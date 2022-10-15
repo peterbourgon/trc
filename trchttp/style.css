@@ -1,0 +1,335 @@
+body {
+	font-family: monospace;
+}
+
+a,
+a:visited {
+	text-decoration: none;
+	color: blue;
+}
+
+div#c {
+	margin: 1em;
+}
+
+.stacks-link a,
+.stacks-link a:visited {
+	color: #000;
+}
+
+.highlight {
+	background-color: yellow;
+}
+
+/*
+ * overview
+ */
+
+table.overview {
+	margin: 1em;
+	border: none;
+	border-collapse: collapse;
+}
+
+table.overview th {
+	font-weight: normal;
+}
+
+table.overview td,
+th {
+	display: table-cell;
+	text-align: center;
+}
+
+table.overview td.category,
+th.category {
+	width: fit-content;
+	white-space: nowrap;
+	text-align: left;
+	padding-right: 1em;
+	padding-left: 0;
+}
+
+table.overview td.total,
+th.total {
+	text-align: right;
+	padding-right: 0;
+	padding-left: 1em;
+}
+
+table.overview th,
+td {
+	width: fit-content;
+	min-width: 7ch;
+}
+
+table.overview tr.header {
+	border-bottom: solid 1px #000;
+}
+
+table.overview tr.category {
+	border-bottom: solid 1px #eee;
+}
+
+table.overview td.individual.bucket {
+	background-color: rgba(0, 0, 0, 0.04);
+	position: relative;
+	z-index: 1;
+}
+
+table.overview.traces tr:nth-last-child(2) {
+	border-bottom: solid 1px #000;
+}
+
+table.overview.logs tr:nth-last-child(2) {
+	border-bottom: solid 1px #000;
+}
+
+table.overview td.bucket .progress-row {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	background-color: rgba(0, 0, 0, 0.08);
+	z-index: -1;
+}
+
+table.overview td.bucket.errored .progress-row {
+	right: 0;
+	background-color: rgba(224, 0, 0, 0.10);
+}
+
+/*
+ * trace
+ */
+
+div.trace {
+	display: flex;
+	flex-direction: column;
+	margin: 1em;
+}
+
+div.trace div.events {
+	flex-grow: 10;
+}
+
+div.trace .metadata span.right {
+	float: right;
+}
+
+div.trace .metadata span.right span.json a {
+	color: #ccc;
+	text-decoration: none;
+}
+
+
+div.trace div.events div.event {
+	display: flex;
+	flex-direction: row;
+	justify-content: space-between;
+	align-items: stretch;
+	flex-wrap: nowrap;
+	border-top: solid 1px #ccc;
+}
+
+div.numeric {
+	text-align: right;
+}
+
+div.text {
+	text-align: left;
+}
+
+div.trace div.event div {
+	display: flex;
+	align-items: center;
+}
+
+div.trace div.events div.event:first-child {
+	border-top: solid 1px #666;
+}
+
+div.trace div.events div.event:last-child {
+	border-top: solid 1px #666;
+}
+
+div.trace div.events div.event div.timestamp {
+	text-align: left;
+	width: 10em;
+	min-width: 10em;
+}
+
+div.trace div.events div.event div.delta {
+	text-align: left;
+	width: 5em;
+	min-width: 5em;
+	position: relative;
+	z-index: 1;
+	background-color: rgba(0, 0, 0, 0.04);
+}
+
+div.trace div.events div.event div.delta .progress-row {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	background-color: rgba(0, 0, 0, 0.08);
+	z-index: -1;
+	min-width: 2px;
+}
+
+div.trace div.events div.event div.what {
+	flex: 10 0px;
+}
+
+/*
+ * logs
+ */
+
+form,
+input,
+select {
+	font-family: monospace;
+}
+
+div.log-event div {
+	display: flex;
+	align-items: center;
+}
+
+div.log-event {
+	display: flex;
+	flex-direction: row;
+	justify-content: space-between;
+	align-items: stretch;
+	flex-wrap: nowrap;
+	border-top: solid 1px #ccc;
+}
+
+div.log-event:first-child {
+	border-top: none;
+}
+
+div.log-event:last-child {
+	border-bottom: solid 1px #ccc;
+}
+
+div.log-event .when {
+	width: 15ch;
+	min-width: 15ch;
+	padding-right: 1ch;
+	color: #999;
+}
+
+div.log-event .category {
+	text-align: left;
+	/* width: 20ch; */
+	/* min-width: 20ch; */
+	width: fit-content;
+	padding-right: 1ch;
+}
+
+div.log-event .delta {
+	text-align: right;
+	/* width: 7ch; */
+	/* min-width: 7ch; */
+	width: fit-content;
+	padding-right: 1ch;
+}
+
+div.log-event .what {
+	flex: 10 0px;
+	padding-right: 1ch;
+}
+
+/*
+ * stack
+ */
+
+.stack {
+	display: flex;
+	flex-direction: column;
+	color: #666;
+}
+
+.stack>div table {
+	color: #666;
+}
+
+details {
+	text-align: right;
+}
+
+details>summary {
+	float: right;
+	list-style-type: none;
+	cursor: pointer;
+}
+
+details>summary::marker {
+	display: none;
+}
+
+details[open] {
+	margin-left: 1rem;
+	padding-left: 1rem;
+}
+
+details[open]>summary {
+	font-weight: bold;
+}
+
+div.stack div.frame {
+	margin-right: 2rem;
+}
+
+div.stack table td {
+	text-align: left;
+	color: #666;
+}
+
+/*
+ * problems
+ */
+
+div#problems {
+	position: fixed;
+	bottom: 1em;
+	right: 1em;
+	display: flex;
+	flex-direction: column;
+	max-width: 50%;
+
+	animation: problems 2s 1;
+	animation-delay: 4s;
+	animation-fill-mode: forwards;
+	-webkit-animation: problems 2s 1;
+	-webkit-animation-delay: 4s;
+	-webkit-animation-fill-mode: forwards;
+}
+
+@keyframes problems {
+	from {
+		opacity: 1;
+	}
+
+	to {
+		opacity: 0;
+	}
+}
+
+@-webkit-keyframes problems {
+	from {
+		opacity: 1;
+	}
+
+	to {
+		opacity: 0;
+	}
+}
+
+div#problems .problem {
+	margin: 0.5em;
+	padding: 0.5em 1em;
+	background-color: pink;
+	border: solid 1px red;
+}

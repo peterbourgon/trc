@@ -1,0 +1,310 @@
+<html>
+<head>
+<style>
+{{ template "style.css" . }}
+
+{{ if .Filter.IsZero -}}
+table.overview tr.overall td.category { font-weight: bold; }
+{{ else if .Filter.CanHighlight -}}
+table.overview td.individual
+	{{- if .Filter.Category    }}.{{category2class .Filter.Category}}{{ end -}}
+	{{- if .Filter.Active      }}.active                             {{ end -}}
+	{{- if .Filter.Finished    }}.finished                           {{ end -}}
+	{{- if .Filter.Succeeded   }}.succeeded                          {{ end -}}
+	{{- if .Filter.Errored     }}.errored                            {{ end -}}
+	{{- if .Filter.MinDuration }}.min-{{ .Filter.MinDuration }}      {{ end -}}
+		{ font-weight: bold; background-color: rgba(255, 255, 0, 0.2); }
+{{ end -}}
+</style>
+</head>
+
+<script>
+	function showstacks(id) {
+		console.log(id);
+		let trace = document.getElementById(id);
+		console.log(trace);
+		let traceStacksLink = document.getElementById(id+"-stacks");
+		console.log(traceStacksLink);
+		let doExpand = traceStacksLink.title == "Show stacks";
+		console.log(doExpand);
+		let stackDetails = trace.getElementsByClassName("stack-details");
+		console.log(stackDetails);
+		for (let i = 0; i < stackDetails.length; i++) {
+			stackDetails[i].open = doExpand;
+		}
+		traceStacksLink.title = doExpand ? "Hide stacks" : "Show stacks";
+	}
+
+	function timesince(s) {
+		var start   = Date.parse(s);
+		var now     = new Date();
+		var ms      = now - start;
+
+		var days    = Math.floor(ms / (86400 * 1000)); if (days    > 0) { ms -= (days    * (86400 * 1000)) };
+		var hours   = Math.floor(ms / (3600  * 1000)); if (hours   > 0) { ms -= (hours   * (3600  * 1000)) };
+		var minutes = Math.floor(ms / (60    * 1000)); if (minutes > 0) { ms -= (minutes * (60    * 1000)) };
+		var seconds = Math.floor(ms / (1     * 1000)); if (seconds > 0) { ms -= (seconds * (1     * 1000)) };
+
+ 		switch (true) {
+			case    days > 0: return days+"d"    + hours+"h"   + " ago";
+			case   hours > 0: return hours+"h"   + minutes+"m" + " ago";
+			case minutes > 0: return minutes+"m" + seconds+"s" + " ago";
+			case seconds > 0: return seconds+"s"               + " ago";
+			case      ms > 0: return ms+"ms"                   + " ago";
+			default:          return "just now";
+		}
+	}
+
+	function calcdates() {
+		let timeSinces = document.getElementsByClassName("time-since");
+		for (let i = 0; i < timeSinces.length; i++) {
+			timeSinces[i].textContent = timesince(timeSinces[i].title);
+		}
+	}
+
+	setInterval(calcdates, 1000);
+
+	function highlight(query) {
+		let re = new RegExp('('+query+')');
+		document.getElementById("traces").querySelectorAll(".searchable").forEach(elem => {
+			if (re.test(elem.textContent)) {
+				console.log("matched", elem, "textContent", elem.textContent.trim());
+				elem.classList.add("highlight");
+				let details = elem.closest("details");
+				if (details != null) {
+					details.open = true;
+				}
+			}
+		});
+	}
+</script>
+
+<body>
+	<div id="c">
+		<div id="problems">
+			{{ range .Problems -}}
+			<div class="problem">{{.}}</div>
+			{{ end -}}
+		</div>
+
+		{{ $n := .Limit }}
+		{{ $num_active  := 0 }}
+		{{ $num_errored := 0 }}
+		{{ $num_overall := 0 }}
+
+		<table class="overview traces">
+			<tr class="header">
+				<th class="text category">&nbsp;</th>
+				<th class="numeric active" title="Active"> <a href="?active&n={{$n}}">Active</a></th>
+				{{ range .Stats.Bucketing -}}
+				<th class="bucket numeric"> <a href="?min={{.String}}&n={{$n}}"> &geq;{{ .String }} </a> </th>
+				{{ end -}}
+				<th class="numeric errored"><a href="?errored&n={{$n}}">Errored</a></th>
+				<th class="numeric total"> </th>
+			</tr>
+
+			{{ range .Stats.Categories -}}
+			<tr class="category">
+				{{ $category_name  := .Name       -}}
+				{{ $category_class := .ClassName  -}}
+				{{ $total_count    := .NumOverall -}}
+
+				<td class="text individual category {{$category_class}}">
+					<a href="?category={{$category_name}}&n={{$n}}">{{ $category_name }}</a>
+				</td>
+
+				{{ $num_active      = intadd $num_active .NumActive         -}}
+				{{ $active_count   := .NumActive                            -}}
+				{{ $active_percent := intpercent $active_count $total_count -}}
+				<td class="numeric individual bucket {{$category_class}} active" title="{{$active_count}} of {{$total_count}}, {{$active_percent}}%">
+					<div class="progress-row" style="width:{{$active_percent}}%;"></div>
+					<a href="?category={{$category_name}}&active&n={{$n}}">{{ $active_count }}</a>
+				</td>
+
+				{{ range .Buckets -}}
+					{{ $bucket_class   := .ClassName                              -}}
+					{{ $bucket_success := .NumSucceeded                           -}}
+					{{ $bucket_percent := intpercent $bucket_success $total_count -}}
+					<td class="numeric individual bucket {{$category_class}} succeeded {{$bucket_class}}" title="{{$bucket_success}} of {{$total_count}}, {{$bucket_percent}}%">
+					<div class="progress-row" style="width:{{$bucket_percent}}%;"></div>
+						<a href="?category={{$category_name}}&min={{.MinDuration}}&n={{$n}}">{{ $bucket_success }}</a>
+					</td>
+				{{ end -}}
+
+				{{ $num_errored      = intadd $num_errored .NumErrored        -}}
+				{{ $errored_count   := .NumErrored                            -}}
+				{{ $errored_percent := intpercent $errored_count $total_count -}}
+				<td class="numeric individual bucket {{$category_class}} errored" title="{{$errored_count}} of {{$total_count}}, {{$errored_percent}}%">
+					<div class="progress-row" style="width:{{$errored_percent}}%;"></div>
+					<a href="?category={{$category_name}}&errored&n={{$n}}">{{ $errored_count }}</a>
+				</td>
+
+				<td class="numeric individual {{$category_class}} total">
+					{{ $num_overall = intadd $num_overall $total_count -}}
+					{{ $total_count }}
+				</td>
+			</tr>
+			{{ end -}}
+
+			<tr class="overall">
+				<td class="text category overall"><a href="?n={{$n}}">overall</a></td>
+				<td class="bucket numeric overall active">{{ .Stats.Overall.NumActive }}</td>
+				{{ range .Stats.Overall.Buckets -}}
+					{{ $bucket_class := .ClassName -}}
+					<td class="bucket numeric overall succeeded {{$bucket_class}}">{{ .NumSucceeded }}</td>
+				{{ end -}}
+				<td class="bucket numeric overall errored">{{ .Stats.Overall.NumErrored }}</td>
+				<td class="numeric overall total">{{ .Stats.Overall.NumOverall }}</td>
+			</tr>
+		</table>
+
+
+		<form method="GET" target="">
+			<input id="query-box" type="text" name="q" placeholder=".*" value="{{.Filter.Query}}" size="64" autofocus onfocus="this.select();" />
+			{{ if .Filter.Category    -}}<input type="hidden" name="category"  value="{{.Filter.Category}}"    />{{ end -}}
+			{{ if .Filter.Active      -}}<input type="hidden" name="active"    value="{{.Filter.Active}}"      />{{ end -}}
+			{{ if .Filter.Finished    -}}<input type="hidden" name="finished"  value="{{.Filter.Finished}}"    />{{ end -}}
+			{{ if .Filter.Succeeded   -}}<input type="hidden" name="succeeded" value="{{.Filter.Succeeded}}"   />{{ end -}}
+			{{ if .Filter.Errored     -}}<input type="hidden" name="errored"   value="{{.Filter.Errored}}"     />{{ end -}}
+			{{ if .Filter.MinDuration -}}<input type="hidden" name="min"       value="{{.Filter.MinDuration}}" />{{ end -}}
+			<select name="n">
+				<option name="10"   {{if eq .Limit 10  }}selected{{end}}>10  </option>
+				<option name="100"  {{if eq .Limit 100 }}selected{{end}}>100 </option>
+				<option name="1000" {{if eq .Limit 1000}}selected{{end}}>1000</option>
+				{{ if not ( or ( or (eq .Limit 10) (eq .Limit 100) ) (eq .Limit 1000) ) -}}
+				<option name="{{.Limit}}" selected>{{.Limit}}</option>
+				{{ end -}}
+			</select>
+			<input type="submit" value="search" />
+		</form>
+
+		<div class="header">
+			<p>
+				total={{ .Stats.Overall.NumOverall }}
+				matched={{ .Matched }}
+				shown={{ len .Selected }}
+			</p>
+		</div>
+
+		<div id="traces" class="traces"> <!-- traces -->
+			{{ if not .Selected -}}
+			<p>No matching traces found.</p>
+			{{ end -}}
+
+			{{ range .Selected -}}
+			<div id="{{.ID}}" class="trace">
+
+				<div class="metadata"> <!-- header line -->
+					<strong class="searchable"><a href="?id={{.ID}}">{{ .ID }}</a></strong>
+					&middot;
+					<a href="?id={{.ID}}&json">JSON</a>
+					&middot;
+					<span class="time-since" title="{{.Start}}"></span>
+
+					<span class="right">
+						<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">
+							<a href="#" onclick="showstacks({{.ID}});"><strong>[≡]</strong></a>
+						</span>
+					</span>
+				</div> <!-- header line -->
+
+				<div class="events"> <!-- events -->
+
+					<div class="event start"> <!-- start event -->
+						<div class="timestamp">
+							{{timetrunc .Start}}
+						</div>
+
+						<div class="delta">
+							<div class="progress-row" style="width:1%;"></div>
+							+0
+						</div>
+
+						<div class="what">
+							<em>start</em>
+						</div>
+					</div> <!-- start event -->
+
+					{{ $start      := .Start    -}}
+					{{ $duration   := .Duration -}}
+					{{ $prev_ts    := .Start    -}}
+					{{ $zero_depth := 0         -}}
+					{{ if .Events }} {{ $zero_depth = len (index .Events 0).Stack }} {{ end -}}
+
+					{{ range .Events -}}
+					<div class="event">
+						{{ $delta   := timediff .When $prev_ts      -}}
+						{{ $overall := timediff .When $start        -}}
+						{{ $percent := timepercent $delta $duration -}}
+
+						<div class="timestamp">
+							{{timetrunc .When}}
+						</div>
+
+						<div class="delta" title="+{{$delta}} = {{$overall}}">
+							<div class="progress-row" style="width:{{$percent}}%;"></div>
+							+{{ humanize $delta }}
+							{{ $prev_ts = .When -}}
+						</div>
+
+						<div class="what searchable">
+							{{ .What.String | insertbreaks }}
+						</div>
+
+						<div class="stack">
+							<details class="stack-details">
+								<summary>[≡]</summary>
+								<table>
+									{{ range $i, $c := .Stack -}}
+									<tr>
+										<td class="searchable">{{ printf "%n"  $c }}</td>
+										<td class="searchable">{{ printf "%+v" $c }}</td>
+									</tr>
+									{{ end -}}
+								</table>
+							</details>
+						</div>
+					</div>
+					{{ end -}}
+
+					<div class="event end"> <!-- end event -->
+						{{ $delta   := timediff (timeadd .Start .Duration) $prev_ts -}}
+						{{ $percent := timepercent $delta $duration                 -}}
+
+						<div class="timestamp" title="{{timeadd .Start .Duration}}">
+							{{timetrunc (timeadd .Start .Duration)}}
+						</div>
+
+						<div class="delta" title="+{{ $delta }} = {{.Duration}}">
+							{{ if .Finished }}<div class="progress-row" style="width:{{$percent}}%;"></div>{{ end -}}
+							+{{ humanize $delta }}
+						</div>
+
+						<div class="what"><em>{{ if .Finished }} end {{ else }} active... {{ end -}}</em></div>
+					</div> <!-- end event -->
+
+					<div class="event summary"> <!-- summary event -->
+						<div class="timestamp"></div>
+						<div class="duration" title="{{ .Duration }}">&nbsp;{{ if .Finished }}<strong>{{ humanize .Duration }}</strong>{{ else }}<em>{{ humanize .Duration }}</em>{{ end -}}</div>
+						<div class="what"></div>
+					</div> <!-- summary event -->
+
+				</div> <!-- events -->
+
+			</div> <!-- trace -->
+
+			{{ end -}} <!-- range selected -->
+
+		</div> <!-- traces -->
+
+		<script>
+			calcdates();
+
+			{{ if .Filter.Regexp -}}
+			highlight({{.Filter.Regexp.String}});
+			{{ end -}}
+		</script>
+
+	</div> <!-- c -->
+</body>
+</html>

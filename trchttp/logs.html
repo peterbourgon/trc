@@ -1,0 +1,186 @@
+<html>
+<head>
+<style>
+{{ template "style.css" . }}
+
+{{ if not .Filter.Category -}}
+table.overview tr.overall td.category {
+	font-weight: bold;
+}
+{{ else if .Filter.Category -}}
+table.overview tr.category td.{{category2class .Filter.Category}} {
+	font-weight: bold;
+	background-color: rgba(255, 255, 0, 0.2);
+}
+{{ end -}}
+</style>
+</head>
+
+{{ $n        := .Limit           }}
+{{ $category := .Filter.Category }}
+
+<body>
+	<div id="c">
+		<div id="problems">
+			{{ range .Problems -}}
+			<div class="problem">{{.}}</div>
+			{{ end -}}
+		</div>
+
+		<table class="overview logs">
+			<tr class="header">
+				<th class="category text   ">Category</th>
+				<th class="oldest   numeric">Oldest</th>
+				<th class="newest   numeric">Newest</th>
+				<th class="rate     numeric">Rate</th>
+				<th class="count    numeric">Count</th>
+			</tr>
+			{{- if .Stats.Categories -}}
+			{{ range .Stats.Categories -}}
+			<tr class="category">
+				<td class="category text    {{.ClassName}}"><a href="?category={{.Name}}&n={{$n}}">{{ .Name }}</a>                   </td>
+				<td class="oldest   numeric {{.ClassName}}" title="{{timetrunc .Oldest}}">         {{ humanize (timesince .Oldest) }}</td>
+				<td class="newest   numeric {{.ClassName}}" title="{{timetrunc .Newest}}">         {{ humanize (timesince .Newest) }}</td>
+				<td class="rate     numeric {{.ClassName}}">                                       {{ printf "%.0f/s" .Rate }}       </td>
+				<td class="count    numeric {{.ClassName}}">                                       {{ .Count }}                      </td>
+			</tr>
+			{{ end -}}
+			<tr class="overall">
+				<td class="category text   "><a href="?n={{$n}}">overall</a>                                                             </td>
+				<td class="oldest   numeric" title="{{timetrunc .Stats.Overall.Oldest}}">{{ humanize (timesince .Stats.Overall.Oldest) }}</td>
+				<td class="newest   numeric" title="{{timetrunc .Stats.Overall.Newest}}">{{ humanize (timesince .Stats.Overall.Newest) }}</td>
+				<td class="rate     numeric">                                            {{ printf "%.0f/s" .Stats.Overall.Rate }}       </td>
+				<td class="count    numeric">                                            {{ .Stats.Overall.Count }}                      </td>
+			</tr>
+			{{ else -}}
+			<tr class="overall">
+				<td class="category text   "><em>no logs</em></td>
+				<td class="oldest   numeric">                </td>
+				<td class="newest   numeric">                </td>
+				<td class="rate     numeric">                </td>
+				<td class="count    numeric">                </td>
+			</tr>
+			{{ end -}}
+		</table>
+
+		<form method="GET" target="">
+			<input id="query-box" type="text" name="q" placeholder=".*" value="{{.Filter.Query}}" size="64" autofocus onfocus="this.select();" />
+			<select name="category">
+				<option value="" {{if not $category}}selected{{end}}>(all categories)</option>
+				{{ range .Stats.Categories -}}
+				<option value="{{.Name}}" {{if eq .Name $category}}selected{{end}}>{{.Name}}</option>
+				{{ end -}}
+			</select>
+			<select name="n">
+				<option name="10"   {{if eq .Limit 10  }}selected{{end}}>10  </option>
+				<option name="100"  {{if eq .Limit 100 }}selected{{end}}>100 </option>
+				<option name="1000" {{if eq .Limit 1000}}selected{{end}}>1000</option>
+				{{ if not ( or ( or (eq .Limit 10) (eq .Limit 100) ) (eq .Limit 1000) ) -}}
+				<option name="{{.Limit}}" selected>{{.Limit}}</option>
+				{{ end -}}
+			</select>
+			<input type="submit" value="search" />
+		</form>
+
+		<div class="header">
+			<p>
+				total={{ .Stats.Overall.Count }}
+				matched={{ .Matched }}
+				shown={{ len .Selected }}
+			</p>
+		</div>
+
+		<div id="log-events">
+			{{ if not .Selected -}}
+			<p>No matching logs found.</p>
+			{{ end -}}
+
+			{{ if .Selected -}}
+			<div class="log-event">
+				<div class="when">{{timetrunc timenow}}</div>
+				<div class="category"><em>now</em></div>
+				<div class="what"></div>
+			</div>
+			{{ end -}}
+
+			{{ range .Selected -}}
+			<div class="log-event">
+				<div class="when">{{timetrunc .Event.When}}</div>
+				<div class="category">{{.Category}}</div>
+				<div class="what">{{.Event.What}}</div>
+				<div class="stack">
+					<details class="stack-details">
+						<summary>[≡]</summary>
+						<table>
+							{{ range $i, $c := .Event.Stack }}
+							<tr>
+								<td>{{ printf "%n"  $c }}</td>
+								<td>{{ printf "%+v" $c }}</td>
+							</tr>
+							{{ end }}
+						</table>
+					</details>
+				</div>
+			</div>
+			{{ end -}}
+		</div>
+	</div> <!-- c -->
+</body>
+
+<script>
+	document.getElementById("query-box").select();
+
+	function addLogEvent(event) {
+		var pre = document.createElement("pre");
+		pre.innerText = JSON.stringify(event, undefined, 4);
+		document.getElementById("log-events").prepend(pre);
+	}
+
+	function addLogMetadata(event) {
+		var pre = document.createElement("pre");
+		pre.innerText = JSON.stringify(event, undefined, 4);
+		document.getElementById("log-metadata").prepend(pre);
+	}
+
+	function onSearch(event) {
+		console.log(event);
+		let u = new URL(window.location.href);
+		u.searchParams.set("q", document.getElementById("log-query").value);
+		window.location.href = u.toString();
+		event.preventDefault();
+	}
+
+	let source;
+
+	function onStream(event) {
+		switch (document.getElementById("log-stream").innerText) {
+			case "Stream":
+				document.getElementById("log-query").disabled = true;
+				document.getElementById("log-query").setAttribute("placeholder", "Streaming...");
+				document.getElementById("log-stream").innerText = "Cancel";
+				document.getElementById("log-stream").focus();
+				addLogMetadata({ msg: "Connecting..." });
+				source = new EventSource("/logs?regex=" + encodeURI(document.getElementById("log-query").value), { withCredentials: true });
+				source.onopen = function (event) { addLogMetadata({ msg: "Connected" }); };
+				source.onmessage = function (event) { addLogEvent(JSON.parse(event.data)); };
+				source.onerror = function (err) { addLogMetadata({ msg: "Ended with error", "err": err }); };
+				source.addEventListener("event", function (event) { addLogEvent(JSON.parse(event.data)); });
+				source.addEventListener("heartbeat", function (event) { addLogMetadata(JSON.parse(event.data)); });
+				break;
+			case "Cancel":
+				source.close();
+				addLogMetadata({ msg: "Canceled" });
+				document.getElementById("log-stream").innerText = "Stream";
+				document.getElementById("log-query").disabled = false;
+				document.getElementById("log-query").setAttribute("placeholder", "Query");
+				document.getElementById("log-query").focus();
+				break;
+		};
+		event.preventDefault();
+	}
+
+	document.getElementById("log-form").addEventListener("submit", onSearch);
+	document.getElementById("log-search").addEventListener("click", onSearch);
+	// document.getElementById("log-stream").addEventListener("submit", onStream);
+	// document.getElementById("log-clear").addEventListener("click", onClear);
+</script>
