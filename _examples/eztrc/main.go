@@ -56,9 +56,13 @@ func main() {
 			c := fmt.Sprintf("worker %d/%d", id, nworkers)
 			for req := range reqc {
 				begin := time.Now()
-				_, err := http.DefaultClient.Do(req)
+				resp, err := http.DefaultClient.Do(req)
 				took := time.Since(begin)
 				eztrc.Logf(c, "%s %s in %s, err %v", req.Method, req.URL.Path, took, err)
+				if err == nil {
+					io.Copy(io.Discard, resp.Body)
+					resp.Body.Close()
+				}
 				time.Sleep(took * time.Duration(id))
 			}
 		}(i)

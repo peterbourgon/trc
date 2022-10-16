@@ -42,12 +42,12 @@ table.summary tr:last-child td:first-child {
 		var seconds = Math.floor(ms / (1     * 1000)); if (seconds > 0) { ms -= (seconds * (1     * 1000)) };
 
  		switch (true) {
-			case    days > 0: return days+"d"    + hours+"h"   + " ago";
-			case   hours > 0: return hours+"h"   + minutes+"m" + " ago";
-			case minutes > 0: return minutes+"m" + seconds+"s" + " ago";
-			case seconds > 0: return seconds+"s"               + " ago";
-			case      ms > 0: return ms+"ms"                   + " ago";
-			default:          return "just now";
+			case    days > 0: return days+"d"    + hours+"h"   ;
+			case   hours > 0: return hours+"h"   + minutes+"m" ;
+			case minutes > 0: return minutes+"m" + seconds+"s" ;
+			case seconds > 0: return seconds+"s"               ;
+			case      ms > 0: return ms+"ms"                   ;
+			default:          return "fresh";
 		}
 	}
 
@@ -100,7 +100,7 @@ table.summary tr:last-child td:first-child {
 				</th>
 				{{ end -}}
 				<th class="errored count">
-					<a href="?errored&n={{$n}}">Errored</a>
+					<a href="?errored&n={{$n}}">Error</a>
 				</th>
 				<th class="total count numeric">
 					Total
@@ -112,10 +112,7 @@ table.summary tr:last-child td:first-child {
 					Rate
 				</th>
 				<th class="latest numeric">
-					Latest
-				</th>
-				<th class="window numeric">
-					Window
+					Last
 				</th>
 			</tr> <!-- overview summary -->
 
@@ -169,10 +166,6 @@ table.summary tr:last-child td:first-child {
 				<td class="latest numeric {{$category_class_name}}">
 					{{humanize (timesince .Newest)}}
 				</td>
-
-				<td class="window numeric {{$category_class_name}}">
-					{{humanize (timediff .Newest .Oldest)}}
-				</td>
 			</tr>
 			{{ end -}} <!-- overview range categories -->
 
@@ -223,10 +216,6 @@ table.summary tr:last-child td:first-child {
 				<td class="latest numeric">
 					{{humanize (timesince .Newest)}}
 				</td>
-
-				<td class="window numeric">
-					{{humanize (timediff .Newest .Oldest)}}
-				</td>
 			</tr>
 			{{ end -}} <!-- overall category -->
 		</table> <!-- overview summary table -->
@@ -236,6 +225,7 @@ table.summary tr:last-child td:first-child {
 				total={{ .Stats.Overall.NumTotal }}
 				matched={{ .Matched }}
 				shown={{ len .Selected }}
+				age=<span class="time-since" title="{{timenow}}"></span>
 			</p>
 		</div> <!-- header line -->
 
