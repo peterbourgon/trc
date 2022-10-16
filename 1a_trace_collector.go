@@ -74,7 +74,7 @@ func (tc *TraceCollector) TraceQuery(ctx context.Context, req *TraceQueryRequest
 	matched := len(allowed)
 	tr.Tracef("fetched traces: overall %d, matched %d", len(overall), matched)
 
-	stats := newTraceCollectorStats(overall, req.Bucketing)
+	stats := newTraceQueryStats(req, overall)
 	tr.Tracef("computed stats")
 
 	selected := allowed
@@ -85,9 +85,11 @@ func (tc *TraceCollector) TraceQuery(ctx context.Context, req *TraceQueryRequest
 	tr.Tracef("selected %d", len(selected))
 
 	return &TraceQueryResponse{
+		Request:  req,
 		Stats:    stats,
 		Matched:  matched,
 		Selected: selected,
+		Problems: nil,
 	}, nil
 }
 
@@ -190,7 +192,8 @@ func (f *TraceQueryRequest) allow(tr Trace) bool {
 
 // TraceQueryResponse represents the results of a trace query.
 type TraceQueryResponse struct {
-	Stats    *TraceCollectorStats
+	Request  *TraceQueryRequest
+	Stats    *TraceQueryStats
 	Matched  int
 	Selected Traces
 	Problems []string
@@ -200,14 +203,15 @@ type TraceQueryResponse struct {
 //
 //
 
-// TraceCollectorStats is a summary view of a set of traces. It's returned as
+// TraceQueryStats is a summary view of a set of traces. It's returned as
 // part of a trace collector's query response, and in that case represents all
 // traces in the collector, with bucketing as specified by the query.
-type TraceCollectorStats struct {
+type TraceQueryStats struct {
+	Request    *TraceQueryRequest
 	Categories []*TraceQueryCategoryStats
 }
 
-func newTraceCollectorStats(trs Traces, bucketing []time.Duration) *TraceCollectorStats {
+func newTraceQueryStats(req *TraceQueryRequest, trs Traces) *TraceQueryStats {
 	// Group the traces into stats buckets by category.
 	byCategory := map[string]*TraceQueryCategoryStats{}
 	for _, tr := range trs {
@@ -224,7 +228,7 @@ func newTraceCollectorStats(trs Traces, bucketing []time.Duration) *TraceCollect
 		// If the bucket doesn't exist yet, create it.
 		st, ok := byCategory[category]
 		if !ok {
-			st = newTraceQueryCategoryStats(category, bucketing)
+			st = newTraceQueryCategoryStats(req, category)
 			byCategory[category] = st
 		}
 
@@ -261,15 +265,17 @@ func newTraceCollectorStats(trs Traces, bucketing []time.Duration) *TraceCollect
 	})
 
 	// That'll do.
-	return &TraceCollectorStats{
+	return &TraceQueryStats{
+		Request:    req,
 		Categories: flattened,
 	}
 }
 
 // Overall returns stats for a synthetic category representing all traces.
-func (ts *TraceCollectorStats) Overall() (*TraceQueryCategoryStats, error) {
+func (ts *TraceQueryStats) Overall() (*TraceQueryCategoryStats, error) {
 	overall := &TraceQueryCategoryStats{
-		Name: "overall",
+		Name:    "overall",
+		Buckets: newTraceQueryCategoryStatsBuckets(ts.Request),
 	}
 	for _, cat := range ts.Categories {
 		if err := mergeTraceQueryCategoryStats(overall, cat); err != nil {
@@ -280,7 +286,7 @@ func (ts *TraceCollectorStats) Overall() (*TraceQueryCategoryStats, error) {
 }
 
 // Bucketing is the set of durations by which finished traces are grouped.
-func (ts *TraceCollectorStats) Bucketing() []time.Duration {
+func (ts *TraceQueryStats) Bucketing() []time.Duration {
 	if len(ts.Categories) == 0 {
 		return defaultBucketing
 	}
@@ -301,26 +307,28 @@ func (ts *TraceCollectorStats) Bucketing() []time.Duration {
 type TraceQueryCategoryStats struct {
 	Name         string
 	Buckets      []*TraceQueryCategoryBucketStats
-	NumSucceeded int //  succeeded
-	NumErrored   int // +  errored
-	NumFinished  int // = finished -> finished
-	NumActive    int //               + active
-	NumTotal     int //               =  total
+	IsQueried    bool // was this category provided in the query?
+	NumSucceeded int  //  succeeded
+	NumErrored   int  // +  errored
+	NumFinished  int  // = finished -> finished
+	NumActive    int  //               + active
+	NumTotal     int  //               =  total
 	Oldest       time.Time
 	Newest       time.Time
 }
 
-func newTraceQueryCategoryStats(name string, bucketing []time.Duration) *TraceQueryCategoryStats {
+func newTraceQueryCategoryStats(req *TraceQueryRequest, name string) *TraceQueryCategoryStats {
 	return &TraceQueryCategoryStats{
-		Name:    name,
-		Buckets: newTraceQueryCategoryStatsBuckets(bucketing),
+		Name:      name,
+		Buckets:   newTraceQueryCategoryStatsBuckets(req),
+		IsQueried: req.Category == name,
 	}
 }
 
 func mergeTraceQueryCategoryStats(dst, src *TraceQueryCategoryStats) error {
-	if dst.Name != src.Name {
-		return fmt.Errorf("name: want %q, have %q", dst.Name, src.Name)
-	}
+	// if dst.Name != src.Name {
+	// return fmt.Errorf("name: want %q, have %q", dst.Name, src.Name)
+	// }
 
 	dst.NumSucceeded += src.NumSucceeded
 	dst.NumErrored += src.NumErrored
@@ -347,15 +355,24 @@ func mergeTraceQueryCategoryStats(dst, src *TraceQueryCategoryStats) error {
 //
 //
 
-func newTraceQueryCategoryStatsBuckets(bucketing []time.Duration) []*TraceQueryCategoryBucketStats {
-	res := make([]*TraceQueryCategoryBucketStats, len(bucketing))
-	for i := range bucketing {
-		res[i] = &TraceQueryCategoryBucketStats{MinDuration: bucketing[i]}
+func newTraceQueryCategoryStatsBuckets(req *TraceQueryRequest) []*TraceQueryCategoryBucketStats {
+	res := make([]*TraceQueryCategoryBucketStats, len(req.Bucketing))
+	for i := range req.Bucketing {
+		res[i] = &TraceQueryCategoryBucketStats{
+			MinDuration: req.Bucketing[i],
+			IsQueried:   req.MinDuration != nil && *req.MinDuration == req.Bucketing[i],
+		}
 	}
 	return res
 }
 
 func mergeTraceQueryCategoryStatsBuckets(dst, src []*TraceQueryCategoryBucketStats) error {
+	if len(dst) == 0 {
+		dst = make([]*TraceQueryCategoryBucketStats, len(src))
+		copy(dst, src)
+		return nil
+	}
+
 	if len(dst) != len(src) {
 		return fmt.Errorf("length mismatch: dst %d, src %d", len(dst), len(src))
 	}
@@ -380,6 +397,7 @@ type TraceQueryCategoryBucketStats struct {
 	NumTotal     int
 	Oldest       time.Time
 	Newest       time.Time
+	IsQueried    bool // was this specific bucket provided in the query?
 }
 
 func mergeTraceQueryCategoryBucketStats(dst, src *TraceQueryCategoryBucketStats) error {

@@ -61,7 +61,7 @@ func TraceCollectorHandler(c *trc.TraceCollector) http.Handler {
 
 		switch getBestContentType(r) {
 		case "text/html":
-			renderHTML(ctx, w, "traces.html", res)
+			renderHTML(ctx, w, "traces2.html", res)
 		default:
 			renderJSON(ctx, w, res)
 		}

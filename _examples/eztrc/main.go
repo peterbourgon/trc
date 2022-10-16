@@ -5,19 +5,20 @@ import (
 	"io"
 	"log"
 	"math/rand"
-	"mekapi/trc/eztrc"
-	"mekapi/trc/trchttp"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"time"
+
+	eztrc "github.com/peterbourgon/trc/eztrc2"
+	"github.com/peterbourgon/trc/trchttp"
 )
 
 func main() {
 	store := NewStore()
 	api := NewAPI(store)
-	instrumentedAPI := trchttp.Middleware(eztrc.Collector(), getAPIMethod)(api)
+	instrumentedAPI := trchttp.Middleware2(eztrc.Collector(), getAPIMethod)(api)
 	server := httptest.NewServer(instrumentedAPI)
 	defer server.Close()
 
@@ -87,12 +88,9 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			instrumentedTraces := trchttp.Middleware(eztrc.Collector(), getMethodPath)(eztrc.TracesHandler)
-			instrumentedLogs := trchttp.Middleware(eztrc.Collector(), getMethodPath)(eztrc.LogsHandler)
+			instrumentedTraces := trchttp.Middleware2(eztrc.Collector(), getMethodPath)(eztrc.TraceHandler)
 			http.Handle("/traces", instrumentedTraces)
-			http.Handle("/logs", instrumentedLogs)
 			log.Printf("http://localhost:8080/traces")
-			log.Printf("http://localhost:8080/logs")
 			http.ListenAndServe(":8080", nil)
 		}()
 	}

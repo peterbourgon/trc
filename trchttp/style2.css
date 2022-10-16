@@ -1,0 +1,269 @@
+body {
+	font-family: monospace;
+}
+
+a,
+a:visited {
+	text-decoration: none;
+	color: blue;
+}
+
+div#c {
+	margin: 1em;
+}
+
+.highlight {
+	background-color: yellow;
+}
+
+.numeric {
+	text-align: right;
+}
+
+.text {
+	text-align: left;
+}
+
+
+/*
+ * summary table
+ */
+
+table.summary {
+	margin: 1em;
+	border-collapse: collapse;
+}
+
+table.summary th {
+	display: table-cell;
+	width: fit-content;
+	min-width: 7ch;
+	font-weight: normal;
+}
+
+table.summary td,
+th {
+	text-align: center;
+}
+
+table.summary td:first-child,
+th:first-child {
+	text-align: left;
+}
+
+table.summary tr td:last-child,
+th:last-child {
+	text-align: right;
+	text-decoration: underline;
+}
+
+table.summary tr {
+	border-bottom: solid 1px #eee;
+}
+
+table.summary tr.header {
+	border-bottom: solid 1px #000;
+}
+
+table.summary tr:nth-last-child(2) {
+	border-bottom: solid 1px #000;
+}
+
+table.summary tr:last-child {
+	border-bottom: 0;
+	background: none;
+}
+
+/* "progress" cells have a slight tint */
+table.summary td.progress {
+	/* background-color: rgba(0, 0, 0, 0.04); */
+	position: relative;
+	z-index: 1;
+}
+
+/* and show percent of category total as a little bar */
+table.summary td.progress div.progress-bar {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	min-width: 1%;
+	max-width: 99%;
+	background-color: rgba(0, 0, 0, 0.08);
+	z-index: -1;
+}
+
+/* error cells show percent from the the right side */
+table.summary td.errored div.progress-bar {
+	right: 0;
+	background-color: rgba(224, 0, 0, 0.10);
+}
+
+/*
+ * trace
+ */
+
+div.trace {
+	display: flex;
+	flex-direction: column;
+	margin: 1em;
+}
+
+div.trace .div.metadata {
+	/* first line of a trace is a metadata header */
+}
+
+div.trace .metadata span.right {
+	float: right;
+}
+
+span.stacks-link a,
+a:visited {
+	color: #000;
+	text-decoration: none;
+}
+
+/* next section is the events table */
+div.trace div.events {
+	flex-grow: 10;
+}
+
+/* each row is an event */
+div.trace div.events div.event {
+	display: flex;
+	flex-direction: row;
+	justify-content: space-between;
+	align-items: stretch;
+	flex-wrap: nowrap;
+	border-top: solid 1px #ccc;
+}
+
+div.trace div.events div.event:first-child,
+div.event:last-child {
+	border-top: solid 1px #666;
+}
+
+/* first cell is timestamp, fixed width */
+div.trace div.events div.event div.timestamp {
+	text-align: left;
+	width: 10em;
+	min-width: 10em;
+}
+
+/* next cell is delta, also fixed width, with progress bar */
+div.trace div.events div.event div.delta {
+	text-align: left;
+	width: 5em;
+	min-width: 5em;
+	position: relative;
+	z-index: 1;
+	background-color: rgba(0, 0, 0, 0.04);
+}
+
+div.trace div.events div.event div.delta .progress-bar {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	min-width: 1%;
+	max-width: 99%;
+	background-color: rgba(0, 0, 0, 0.08);
+	z-index: -1;
+}
+
+/* last cell is what, should fill the rest of the page */
+div.trace div.events div.event div.what {
+	flex: 10 0px;
+}
+
+/*
+ * stack
+ */
+
+.stack {
+	display: flex;
+	flex-direction: column;
+	color: #666;
+}
+
+.stack>div table {
+	color: #666;
+}
+
+details {
+	text-align: right;
+}
+
+details>summary {
+	float: right;
+	list-style-type: none;
+	cursor: pointer;
+}
+
+details>summary::marker {
+	display: none;
+}
+
+details[open] {
+	margin-left: 1rem;
+	padding-left: 1rem;
+}
+
+details[open]>summary {
+	font-weight: bold;
+}
+
+div.stack div.frame {
+	margin-right: 2rem;
+}
+
+div.stack table td {
+	text-align: left;
+	color: #666;
+}
+
+/*
+ * problems
+ */
+
+div#problems {
+	position: fixed;
+	bottom: 1em;
+	right: 1em;
+	display: flex;
+	flex-direction: column;
+	max-width: 50%;
+
+	animation: problems 2s 1;
+	animation-delay: 4s;
+	animation-fill-mode: forwards;
+	-webkit-animation: problems 2s 1;
+	-webkit-animation-delay: 4s;
+	-webkit-animation-fill-mode: forwards;
+}
+
+@keyframes problems {
+	from {
+		opacity: 1;
+	}
+
+	to {
+		opacity: 0;
+	}
+}
+
+@-webkit-keyframes problems {
+	from {
+		opacity: 1;
+	}
+
+	to {
+		opacity: 0;
+	}
+}
+
+div#problems .problem {
+	margin: 0.5em;
+	padding: 0.5em 1em;
+	background-color: pink;
+	border: solid 1px red;
+}

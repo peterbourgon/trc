@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -75,7 +76,12 @@ func renderHTML(ctx context.Context, w http.ResponseWriter, filename string, dat
 			if _, err := os.Stat(asset); err == nil {
 				if tt, err := t.ParseFiles(asset); err == nil {
 					t = tt
+					log.Printf("### asset %s: using from local disk", asset)
+				} else {
+					log.Printf("### asset %s: using asset, Parse err %v", asset, err)
 				}
+			} else {
+				log.Printf("### asset %s: using asset, Stat err %v", asset, err)
 			}
 		}
 
@@ -126,6 +132,39 @@ var templateFuncs = template.FuncMap{
 	"queryescape":    func(s string) string { return url.QueryEscape(s) },
 	"insertbreaks":   func(s string) template.HTML { return template.HTML(breaksReplacer.Replace(s)) },
 	"humanize":       humanize,
+	"highlightclasses": func(res *trc.TraceQueryResponse) []string {
+		var classes []string
+
+		if len(res.Request.IDs) > 0 {
+			return nil
+		}
+
+		if res.Request.Category != "" {
+			classes = append(classes, "category-"+sha256hex(res.Request.Category))
+		}
+
+		if res.Request.IsActive {
+			classes = append(classes, "active")
+		}
+
+		if res.Request.IsErrored {
+			classes = append(classes, "errored")
+		}
+
+		if res.Request.IsFinished {
+			classes = append(classes, "finished")
+		}
+
+		if res.Request.IsSucceeded {
+			classes = append(classes, "succeeded")
+		}
+
+		if res.Request.MinDuration != nil {
+			classes = append(classes, "min-"+res.Request.MinDuration.String())
+		}
+
+		return classes
+	},
 }
 
 var breaksReplacer = strings.NewReplacer(

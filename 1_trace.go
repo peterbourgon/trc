@@ -117,37 +117,6 @@ type TraceCore struct {
 	duration  time.Duration
 }
 
-// SetTraceCoreMaxEvents sets the maximum number of events that will be stored
-// in a core trace produced by this package. Past this limit, new events will
-// increment a "truncated" counter in the trace. The value of that counter is
-// represented by a single, final trace event.
-//
-// The default value is 1000, the minimum is 1, and the maximum is 10000.
-func SetTraceCoreMaxEvents(n int) {
-	switch {
-	case n < traceCoreMaxEventsMin:
-		n = traceCoreMaxEventsMin
-	case n > traceCoreMaxEventsMax:
-		n = traceCoreMaxEventsMax
-	}
-	atomic.StoreUint64(&traceCoreMaxEvents, uint64(n))
-}
-
-const (
-	traceCoreMaxEventsMin = 1
-	traceCoreMaxEventsDef = 1000
-	traceCoreMaxEventsMax = 10000
-)
-
-var (
-	traceCoreMaxEvents = uint64(traceCoreMaxEventsDef)
-	traceIDEntropy     = ulid.DefaultEntropy()
-)
-
-func getTraceCoreMaxEvents() int {
-	return int(atomic.LoadUint64(&traceCoreMaxEvents))
-}
-
 // NewTraceCore creates a new TraceCore with the given category.
 func NewTraceCore(category string) *TraceCore {
 	now := time.Now().UTC()
@@ -313,6 +282,41 @@ func (ctr *TraceCore) Events() []Event {
 	}
 
 	return events
+}
+
+//
+//
+//
+
+// SetTraceCoreMaxEvents sets the maximum number of events that will be stored
+// in a core trace produced by this package. Past this limit, new events will
+// increment a "truncated" counter in the trace. The value of that counter is
+// represented by a single, final trace event.
+//
+// The default value is 1000, the minimum is 1, and the maximum is 10000.
+func SetTraceCoreMaxEvents(n int) {
+	switch {
+	case n < traceCoreMaxEventsMin:
+		n = traceCoreMaxEventsMin
+	case n > traceCoreMaxEventsMax:
+		n = traceCoreMaxEventsMax
+	}
+	atomic.StoreUint64(&traceCoreMaxEvents, uint64(n))
+}
+
+const (
+	traceCoreMaxEventsMin = 1
+	traceCoreMaxEventsDef = 1000
+	traceCoreMaxEventsMax = 10000
+)
+
+var (
+	traceCoreMaxEvents = uint64(traceCoreMaxEventsDef)
+	traceIDEntropy     = ulid.DefaultEntropy()
+)
+
+func getTraceCoreMaxEvents() int {
+	return int(atomic.LoadUint64(&traceCoreMaxEvents))
 }
 
 //

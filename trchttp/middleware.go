@@ -1,6 +1,7 @@
 package trchttp
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -16,6 +17,37 @@ import (
 // use cases. Users who want different or more sophisticated behavior should
 // implement their own middlewares.
 func Middleware(c *trc.Collector, getCategory func(*http.Request) string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx, tr := c.GetOrCreateTrace(r.Context(), getCategory(r))
+			defer tr.Finish()
+
+			tr.Tracef("%s %s %s", r.RemoteAddr, r.Method, r.URL.Path)
+
+			iw := newInterceptor(w)
+			defer func(b time.Time) {
+				code := iw.Code()
+				sent := iw.Written()
+				took := humanize(time.Since(b))
+				tr.Tracef("HTTP %d, %dB, %s", code, sent, took)
+			}(time.Now())
+
+			w = iw
+			r = r.WithContext(ctx)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+type TraceCreator interface {
+	GetOrCreateTrace(context.Context, string) (context.Context, trc.Trace)
+}
+
+//
+//
+//
+
+func Middleware2(c TraceCreator, getCategory func(*http.Request) string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx, tr := c.GetOrCreateTrace(r.Context(), getCategory(r))
