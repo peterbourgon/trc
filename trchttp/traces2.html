@@ -5,6 +5,7 @@
 
 {{ if highlightclasses . -}}
 table.summary
+	th{{ range highlightclasses . -}}.{{.}}{{ end }},
 	td{{ range highlightclasses . -}}.{{.}}{{ end }},
 	tr{{ range highlightclasses . -}}.{{.}}{{ end }}
 {
@@ -95,7 +96,7 @@ table.summary tr:last-child td {
 					<a href="?active&n={{$n}}">Active</a>
 				</th>
 				{{ range .Stats.Bucketing -}}
-				<th class="bucket count">
+				<th class="bucket count min-{{.String}}">
 					<a href="?min={{.String}}&n={{$n}}">&geq;{{.String}}</a>
 				</th>
 				{{ end -}}
@@ -153,7 +154,7 @@ table.summary tr:last-child td {
 					{{$num_total}}
 				</td>
 
-				<td class="separator">
+				<td class="separator {{$category_class_name}}">
 					&nbsp;
 				</td>
 
@@ -184,7 +185,7 @@ table.summary tr:last-child td {
 
 				<td class="active count progress" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
 					<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
-					<a href="?active&n={{$n}}">{{$num_active}}</a>
+					{{$num_active}}
 				</td>
 
 				{{ range .Buckets -}}
@@ -192,13 +193,13 @@ table.summary tr:last-child td {
 				{{ $pct_succeeded := intpercent $num_succeeded $num_total -}}
 				<td class="bucket count progress min-{{.MinDuration}}" title="{{$num_succeeded}} of {{$num_total}}, {{$pct_succeeded}}%">
 					<div class="progress-bar" style="width:{{$pct_succeeded}}%;"></div>
-					<a href="?min={{.MinDuration}}&n={{$n}}">{{$num_succeeded}}</a>
+					{{$num_succeeded}}
 				</td>
 				{{ end -}}
 
 				<td class="errored count progress" title="{{$num_errored}} of {{$num_total}}, {{$pct_errored}}%">
 					<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
-					<a href="?errored&n={{$n}}">{{$num_errored}}</a>
+					{{$num_errored}}
 				</td>
 
 				<td class="total count numeric" title="{{$num_total}} total traces">
