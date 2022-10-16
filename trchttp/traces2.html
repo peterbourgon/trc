@@ -12,7 +12,7 @@ table.summary
 	font-weight: bold;
 	background-color: rgba(255, 255, 0, 0.2);
 }
-{{ else }}
+{{ else if not .Request.IDs }}
 table.summary tr:last-child td {
 	font-weight: bold;
 }
