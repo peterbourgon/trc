@@ -12,18 +12,6 @@ div#c {
 	margin: 1em;
 }
 
-.highlight {
-	background-color: yellow;
-}
-
-.numeric {
-	text-align: right;
-}
-
-.text {
-	text-align: left;
-}
-
 
 /*
  * summary table
@@ -32,6 +20,7 @@ div#c {
 table.summary {
 	margin: 1em;
 	border-collapse: collapse;
+	table-layout: fixed;
 }
 
 table.summary th {
@@ -41,20 +30,14 @@ table.summary th {
 	font-weight: normal;
 }
 
+table.summary th.separator {
+	width: 3ch;
+	min-width: 3ch;
+}
+
 table.summary td,
 th {
 	text-align: center;
-}
-
-table.summary td:first-child,
-th:first-child {
-	text-align: left;
-}
-
-table.summary tr td:last-child,
-th:last-child {
-	text-align: right;
-	text-decoration: underline;
 }
 
 table.summary tr {
@@ -74,14 +57,10 @@ table.summary tr:last-child {
 	background: none;
 }
 
-/* "progress" cells have a slight tint */
 table.summary td.progress {
-	/* background-color: rgba(0, 0, 0, 0.04); */
 	position: relative;
-	z-index: 1;
 }
 
-/* and show percent of category total as a little bar */
 table.summary td.progress div.progress-bar {
 	position: absolute;
 	top: 0;
@@ -116,8 +95,7 @@ div.trace .metadata span.right {
 	float: right;
 }
 
-span.stacks-link a,
-a:visited {
+span.stacks-link a {
 	color: #000;
 	text-decoration: none;
 }
@@ -266,4 +244,20 @@ div#problems .problem {
 	padding: 0.5em 1em;
 	background-color: pink;
 	border: solid 1px red;
+}
+
+/*
+ * overrides
+ */
+
+.highlight {
+	background-color: yellow;
+}
+
+.numeric {
+	text-align: right !important;
+}
+
+.text {
+	text-align: left !important;
 }

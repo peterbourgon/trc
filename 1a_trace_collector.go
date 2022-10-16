@@ -433,13 +433,13 @@ func incrIf(dst *int, when bool) {
 }
 
 func olderOf(dst *time.Time, src time.Time) {
-	if src.Before(*dst) {
+	if dst.IsZero() || src.Before(*dst) {
 		*dst = src
 	}
 }
 
 func newerOf(dst *time.Time, src time.Time) {
-	if src.After(*dst) {
+	if dst.IsZero() || src.After(*dst) {
 		*dst = src
 	}
 }

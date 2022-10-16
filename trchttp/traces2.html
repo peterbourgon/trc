@@ -75,6 +75,7 @@ table.summary tr:last-child td:first-child {
 </script>
 
 {{ $n := .Request.Limit }}
+{{ $total_rate := 0.0 }}
 
 <body>
 	<div id="c">
@@ -87,22 +88,34 @@ table.summary tr:last-child td:first-child {
 
 		<table class="summary"> <!-- overview summary table -->
 			<tr class="header">
-				<th class="category">
+				<th class="category text">
 					&nbsp;
 				</th>
-				<th class="active">
+				<th class="active count">
 					<a href="?active&n={{$n}}">Active</a>
 				</th>
 				{{ range .Stats.Bucketing -}}
-				<th class="bucket">
+				<th class="bucket count">
 					<a href="?min={{.String}}&n={{$n}}">&geq;{{.String}}</a>
 				</th>
 				{{ end -}}
-				<th class="errored">
+				<th class="errored count">
 					<a href="?errored&n={{$n}}">Errored</a>
 				</th>
-				<th class="total">
-					<a href="?n={{$n}}">Total</a>
+				<th class="total count numeric">
+					Total
+				</th>
+				<th class="separator">
+					&nbsp;
+				</th>
+				<th class="rate numeric">
+					Rate
+				</th>
+				<th class="latest numeric">
+					Latest
+				</th>
+				<th class="window numeric">
+					Window
 				</th>
 			</tr> <!-- overview summary -->
 
@@ -120,7 +133,7 @@ table.summary tr:last-child td:first-child {
 					<a href="?category={{$category_name}}&n={{$n}}">{{$category_name}}</a>
 				</td>
 
-				<td class="active numeric progress active {{$category_class_name}}" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
+				<td class="active count progress active {{$category_class_name}}" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
 					<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
 					<a href="?category={{$category_name}}&active&n={{$n}}">{{$num_active}}</a>
 				</td>
@@ -128,19 +141,37 @@ table.summary tr:last-child td:first-child {
 				{{ range .Buckets -}}
 				{{ $num_succeeded := .NumSucceeded                        -}}
 				{{ $pct_succeeded := intpercent $num_succeeded $num_total -}}
-				<td class="bucket numeric progress finished succeeded min-{{.MinDuration}} {{$category_class_name}}" title="{{$num_succeeded}} of {{$num_total}}, {{$pct_succeeded}}%">
+				<td class="bucket count progress finished succeeded min-{{.MinDuration}} {{$category_class_name}}" title="{{$num_succeeded}} of {{$num_total}}, {{$pct_succeeded}}%">
 					<div class="progress-bar" style="width:{{$pct_succeeded}}%;"></div>
 					<a href="?category={{$category_name}}&min={{.MinDuration}}&n={{$n}}">{{$num_succeeded}}</a>
 				</td>
 				{{ end -}}
 
-				<td class="errored numeric progress finished errored {{$category_class_name}}" title="{{$num_errored}} of {{$num_total}}, {{$pct_errored}}%">
+				<td class="errored count progress finished errored {{$category_class_name}}" title="{{$num_errored}} of {{$num_total}}, {{$pct_errored}}%">
 					<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
 					<a href="?category={{$category_name}}&errored&n={{$n}}">{{$num_errored}}</a>
 				</td>
 
-				<td class="total numeric {{$category_class_name}}" title="{{$num_total}} total traces">
+				<td class="total count numeric {{$category_class_name}}" title="{{$num_total}} total traces">
 					{{$num_total}}
+				</td>
+
+				<td class="separator">
+					&nbsp;
+				</td>
+
+				<td class="rate numeric {{$category_class_name}}">
+					{{ $rate       := ratecalc $num_total (timediff .Newest .Oldest) }}
+					{{ $total_rate  = floatadd $total_rate $rate }}
+					{{ humanizefloat $rate }}/s
+				</td>
+
+				<td class="latest numeric {{$category_class_name}}">
+					{{humanize (timesince .Newest)}}
+				</td>
+
+				<td class="window numeric {{$category_class_name}}">
+					{{humanize (timediff .Newest .Oldest)}}
 				</td>
 			</tr>
 			{{ end -}} <!-- overview range categories -->
@@ -158,7 +189,7 @@ table.summary tr:last-child td:first-child {
 					<a href="?n={{$n}}">(overall)</a>
 				</td>
 
-				<td class="active numeric progress" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
+				<td class="active count progress" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
 					<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
 					<a href="?active&n={{$n}}">{{$num_active}}</a>
 				</td>
@@ -166,19 +197,35 @@ table.summary tr:last-child td:first-child {
 				{{ range .Buckets -}}
 				{{ $num_succeeded := .NumSucceeded                        -}}
 				{{ $pct_succeeded := intpercent $num_succeeded $num_total -}}
-				<td class="bucket numeric progress min-{{.MinDuration}}" title="{{$num_succeeded}} of {{$num_total}}, {{$pct_succeeded}}%">
+				<td class="bucket count progress min-{{.MinDuration}}" title="{{$num_succeeded}} of {{$num_total}}, {{$pct_succeeded}}%">
 					<div class="progress-bar" style="width:{{$pct_succeeded}}%;"></div>
 					<a href="?min={{.MinDuration}}&n={{$n}}">{{$num_succeeded}}</a>
 				</td>
 				{{ end -}}
 
-				<td class="errored numeric progress" title="{{$num_errored}} of {{$num_total}}, {{$pct_errored}}%">
+				<td class="errored count progress" title="{{$num_errored}} of {{$num_total}}, {{$pct_errored}}%">
 					<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
 					<a href="?errored&n={{$n}}">{{$num_errored}}</a>
 				</td>
 
-				<td class="total numeric" title="{{$num_total}} total traces">
+				<td class="total count numeric" title="{{$num_total}} total traces">
 					{{$num_total}}
+				</td>
+
+				<td class="separator">
+					&nbsp;
+				</td>
+
+				<td class="rate numeric">
+					{{ humanizefloat $total_rate }}/s
+				</td>
+
+				<td class="latest numeric">
+					{{humanize (timesince .Newest)}}
+				</td>
+
+				<td class="window numeric">
+					{{humanize (timediff .Newest .Oldest)}}
 				</td>
 			</tr>
 			{{ end -}} <!-- overall category -->
@@ -206,7 +253,7 @@ table.summary tr:last-child td:first-child {
 					&middot;
 					<a href="?id={{.ID}}&json">JSON</a>
 					&middot;
-					<span class="time-since" title="{{.Start}}"></span>
+					<span title="{{.Start}}">{{humanize (timesince .Start)}} ago</span>
 
 					<span class="right">
 						<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">

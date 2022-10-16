@@ -121,6 +121,7 @@ const timeFormat = "15:04:05.000000"
 
 var templateFuncs = template.FuncMap{
 	"intadd":         func(i, j int) int { return i + j },
+	"floatadd":       func(i, j float64) float64 { return i + j },
 	"category2class": func(name string) string { return "category-" + sha256hex(name) },
 	"timenow":        func() time.Time { return time.Now().UTC() },
 	"timesince":      func(t time.Time) time.Duration { return time.Since(t) },
@@ -131,6 +132,8 @@ var templateFuncs = template.FuncMap{
 	"intpercent":     func(n, d int) int { return int(100 * float64(n) / float64(d)) },
 	"queryescape":    func(s string) string { return url.QueryEscape(s) },
 	"insertbreaks":   func(s string) template.HTML { return template.HTML(breaksReplacer.Replace(s)) },
+	"ratecalc":       func(n int, d time.Duration) float64 { return float64(n) / float64(d.Seconds()) },
+	"humanizefloat":  humanizefloat,
 	"humanize":       humanize,
 	"highlightclasses": func(res *trc.TraceQueryResponse) []string {
 		var classes []string
@@ -232,6 +235,22 @@ func humanize(d time.Duration) time.Duration {
 		return d.Truncate(1 * time.Microsecond)
 	default:
 		return d
+	}
+}
+
+func humanizefloat(f float64) string {
+	// try to enforce max width of 3-4
+	switch {
+	case f > 1_000_000:
+		return "1M+"
+	case f > 10_000:
+		return fmt.Sprintf("%.0fK", f/1000) // 32756 -> 32K
+	case f > 1_000:
+		return fmt.Sprintf("%.1fK", f/1000) // 5142 -> 5.1K
+	case f > 1:
+		return fmt.Sprintf("%.0f", f) // 812.3 -> 821
+	default:
+		return fmt.Sprintf("%0.01f", f) // 0.15845 -> 0.1
 	}
 }
 
