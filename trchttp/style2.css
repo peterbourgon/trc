@@ -134,7 +134,7 @@ div.trace div.events div.event div.delta {
 	min-width: 5em;
 	position: relative;
 	z-index: 1;
-	background-color: rgba(0, 0, 0, 0.04);
+	/* background-color: rgba(0, 0, 0, 0.04); */
 }
 
 div.trace div.events div.event div.delta .progress-bar {

@@ -132,9 +132,14 @@ var templateFuncs = template.FuncMap{
 	"intpercent":     func(n, d int) int { return int(100 * float64(n) / float64(d)) },
 	"queryescape":    func(s string) string { return url.QueryEscape(s) },
 	"insertbreaks":   func(s string) template.HTML { return template.HTML(breaksReplacer.Replace(s)) },
-	"ratecalc":       func(n int, d time.Duration) float64 { return float64(n) / float64(d.Seconds()) },
-	"humanizefloat":  humanizefloat,
-	"humanize":       humanize,
+	"ratecalc": func(n int, d time.Duration) float64 {
+		if d == 0 {
+			return 0.0
+		}
+		return float64(n) / float64(d.Seconds())
+	},
+	"humanizefloat": humanizefloat,
+	"humanize":      humanize,
 	"highlightclasses": func(res *trc.TraceQueryResponse) []string {
 		var classes []string
 
