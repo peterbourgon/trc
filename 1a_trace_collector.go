@@ -77,11 +77,16 @@ func (tc *TraceCollector) TraceQuery(ctx context.Context, req *TraceQueryRequest
 	stats := newTraceQueryStats(req, overall)
 	tr.Tracef("computed stats")
 
-	selected := allowed
-	sort.Sort(selected)
-	if len(selected) > req.Limit {
-		selected = selected[:req.Limit]
+	sort.Sort(allowed)
+	if len(allowed) > req.Limit {
+		allowed = allowed[:req.Limit]
 	}
+
+	selected := make([]*TraceStatic, len(allowed))
+	for i := range allowed {
+		selected[i] = NewTraceStatic(allowed[i])
+	}
+
 	tr.Tracef("selected %d", len(selected))
 
 	return &TraceQueryResponse{
@@ -99,16 +104,16 @@ func (tc *TraceCollector) TraceQuery(ctx context.Context, req *TraceQueryRequest
 
 // TraceQueryRequest collects the parameters used to query a trace collector.
 type TraceQueryRequest struct {
-	IDs         []string
-	Category    string
-	IsActive    bool
-	IsFinished  bool
-	IsSucceeded bool
-	IsErrored   bool
-	MinDuration *time.Duration // minimum
-	Bucketing   []time.Duration
-	Search      *regexp.Regexp
-	Limit       int
+	IDs         []string        `json:"ids,omitempty"`
+	Category    string          `json:"category,omitempty"`
+	IsActive    bool            `json:"is_active,omitempty"`
+	IsFinished  bool            `json:"is_finished,omitempty"`
+	IsSucceeded bool            `json:"is_succeeded,omitempty"`
+	IsErrored   bool            `json:"is_errored,omitempty"`
+	MinDuration *time.Duration  `json:"min_duration,omitempty"`
+	Bucketing   []time.Duration `json:"bucketing,omitempty"`
+	Search      *regexp.Regexp  `json:"search,omitempty"`
+	Limit       int             `json:"limit,omitempty"`
 }
 
 func (req *TraceQueryRequest) sanitize() {
@@ -192,11 +197,21 @@ func (f *TraceQueryRequest) allow(tr Trace) bool {
 
 // TraceQueryResponse represents the results of a trace query.
 type TraceQueryResponse struct {
-	Request  *TraceQueryRequest
-	Stats    *TraceQueryStats
-	Matched  int
-	Selected Traces
-	Problems []string
+	Request  *TraceQueryRequest `json:"request"`
+	Stats    *TraceQueryStats   `json:"stats"`
+	Matched  int                `json:"matched"`
+	Selected []*TraceStatic     `json:"selected"`
+	Problems []string           `json:"problems,omitempty"`
+}
+
+func mergeTraceQueryResponse(dst, src *TraceQueryResponse) error {
+	if err := mergeTraceQueryStats(dst.Stats, src.Stats); err != nil {
+		return fmt.Errorf("merge stats: %w", err)
+	}
+	dst.Matched += src.Matched
+	dst.Selected = append(dst.Selected, src.Selected...)
+	dst.Problems = append(dst.Problems, src.Problems...)
+	return nil
 }
 
 //
@@ -299,22 +314,51 @@ func (ts *TraceQueryStats) Bucketing() []time.Duration {
 	return bucketing
 }
 
+func mergeTraceQueryStats(dst, src *TraceQueryStats) error {
+	m := map[string]*TraceQueryCategoryStats{}
+	for _, c := range dst.Categories {
+		m[c.Name] = c
+	}
+
+	for _, c := range src.Categories {
+		target, ok := m[c.Name]
+		if !ok {
+			m[c.Name] = c
+			continue
+		}
+		if err := mergeTraceQueryCategoryStats(target, c); err != nil {
+			return fmt.Errorf("category %q: %w", c.Name, err)
+		}
+	}
+
+	flat := make([]*TraceQueryCategoryStats, 0, len(m))
+	for _, s := range m {
+		flat = append(flat, s)
+	}
+	sort.Slice(flat, func(i, j int) bool {
+		return flat[i].Name < flat[j].Name
+	})
+	dst.Categories = flat
+
+	return nil
+}
+
 //
 //
 //
 
 // TraceCategoryStats is a summary view of traces in a given category.
 type TraceQueryCategoryStats struct {
-	Name         string
-	Buckets      []*TraceQueryCategoryBucketStats
-	IsQueried    bool // was this category provided in the query?
-	NumSucceeded int  //  succeeded
-	NumErrored   int  // +  errored
-	NumFinished  int  // = finished -> finished
-	NumActive    int  //               + active
-	NumTotal     int  //               =  total
-	Oldest       time.Time
-	Newest       time.Time
+	Name         string                           `json:"name"`
+	Buckets      []*TraceQueryCategoryBucketStats `json:"buckets"`
+	IsQueried    bool                             `json:"is_queried,omitempty"`
+	NumSucceeded int                              `json:"num_succeeded"` //  succeeded
+	NumErrored   int                              `json:"num_errored"`   // +  errored
+	NumFinished  int                              `json:"num_finished"`  // = finished -> finished
+	NumActive    int                              `json:"num_active"`    //               + active
+	NumTotal     int                              `json:"num_total"`     //               =  total
+	Oldest       time.Time                        `json:"oldest"`
+	Newest       time.Time                        `json:"newest"`
 }
 
 func newTraceQueryCategoryStats(req *TraceQueryRequest, name string) *TraceQueryCategoryStats {
@@ -326,10 +370,6 @@ func newTraceQueryCategoryStats(req *TraceQueryRequest, name string) *TraceQuery
 }
 
 func mergeTraceQueryCategoryStats(dst, src *TraceQueryCategoryStats) error {
-	// if dst.Name != src.Name {
-	// return fmt.Errorf("name: want %q, have %q", dst.Name, src.Name)
-	// }
-
 	dst.NumSucceeded += src.NumSucceeded
 	dst.NumErrored += src.NumErrored
 	dst.NumFinished += src.NumFinished
@@ -389,15 +429,15 @@ func mergeTraceQueryCategoryStatsBuckets(dst, src []*TraceQueryCategoryBucketSta
 // TraceQueryCategoryBucketStats is a summary view of traces in a given category
 // with a duration greater than or equal to the specified minimum duration.
 type TraceQueryCategoryBucketStats struct {
-	MinDuration  time.Duration
-	NumSucceeded int
-	NumErrored   int
-	NumFinished  int
-	NumActive    int
-	NumTotal     int
-	Oldest       time.Time
-	Newest       time.Time
-	IsQueried    bool // was this specific bucket provided in the query?
+	MinDuration  time.Duration `json:"min_duration"`
+	IsQueried    bool          `json:"is_queried,omitempty"`
+	NumSucceeded int           `json:"num_succeeded"`
+	NumErrored   int           `json:"num_errored"`
+	NumFinished  int           `json:"num_finished"`
+	NumActive    int           `json:"num_active"`
+	NumTotal     int           `json:"num_total"`
+	Oldest       time.Time     `json:"oldest"`
+	Newest       time.Time     `json:"newest"`
 }
 
 func mergeTraceQueryCategoryBucketStats(dst, src *TraceQueryCategoryBucketStats) error {

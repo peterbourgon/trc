@@ -1,16 +1,23 @@
 package trchttp
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/peterbourgon/trc"
 )
 
-func TraceCollectorHandler(c *trc.TraceCollector) http.Handler {
+type TraceQueryer interface {
+	TraceQuery(ctx context.Context, req *trc.TraceQueryRequest) (*trc.TraceQueryResponse, error)
+}
+
+func TraceCollectorHandler(tq TraceQueryer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var (
 			ctx       = r.Context()
@@ -20,6 +27,7 @@ func TraceCollectorHandler(c *trc.TraceCollector) http.Handler {
 			min       = parseDefault(query.Get("min"), time.ParseDuration, 0)
 			bucketing = parseBucketing(query["b"])
 			q         = query.Get("q")
+			remotes   = query["r"]
 			problems  = []string{}
 		)
 
@@ -47,9 +55,23 @@ func TraceCollectorHandler(c *trc.TraceCollector) http.Handler {
 			Search:      re,
 		}
 
+		if ct := r.Header.Get("content-type"); strings.Contains(ct, "application/json") {
+			tr.Tracef("parsing request body as JSON")
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				err = fmt.Errorf("parse JSON request from body: %w", err)
+				problems = append(problems, err.Error())
+				tr.Errorf(err.Error())
+			}
+		}
+
+		queryer := tq
+		if len(remotes) > 0 {
+			queryer = trc.NewDistributedTraceCollector(http.DefaultClient, remotes...)
+		}
+
 		tr.Tracef("querying")
 
-		res, err := c.TraceQuery(ctx, req)
+		res, err := queryer.TraceQuery(ctx, req)
 		if err != nil {
 			tr.Errorf("TraceQuery: %v", err)
 			problems = append(problems, err.Error())
@@ -67,3 +89,5 @@ func TraceCollectorHandler(c *trc.TraceCollector) http.Handler {
 		}
 	})
 }
+
+type TraceQueryRequest trc.TraceQueryRequest

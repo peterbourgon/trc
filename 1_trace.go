@@ -2,6 +2,7 @@ package trc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -21,7 +22,7 @@ import (
 //
 // Implementations of Trace are expected to be safe for concurrent access.
 type Trace interface {
-	// ID should return a process-unique identifier for the trace.
+	// ID should return a unique identifier for the trace.
 	ID() string
 
 	// Category should return the user-supplied category of the trace.
@@ -107,14 +108,15 @@ func (trs Traces) Len() int { return len(trs) }
 // TraceCore is the default, mutable implementation of the Trace interface.
 type TraceCore struct {
 	mtx       sync.Mutex
+	source    string
 	id        string
-	start     time.Time
 	category  string
-	events    []Event
-	truncated int
+	start     time.Time
 	errored   bool
 	finished  bool
 	duration  time.Duration
+	events    []Event
+	truncated int
 }
 
 // NewTraceCore creates a new TraceCore with the given category.
@@ -122,166 +124,176 @@ func NewTraceCore(category string) *TraceCore {
 	now := time.Now().UTC()
 	id := ulid.MustNew(ulid.Timestamp(now), traceIDEntropy).String()
 	return &TraceCore{
+		source:   "",
 		id:       id,
-		start:    now,
 		category: category,
+		start:    now,
 	}
 }
 
-// Tracef implements Trace.
-func (ctr *TraceCore) Tracef(format string, args ...interface{}) {
-	ctr.mtx.Lock()
-	defer ctr.mtx.Unlock()
+func (tr *TraceCore) Source() string {
+	return tr.source // immutable
+}
 
-	if ctr.finished {
+// Tracef implements Trace.
+func (tr *TraceCore) Tracef(format string, args ...interface{}) {
+	tr.mtx.Lock()
+	defer tr.mtx.Unlock()
+
+	if tr.finished {
 		return
 	}
 
 	switch {
-	case len(ctr.events) >= getTraceCoreMaxEvents():
-		ctr.truncated++
+	case len(tr.events) >= getTraceCoreMaxEvents():
+		tr.truncated++
 	default:
-		ctr.events = append(ctr.events, MakeEvent(format, args...))
+		tr.events = append(tr.events, MakeEvent(format, args...))
 	}
 }
 
 // LazyTracef implements Trace.
-func (ctr *TraceCore) LazyTracef(format string, args ...interface{}) {
-	ctr.mtx.Lock()
-	defer ctr.mtx.Unlock()
+func (tr *TraceCore) LazyTracef(format string, args ...interface{}) {
+	tr.mtx.Lock()
+	defer tr.mtx.Unlock()
 
-	if ctr.finished {
+	if tr.finished {
 		return
 	}
 
 	switch {
-	case len(ctr.events) >= getTraceCoreMaxEvents():
-		ctr.truncated++
+	case len(tr.events) >= getTraceCoreMaxEvents():
+		tr.truncated++
 	default:
-		ctr.events = append(ctr.events, MakeLazyEvent(format, args...))
+		tr.events = append(tr.events, MakeLazyEvent(format, args...))
 	}
 }
 
 // Errorf implements Trace.
-func (ctr *TraceCore) Errorf(format string, args ...interface{}) {
-	ctr.mtx.Lock()
-	defer ctr.mtx.Unlock()
+func (tr *TraceCore) Errorf(format string, args ...interface{}) {
+	tr.mtx.Lock()
+	defer tr.mtx.Unlock()
 
-	if ctr.finished {
+	if tr.finished {
 		return
 	}
 
-	ctr.errored = true
+	tr.errored = true
 
 	switch {
-	case len(ctr.events) >= getTraceCoreMaxEvents():
-		ctr.truncated++
+	case len(tr.events) >= getTraceCoreMaxEvents():
+		tr.truncated++
 	default:
-		ctr.events = append(ctr.events, MakeEvent(format, args...))
+		tr.events = append(tr.events, MakeEvent(format, args...))
 	}
 }
 
 // LazyErrorf implements Trace.
-func (ctr *TraceCore) LazyErrorf(format string, args ...interface{}) {
-	ctr.mtx.Lock()
-	defer ctr.mtx.Unlock()
+func (tr *TraceCore) LazyErrorf(format string, args ...interface{}) {
+	tr.mtx.Lock()
+	defer tr.mtx.Unlock()
 
-	if ctr.finished {
+	if tr.finished {
 		return
 	}
 
-	ctr.errored = true
+	tr.errored = true
 
 	switch {
-	case len(ctr.events) >= getTraceCoreMaxEvents():
-		ctr.truncated++
+	case len(tr.events) >= getTraceCoreMaxEvents():
+		tr.truncated++
 	default:
-		ctr.events = append(ctr.events, MakeLazyEvent(format, args...))
+		tr.events = append(tr.events, MakeLazyEvent(format, args...))
 	}
 }
 
 // Finish implements Trace.
-func (ctr *TraceCore) Finish() {
-	ctr.mtx.Lock()
-	defer ctr.mtx.Unlock()
+func (tr *TraceCore) Finish() {
+	tr.mtx.Lock()
+	defer tr.mtx.Unlock()
 
-	if ctr.finished {
+	if tr.finished {
 		return
 	}
 
-	ctr.finished = true
-	ctr.duration = time.Since(ctr.start)
+	tr.finished = true
+	tr.duration = time.Since(tr.start)
 }
 
 // ID implements Trace.
-func (ctr *TraceCore) ID() string {
-	return ctr.id // immutable
+func (tr *TraceCore) ID() string {
+	return tr.id // immutable
 }
 
 // Start implements Trace.
-func (ctr *TraceCore) Start() time.Time {
-	return ctr.start // immutable
+func (tr *TraceCore) Start() time.Time {
+	return tr.start // immutable
 }
 
 // Category implements Trace.
-func (ctr *TraceCore) Category() string {
-	return ctr.category // immutable
+func (tr *TraceCore) Category() string {
+	return tr.category // immutable
 }
 
 // Active implements Trace.
-func (ctr *TraceCore) Active() bool {
-	return !ctr.Finished()
+func (tr *TraceCore) Active() bool {
+	return !tr.Finished()
 }
 
 // Finished implements Trace.
-func (ctr *TraceCore) Finished() bool {
-	ctr.mtx.Lock()
-	defer ctr.mtx.Unlock()
+func (tr *TraceCore) Finished() bool {
+	tr.mtx.Lock()
+	defer tr.mtx.Unlock()
 
-	return ctr.finished
+	return tr.finished
 }
 
 // Succeeded implements Trace.
-func (ctr *TraceCore) Succeeded() bool {
-	ctr.mtx.Lock()
-	defer ctr.mtx.Unlock()
+func (tr *TraceCore) Succeeded() bool {
+	tr.mtx.Lock()
+	defer tr.mtx.Unlock()
 
-	return ctr.finished && !ctr.errored
+	return tr.finished && !tr.errored
 }
 
 // Errored implements Trace.
-func (ctr *TraceCore) Errored() bool {
-	ctr.mtx.Lock()
-	defer ctr.mtx.Unlock()
+func (tr *TraceCore) Errored() bool {
+	tr.mtx.Lock()
+	defer tr.mtx.Unlock()
 
-	return ctr.finished && ctr.errored
+	return tr.finished && tr.errored
 }
 
 // Duration implements Trace.
-func (ctr *TraceCore) Duration() time.Duration {
-	ctr.mtx.Lock()
-	defer ctr.mtx.Unlock()
+func (tr *TraceCore) Duration() time.Duration {
+	tr.mtx.Lock()
+	defer tr.mtx.Unlock()
 
-	if ctr.finished {
-		return ctr.duration
+	if tr.finished {
+		return tr.duration
 	}
 
-	return time.Since(ctr.start)
+	return time.Since(tr.start)
 }
 
 // Events implements Trace.
-func (ctr *TraceCore) Events() []Event {
-	ctr.mtx.Lock()
-	defer ctr.mtx.Unlock()
+func (tr *TraceCore) Events() []Event {
+	tr.mtx.Lock()
+	defer tr.mtx.Unlock()
 
-	events := make([]Event, len(ctr.events))
-	copy(events, ctr.events)
+	events := make([]Event, len(tr.events))
+	copy(events, tr.events)
 
-	if ctr.truncated > 0 {
-		events = append(events, MakeEvent("(truncated event count %d)", ctr.truncated))
+	if tr.truncated > 0 {
+		events = append(events, MakeEvent("(truncated event count %d)", tr.truncated))
 	}
 
 	return events
+}
+
+// MarshalJSON implements json.Marshaler for the trace.
+func (tr *TraceCore) MarshalJSON() ([]byte, error) {
+	return json.Marshal(NewTraceStatic(tr))
 }
 
 //
@@ -337,6 +349,7 @@ func getTraceCoreMaxEvents() int {
 //	        ...
 type PrefixedTrace struct {
 	Trace
+
 	prefix string
 }
 
@@ -388,3 +401,50 @@ func (ptr *PrefixedTrace) Errorf(format string, args ...interface{}) {
 func (ptr *PrefixedTrace) LazyErrorf(format string, args ...interface{}) {
 	ptr.Trace.LazyErrorf(ptr.prefix+format, args...)
 }
+
+//
+//
+//
+
+type TraceStatic struct {
+	StaticID        string        `json:"id"`
+	StaticCategory  string        `json:"category"`
+	StaticStart     time.Time     `json:"start"`
+	StaticActive    bool          `json:"active"`
+	StaticFinished  bool          `json:"finished"`
+	StaticSucceeded bool          `json:"succeeded"`
+	StaticErrored   bool          `json:"errored"`
+	StaticDuration  time.Duration `json:"duration"`
+	StaticEvents    []Event       `json:"events"`
+}
+
+var _ Trace = (*TraceStatic)(nil)
+
+func NewTraceStatic(tr Trace) *TraceStatic {
+	return &TraceStatic{
+		StaticID:        tr.ID(),
+		StaticCategory:  tr.Category(),
+		StaticStart:     tr.Start(),
+		StaticActive:    tr.Active(),
+		StaticFinished:  tr.Finished(),
+		StaticSucceeded: tr.Succeeded(),
+		StaticErrored:   tr.Errored(),
+		StaticDuration:  tr.Duration(),
+		StaticEvents:    tr.Events(),
+	}
+}
+
+func (tr *TraceStatic) ID() string                                    { return tr.StaticID }
+func (tr *TraceStatic) Category() string                              { return tr.StaticCategory }
+func (tr *TraceStatic) Start() time.Time                              { return tr.StaticStart }
+func (tr *TraceStatic) Active() bool                                  { return tr.StaticActive }
+func (tr *TraceStatic) Finished() bool                                { return tr.StaticFinished }
+func (tr *TraceStatic) Succeeded() bool                               { return tr.StaticSucceeded }
+func (tr *TraceStatic) Errored() bool                                 { return tr.StaticErrored }
+func (tr *TraceStatic) Duration() time.Duration                       { return tr.StaticDuration }
+func (tr *TraceStatic) Finish()                                       { /* no-op */ }
+func (tr *TraceStatic) Tracef(format string, args ...interface{})     { /* no-op */ }
+func (tr *TraceStatic) LazyTracef(format string, args ...interface{}) { /* no-op */ }
+func (tr *TraceStatic) Errorf(format string, args ...interface{})     { /* no-op */ }
+func (tr *TraceStatic) LazyErrorf(format string, args ...interface{}) { /* no-op */ }
+func (tr *TraceStatic) Events() []Event                               { return tr.StaticEvents }

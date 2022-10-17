@@ -215,7 +215,7 @@ table.summary tr:last-child td {
 				</td>
 
 				<td class="latest numeric">
-					{{humanize (timesince .Newest)}}
+					{{ if not .Newest.IsZero -}} {{humanize (timesince .Newest)}} {{ end -}}
 				</td>
 			</tr>
 			{{ end -}} <!-- overall category -->

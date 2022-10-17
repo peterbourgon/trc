@@ -21,6 +21,22 @@ import (
 	"github.com/peterbourgon/trc"
 )
 
+func parseParam[T any](r *http.Request, key string, parse func(string) (T, error)) (T, bool) {
+	var zero T
+
+	if !r.URL.Query().Has(key) {
+		return zero, false
+	}
+
+	str := r.URL.Query().Get(key)
+	val, err := parse(str)
+	if err != nil {
+		return zero, false
+	}
+
+	return val, false
+}
+
 func parseDefault[T any](s string, parse func(string) (T, error), def T) T {
 	if v, err := parse(s); err == nil {
 		return v
@@ -48,7 +64,13 @@ func renderJSON(ctx context.Context, w http.ResponseWriter, data interface{}) {
 func renderHTML(ctx context.Context, w http.ResponseWriter, filename string, data any) {
 	tr := trc.FromContext(ctx)
 
-	body, err := func() ([]byte, error) {
+	body, err := func() (_ []byte, err error) {
+		defer func() {
+			if x := recover(); x != nil {
+				err = fmt.Errorf("PANIC: %v", x)
+			}
+		}()
+
 		// List everything in the base dir of the embedded fs.
 		entries, err := fs.ReadDir(".")
 		if err != nil {
@@ -143,32 +165,32 @@ var templateFuncs = template.FuncMap{
 	"highlightclasses": func(res *trc.TraceQueryResponse) []string {
 		var classes []string
 
-		if len(res.Request.IDs) > 0 {
+		if len(res.Stats.Request.IDs) > 0 {
 			return nil
 		}
 
-		if res.Request.Category != "" {
-			classes = append(classes, "category-"+sha256hex(res.Request.Category))
+		if res.Stats.Request.Category != "" {
+			classes = append(classes, "category-"+sha256hex(res.Stats.Request.Category))
 		}
 
-		if res.Request.IsActive {
+		if res.Stats.Request.IsActive {
 			classes = append(classes, "active")
 		}
 
-		if res.Request.IsErrored {
+		if res.Stats.Request.IsErrored {
 			classes = append(classes, "errored")
 		}
 
-		if res.Request.IsFinished {
+		if res.Stats.Request.IsFinished {
 			classes = append(classes, "finished")
 		}
 
-		if res.Request.IsSucceeded {
+		if res.Stats.Request.IsSucceeded {
 			classes = append(classes, "succeeded")
 		}
 
-		if res.Request.MinDuration != nil {
-			classes = append(classes, "min-"+res.Request.MinDuration.String())
+		if res.Stats.Request.MinDuration != nil {
+			classes = append(classes, "min-"+res.Stats.Request.MinDuration.String())
 		}
 
 		return classes
