@@ -75,7 +75,7 @@ func TraceCollectorHandler(tq TraceQueryer) http.Handler {
 			queryer = trc.NewDistributedTraceCollector(http.DefaultClient, remotes...)
 		}
 
-		tr.Tracef("request: %s", req)
+		tr.Tracef("trace query: %s", req)
 
 		res, err := queryer.TraceQuery(ctx, req)
 		if err != nil {
@@ -83,7 +83,7 @@ func TraceCollectorHandler(tq TraceQueryer) http.Handler {
 			problems = append(problems, err.Error())
 		}
 
-		tr.Tracef("matched %d, selected %d", res.Matched, len(res.Selected))
+		tr.Tracef("query complete")
 
 		res.Problems = append(problems, res.Problems...)
 		res.Duration = time.Since(begin)

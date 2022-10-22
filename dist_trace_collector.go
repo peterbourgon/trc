@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"time"
@@ -28,6 +27,8 @@ func NewDistributedTraceCollector(c HTTPClient, uris ...string) *DistributedTrac
 }
 
 func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *TraceQueryRequest) (*TraceQueryResponse, error) {
+	tr := PrefixTracef(FromContext(ctx), "[dist]")
+
 	type tuple struct {
 		uri string
 		res *TraceQueryResponse
@@ -84,14 +85,19 @@ func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *TraceQ
 	for i := 0; i < cap(tuplec); i++ {
 		t := <-tuplec
 
-		if t.err == nil {
-			log.Printf("### %d/%d %s matched %d selected %d", i+1, cap(tuplec), t.uri, t.res.Matched, len(t.res.Selected))
-			t.err = mergeTraceQueryResponse(aggregate, t.res)
+		if t.err != nil {
+			tr.Tracef("%s: query error: %v", t.uri, t.err)
+			aggregate.Problems = append(aggregate.Problems, fmt.Sprintf("%s: %v", t.uri, t.err))
+			continue
 		}
 
-		if t.err != nil {
+		if err := mergeTraceQueryResponse(aggregate, t.res); err != nil {
+			tr.Tracef("%s: merge error: matched %d, selected %d, error %v", t.uri, t.res.Matched, len(t.res.Selected), err)
 			aggregate.Problems = append(aggregate.Problems, fmt.Sprintf("%s: %v", t.uri, t.err))
+			continue
 		}
+
+		tr.Tracef("%s: OK: matched %d, selected %d", t.uri, t.res.Matched, len(t.res.Selected))
 	}
 
 	// The selected traces aren't sorted, and may be too many.

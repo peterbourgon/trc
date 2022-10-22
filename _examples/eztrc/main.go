@@ -102,10 +102,10 @@ func main() {
 		metaHandlerInst := trchttp.Middleware(metaCollector, getMethodPath)(metaHandler)
 
 		mux := http.NewServeMux()
-		mux.Handle("/traces", distHandlerInst)
-		mux.Handle("/metatraces", metaHandlerInst)
-		log.Printf("http://%s/traces -- proxying to other instances", hostport)
-		log.Printf("http://%s/metatraces -- for the meta instance itself", hostport)
+		mux.Handle("/dist", distHandlerInst)
+		mux.Handle("/meta", metaHandlerInst)
+		log.Printf("http://%s/dist -- proxy to other instances", hostport)
+		log.Printf("http://%s/meta -- traces for this instance", hostport)
 
 		server := &http.Server{Addr: hostport, Handler: mux}
 		errc := make(chan error, 1)

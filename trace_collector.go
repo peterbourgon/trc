@@ -67,7 +67,9 @@ func (tc *TraceCollector) TraceQuery(ctx context.Context, req *TraceQueryRequest
 		return nil, fmt.Errorf("trace query request: %w", err)
 	}
 
-	var overall, allowed Traces
+	var begin = time.Now()
+	var overall Traces
+	var allowed Traces
 	{
 		for cat, rb := range tc.byCategory.getAll() {
 			if err := rb.walk(func(tr Trace) error {
@@ -82,9 +84,13 @@ func (tc *TraceCollector) TraceQuery(ctx context.Context, req *TraceQueryRequest
 		}
 	}
 	matched := len(allowed)
-	tr.Tracef("fetched traces: overall %d, matched %d", len(overall), matched)
+	took := time.Since(begin)
+	perTrace := time.Duration(float64(took) / float64(len(overall)))
+
+	tr.Tracef("evaluated %d, matched %d, took %s, %s/trace", len(overall), matched, took, perTrace)
 
 	stats := newTraceQueryStats(req, overall)
+
 	tr.Tracef("computed stats")
 
 	sort.Sort(allowed)
@@ -164,7 +170,7 @@ func (req *TraceQueryRequest) String() string {
 	}
 
 	if req.Regexp != nil {
-		parts = append(parts, fmt.Sprintf("regexp=%v", req.Regexp.String()))
+		parts = append(parts, fmt.Sprintf("regexp=%q", req.Regexp.String()))
 	}
 
 	if req.Limit > 0 {

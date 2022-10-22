@@ -55,7 +55,6 @@ table.summary tr:last-child td {
 	function calcdates() {
 		let timeSinces = document.getElementsByClassName("time-since");
 		for (let i = 0; i < timeSinces.length; i++) {
-			console.log(timeSinces[i]);
 			timeSinces[i].textContent = timesince(timeSinces[i].title);
 		}
 	}
@@ -73,18 +72,6 @@ table.summary tr:last-child td {
 				}
 			}
 		});
-	}
-
-	function toggleorigins() {
-		let elems = document.getElementById("header-origins").querySelectorAll("div");
-		console.log(elems);
-		elems.forEach(elem => {
-			if (elem.style.display === "none") {
-				elem.style.display = "block";
-			} else {
-				elem.style.display = "none";
-			}
-		})
 	}
 </script>
 
