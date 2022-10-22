@@ -54,7 +54,7 @@ func TraceCollectorHandler(tq TraceQueryer) http.Handler {
 			IsSucceeded: query.Has("succeeded"),
 			IsErrored:   query.Has("errored"),
 			MinDuration: ifThenElse(query.Has("min"), &min, nil),
-			Search:      re,
+			Regexp:      re,
 		}
 
 		if ct := r.Header.Get("content-type"); strings.Contains(ct, "application/json") {
@@ -64,6 +64,12 @@ func TraceCollectorHandler(tq TraceQueryer) http.Handler {
 				problems = append(problems, err.Error())
 				tr.Errorf(err.Error())
 			}
+		}
+
+		if err := req.Sanitize(); err != nil {
+			err = fmt.Errorf("sanitize request: %w", err)
+			problems = append(problems, err.Error())
+			tr.Errorf(err.Error())
 		}
 
 		queryer := tq

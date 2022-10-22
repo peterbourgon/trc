@@ -61,7 +61,10 @@ func (tc *TraceCollector) GetOrCreateTrace(ctx context.Context, category string)
 
 func (tc *TraceCollector) TraceQuery(ctx context.Context, req *TraceQueryRequest) (*TraceQueryResponse, error) {
 	tr := FromContext(ctx)
-	req.sanitize()
+
+	if err := req.Sanitize(); err != nil {
+		return nil, fmt.Errorf("trace query request: %w", err)
+	}
 
 	var overall, allowed Traces
 	{
@@ -118,13 +121,25 @@ type TraceQueryRequest struct {
 	IsErrored   bool            `json:"is_errored,omitempty"`
 	MinDuration *time.Duration  `json:"min_duration,omitempty"`
 	Bucketing   []time.Duration `json:"bucketing,omitempty"`
-	Search      *regexp.Regexp  `json:"search,omitempty"`
+	Search      string          `json:"search"`
+	Regexp      *regexp.Regexp  `json:"-"`
 	Limit       int             `json:"limit,omitempty"`
 }
 
-func (req *TraceQueryRequest) sanitize() {
+func (req *TraceQueryRequest) Sanitize() error {
 	if req.Bucketing == nil {
 		req.Bucketing = defaultBucketing
+	}
+
+	switch {
+	case req.Regexp != nil && req.Search == "":
+		req.Search = req.Regexp.String()
+	case req.Regexp == nil && req.Search != "":
+		re, err := regexp.Compile(req.Search)
+		if err != nil {
+			return fmt.Errorf("%q: %w", req.Search, err)
+		}
+		req.Regexp = re
 	}
 
 	switch {
@@ -135,6 +150,8 @@ func (req *TraceQueryRequest) sanitize() {
 	case req.Limit > traceQueryLimitMax:
 		req.Limit = traceQueryLimitMax
 	}
+
+	return nil
 }
 
 func (f *TraceQueryRequest) allow(tr Trace) bool {
@@ -175,16 +192,16 @@ func (f *TraceQueryRequest) allow(tr Trace) bool {
 		return false
 	}
 
-	if f.Search != nil {
+	if f.Regexp != nil {
 		if matchedSomething := func() bool {
-			if f.Search.MatchString(tr.ID()) {
+			if f.Regexp.MatchString(tr.ID()) {
 				return true
 			}
-			if f.Search.MatchString(tr.Category()) {
+			if f.Regexp.MatchString(tr.Category()) {
 				return true
 			}
 			for _, ev := range tr.Events() {
-				if ev.MatchRegexp(f.Search) {
+				if ev.MatchRegexp(f.Regexp) {
 					return true
 				}
 			}
@@ -204,6 +221,7 @@ func (f *TraceQueryRequest) allow(tr Trace) bool {
 // TraceQueryResponse represents the results of a trace query.
 type TraceQueryResponse struct {
 	Request  *TraceQueryRequest `json:"request"`
+	Origins  []string           `json:"origins"`
 	Stats    *TraceQueryStats   `json:"stats"`
 	Matched  int                `json:"matched"`
 	Selected []*TraceStatic     `json:"selected"`
@@ -211,6 +229,7 @@ type TraceQueryResponse struct {
 }
 
 func mergeTraceQueryResponse(dst, src *TraceQueryResponse) error {
+	dst.Origins = mergeStringSlices(dst.Origins, src.Origins)
 	if err := mergeTraceQueryStats(dst.Stats, src.Stats); err != nil {
 		return fmt.Errorf("merge stats: %w", err)
 	}
@@ -218,6 +237,22 @@ func mergeTraceQueryResponse(dst, src *TraceQueryResponse) error {
 	dst.Selected = append(dst.Selected, src.Selected...)
 	dst.Problems = append(dst.Problems, src.Problems...)
 	return nil
+}
+
+func mergeStringSlices(a, b []string) []string {
+	m := map[string]struct{}{}
+	for _, s := range a {
+		m[s] = struct{}{}
+	}
+	for _, s := range b {
+		m[s] = struct{}{}
+	}
+	r := make([]string, 0, len(m))
+	for s := range m {
+		r = append(r, s)
+	}
+	sort.Strings(r)
+	return r
 }
 
 //

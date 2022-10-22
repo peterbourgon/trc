@@ -63,6 +63,7 @@ func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *TraceQ
 				return
 			}
 
+			res.Origins = []string{uri}
 			for _, tr := range res.Selected {
 				tr.Origin = uri
 			}

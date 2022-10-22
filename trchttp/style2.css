@@ -2,6 +2,12 @@ body {
 	font-family: monospace;
 }
 
+form,
+input,
+select {
+	font-family: monospace;
+}
+
 a,
 a:visited {
 	text-decoration: none;
@@ -76,6 +82,19 @@ table.summary td.errored div.progress-bar {
 	right: 0;
 	background-color: rgba(224, 0, 0, 0.10);
 }
+
+/*
+ * header line
+ */
+
+div.header {
+	display: flex;
+}
+
+div.header div {
+	margin-right: 1ch;
+}
+
 
 /*
  * trace
@@ -166,6 +185,14 @@ div.trace div.events div.event div.what {
 	color: #666;
 }
 
+details summary::-webkit-details-marker {
+	display: none;
+}
+
+details summary::marker {
+	display: none;
+}
+
 details {
 	text-align: right;
 }
@@ -174,10 +201,6 @@ details>summary {
 	float: right;
 	list-style-type: none;
 	cursor: pointer;
-}
-
-details>summary::marker {
-	display: none;
 }
 
 details[open] {
@@ -208,14 +231,15 @@ div#problems {
 	right: 1em;
 	display: flex;
 	flex-direction: column;
-	max-width: 50%;
+	max-width: 66%;
+	font-size: smaller;
 
-	animation: problems 2s 1;
-	animation-delay: 4s;
-	animation-fill-mode: forwards;
-	-webkit-animation: problems 2s 1;
-	-webkit-animation-delay: 4s;
-	-webkit-animation-fill-mode: forwards;
+	/* animation: problems 2s 1; */
+	/* animation-delay: 4s; */
+	/* animation-fill-mode: forwards; */
+	/* -webkit-animation: problems 2s 1; */
+	/* -webkit-animation-delay: 4s; */
+	/* -webkit-animation-fill-mode: forwards; */
 }
 
 @keyframes problems {
@@ -224,7 +248,7 @@ div#problems {
 	}
 
 	to {
-		opacity: 0;
+		opacity: 0.5;
 	}
 }
 
@@ -234,13 +258,13 @@ div#problems {
 	}
 
 	to {
-		opacity: 0;
+		opacity: 0.5;
 	}
 }
 
 div#problems .problem {
-	margin: 0.5em;
-	padding: 0.5em 1em;
+	margin: 0.1em;
+	padding: 0.1em 1em;
 	background-color: pink;
 	border: solid 1px red;
 }
