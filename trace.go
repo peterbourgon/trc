@@ -407,8 +407,7 @@ func (ptr *PrefixedTrace) LazyErrorf(format string, args ...interface{}) {
 //
 
 type TraceStatic struct {
-	Origin string `json:"-"`
-
+	Origin          string        `json:"origin,omitempty"`
 	StaticID        string        `json:"id"`
 	StaticCategory  string        `json:"category"`
 	StaticStart     time.Time     `json:"start"`

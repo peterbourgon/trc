@@ -284,12 +284,27 @@ func (f *TraceQueryRequest) allow(tr Trace) bool {
 // TraceQueryResponse represents the results of a trace query.
 type TraceQueryResponse struct {
 	Request  *TraceQueryRequest `json:"request"`
-	Origins  []string           `json:"origins"`
+	Origins  []string           `json:"origins,omitempty"`
 	Stats    *TraceQueryStats   `json:"stats"`
 	Matched  int                `json:"matched"`
 	Selected []*TraceStatic     `json:"selected"`
 	Problems []string           `json:"problems,omitempty"`
 	Duration time.Duration      `json:"duration"`
+}
+
+func NewTraceQueryResponse(req *TraceQueryRequest, selected Traces) *TraceQueryResponse {
+	return &TraceQueryResponse{
+		Request: req,
+		Stats:   newTraceQueryStats(req, selected),
+	}
+}
+
+func (res *TraceQueryResponse) Merge(other *TraceQueryResponse) error {
+	if res.Request == nil {
+		return fmt.Errorf("invalid response: missing request")
+	}
+
+	return mergeTraceQueryResponse(res, other)
 }
 
 func mergeTraceQueryResponse(dst, src *TraceQueryResponse) error {
@@ -333,10 +348,10 @@ func ifThenElse[T any](cond bool, yes, not T) T {
 
 // TraceQueryStats is a summary view of a set of traces. It's returned as
 // part of a trace collector's query response, and in that case represents all
-// traces in the collector, with bucketing as specified by the query.
+// traces in the collector, with bucketing as specified in the query.
 type TraceQueryStats struct {
-	Request    *TraceQueryRequest
-	Categories []*TraceQueryCategoryStats
+	Request    *TraceQueryRequest         `json:"request"`
+	Categories []*TraceQueryCategoryStats `json:"categories"`
 }
 
 func newTraceQueryStats(req *TraceQueryRequest, trs Traces) *TraceQueryStats {

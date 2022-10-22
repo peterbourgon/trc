@@ -1,4 +1,4 @@
-package trc
+package trchttp
 
 import (
 	"bytes"
@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"sort"
 	"time"
+
+	"github.com/peterbourgon/trc"
 )
 
 type HTTPClient interface {
@@ -26,12 +28,12 @@ func NewDistributedTraceCollector(c HTTPClient, uris ...string) *DistributedTrac
 	}
 }
 
-func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *TraceQueryRequest) (*TraceQueryResponse, error) {
-	tr := PrefixTracef(FromContext(ctx), "[dist]")
+func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *trc.TraceQueryRequest) (*trc.TraceQueryResponse, error) {
+	tr := trc.PrefixTracef(trc.FromContext(ctx), "[dist]")
 
 	type tuple struct {
 		uri string
-		res *TraceQueryResponse
+		res *trc.TraceQueryResponse
 		err error
 	}
 
@@ -60,7 +62,7 @@ func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *TraceQ
 			}
 			defer resp.Body.Close()
 
-			var res TraceQueryResponse
+			var res trc.TraceQueryResponse
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 				tuplec <- tuple{uri, nil, fmt.Errorf("decode response: %w", err)}
 				return
@@ -77,11 +79,7 @@ func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *TraceQ
 	}
 
 	// We'll merge responses into a single aggregate response.
-	aggregate := &TraceQueryResponse{
-		Request: tqr,
-		Stats:   newTraceQueryStats(tqr, nil),
-	}
-
+	aggregate := trc.NewTraceQueryResponse(tqr, nil)
 	for i := 0; i < cap(tuplec); i++ {
 		t := <-tuplec
 
@@ -91,7 +89,7 @@ func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *TraceQ
 			continue
 		}
 
-		if err := mergeTraceQueryResponse(aggregate, t.res); err != nil {
+		if err := aggregate.Merge(t.res); err != nil {
 			tr.Tracef("%s: merge error: matched %d, selected %d, error %v", t.uri, t.res.Matched, len(t.res.Selected), err)
 			aggregate.Problems = append(aggregate.Problems, fmt.Sprintf("%s: %v", t.uri, t.err))
 			continue

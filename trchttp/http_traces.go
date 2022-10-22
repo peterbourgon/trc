@@ -72,7 +72,7 @@ func TraceCollectorHandler(tq TraceQueryer) http.Handler {
 		queryer := tq
 		if len(remotes) > 0 {
 			tr.Tracef("remotes count %d, using explicit distributed trace collector")
-			queryer = trc.NewDistributedTraceCollector(http.DefaultClient, remotes...)
+			queryer = NewDistributedTraceCollector(http.DefaultClient, remotes...)
 		}
 
 		tr.Tracef("trace query: %s", req)

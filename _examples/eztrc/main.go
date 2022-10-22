@@ -94,7 +94,7 @@ func main() {
 			uris = append(uris, fmt.Sprintf("http://%s/traces", hostport))
 		}
 
-		distCollector := trc.NewDistributedTraceCollector(http.DefaultClient, uris...)
+		distCollector := trchttp.NewDistributedTraceCollector(http.DefaultClient, uris...)
 		distHandler := trchttp.TraceCollectorHandler(distCollector)
 		metaCollector := trc.NewTraceCollector(100)
 		distHandlerInst := trchttp.Middleware(metaCollector, getMethodPath)(distHandler)
