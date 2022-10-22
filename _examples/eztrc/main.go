@@ -1,105 +1,156 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/signal"
 	"strings"
 	"sync"
 	"time"
 
-	eztrc "github.com/peterbourgon/trc/eztrc2"
+	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/eztrc"
 	"github.com/peterbourgon/trc/trchttp"
 )
 
 func main() {
-	store := NewStore()
-	api := NewAPI(store)
-	instrumentedAPI := trchttp.Middleware2(eztrc.Collector(), getAPIMethod)(api)
-	server := httptest.NewServer(instrumentedAPI)
-	defer server.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	taskGroup := &sync.WaitGroup{}
 
-	reqc := make(chan *http.Request)
+	// Make some API instances.
+	instances := map[string]*apiInstance{}
+	for i := 0; i < 3; i++ {
+		// Each one sits on a port.
+		hostport := fmt.Sprintf("localhost:%d", 8080+i)
+		instance := newAPIInstance(hostport)
 
-	set := func() *http.Request {
-		key := getWord()
-		val := getWord()
-		url := fmt.Sprintf("%s/%s", server.URL, key)
-		req, _ := http.NewRequest("PUT", url, strings.NewReader(val))
-		return req
-	}
-
-	get := func() *http.Request {
-		key := getWord()
-		url := fmt.Sprintf("%s/%s", server.URL, key)
-		req, _ := http.NewRequest("GET", url, nil)
-		return req
-	}
-
-	del := func() *http.Request {
-		key := getWord()
-		url := fmt.Sprintf("%s/%s", server.URL, key)
-		req, _ := http.NewRequest("DELETE", url, nil)
-		return req
-	}
-
-	var wg sync.WaitGroup
-
-	nworkers := 4
-	for i := 1; i <= nworkers; i++ {
-		wg.Add(1)
-		go func(id int) {
-			defer wg.Done()
-			c := fmt.Sprintf("worker %d/%d", id, nworkers)
-			for req := range reqc {
-				begin := time.Now()
-				resp, err := http.DefaultClient.Do(req)
-				took := time.Since(begin)
-				eztrc.Logf(c, "%s %s in %s, err %v", req.Method, req.URL.Path, took, err)
-				if err == nil {
-					io.Copy(io.Discard, resp.Body)
-					resp.Body.Close()
-				}
-				time.Sleep(took * time.Duration(id))
-			}
-		}(i)
-	}
-
-	{
-		wg.Add(1)
+		// Load the API with requests, but directly, to the API handler.
+		taskGroup.Add(1)
 		go func() {
-			defer wg.Done()
-			for {
-				r := rand.Float64()
-				d := time.Duration(r*100) * time.Millisecond
-				eztrc.Logf("generator", "r=%.3f -> d=%s", r, d)
+			defer taskGroup.Done()
+			for ctx.Err() == nil {
+				f := rand.Float64()
 				switch {
-				case r <= 0.7:
-					reqc <- set()
-				case r <= 0.9:
-					reqc <- get()
-				case r <= 1.0:
-					reqc <- del()
+				case f < 0.6:
+					key := getWord()
+					url := fmt.Sprintf("http://localhost/%s", key)
+					req, _ := http.NewRequest("GET", url, nil)
+					rec := httptest.NewRecorder()
+					instance.apiHandler.ServeHTTP(rec, req)
+
+				case f < 0.9:
+					key := getWord()
+					val := getWord()
+					url := fmt.Sprintf("http://localhost/%s", key)
+					req, _ := http.NewRequest("PUT", url, strings.NewReader(val))
+					rec := httptest.NewRecorder()
+					instance.apiHandler.ServeHTTP(rec, req)
+
+				default:
+					key := getWord()
+					url := fmt.Sprintf("http://localhost/%s", key)
+					req, _ := http.NewRequest("DELETE", url, nil)
+					rec := httptest.NewRecorder()
+					instance.apiHandler.ServeHTTP(rec, req)
 				}
 			}
 		}()
-	}
 
-	{
-		wg.Add(1)
+		// Serve the traces endpoint over proper HTTP.
+		taskGroup.Add(1)
 		go func() {
-			defer wg.Done()
-			instrumentedTraces := trchttp.Middleware2(eztrc.Collector(), getMethodPath)(eztrc.TraceHandler)
-			http.Handle("/traces", instrumentedTraces)
-			log.Printf("http://localhost:8080/traces")
-			http.ListenAndServe(":8080", nil)
+			defer taskGroup.Done()
+			mux := http.NewServeMux()
+			mux.Handle("/traces", instance.trcHandler)
+			log.Printf("http://%s/traces", hostport)
+			server := &http.Server{Addr: hostport, Handler: mux}
+			errc := make(chan error, 1)
+			go func() { errc <- server.ListenAndServe() }()
+			<-ctx.Done()
+			log.Printf("%s shutting down", hostport)
+			server.Close()
+			log.Printf("%s waiting for done", hostport)
+			<-errc
+			log.Printf("%s done", hostport)
 		}()
+
+		instances[hostport] = instance
 	}
 
-	wg.Wait()
+	// An HTTP server for the meta-traces endpoint by itself.
+	taskGroup.Add(1)
+	go func() {
+		defer taskGroup.Done()
+		hostport := fmt.Sprintf("localhost:%d", 8080+len(instances))
+		var uris []string
+		for hostport := range instances {
+			uris = append(uris, fmt.Sprintf("http://%s/traces", hostport))
+		}
+		distcollector := trc.NewDistributedTraceCollector(http.DefaultClient, uris...)
+		handler := trchttp.TraceCollectorHandler(distcollector)
+		mux := http.NewServeMux()
+		mux.Handle("/metatraces", handler)
+		log.Printf("http://%s/metatraces", hostport)
+		server := &http.Server{Addr: hostport, Handler: mux}
+		errc := make(chan error, 1)
+		go func() { errc <- server.ListenAndServe() }()
+		<-ctx.Done()
+		log.Printf("%s shutting down", hostport)
+		server.Close()
+		log.Printf("%s waiting for done", hostport)
+		<-errc
+		log.Printf("%s done", hostport)
+	}()
+
+	log.Printf("running")
+
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, os.Interrupt)
+	log.Printf("got signal %s", <-sigc)
+	cancel()
+
+	log.Printf("waiting for shutdown")
+	taskGroup.Wait()
+
+	log.Printf("done")
+}
+
+//
+//
+//
+
+type apiInstance struct {
+	collector  *trc.TraceCollector
+	trcHandler http.Handler
+	apiHandler http.Handler
+}
+
+func newAPIInstance(id string) *apiInstance {
+	var (
+		collector = trc.NewTraceCollector(1000)
+		store     = NewStore()
+		api       = NewAPI(store)
+	)
+	return &apiInstance{
+		collector:  collector,
+		trcHandler: trchttp.Middleware(collector, getMethodPath)(trchttp.TraceCollectorHandler(collector)),
+		apiHandler: trchttp.Middleware(collector, getAPIMethod)(api),
+	}
+}
+
+func (i *apiInstance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case strings.HasPrefix(r.URL.Path, "/traces"):
+		i.trcHandler.ServeHTTP(w, r)
+	default:
+		i.apiHandler.ServeHTTP(w, r)
+	}
 }
 
 //

@@ -12,6 +12,8 @@ const (
 	traceQueryLimitMin = 1
 	traceQueryLimitDef = 10
 	traceQueryLimitMax = 1000
+
+	DefaultTraceCollectorMaxEvents = 1000
 )
 
 var defaultBucketing = []time.Duration{
@@ -31,6 +33,10 @@ var defaultBucketing = []time.Duration{
 
 type TraceCollector struct {
 	byCategory *ringBuffers[Trace]
+}
+
+func NewDefaultTraceCollector() *TraceCollector {
+	return NewTraceCollector(DefaultTraceCollectorMaxEvents)
 }
 
 func NewTraceCollector(max int) *TraceCollector {

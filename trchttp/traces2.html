@@ -109,11 +109,14 @@ table.summary tr:last-child td {
 				<th class="separator">
 					&nbsp;
 				</th>
+				<th class="newest numeric">
+					Oldest
+				</th>
+				<th class="newest numeric">
+					Newest
+				</th>
 				<th class="rate numeric">
 					Rate
-				</th>
-				<th class="latest numeric">
-					Last
 				</th>
 			</tr> <!-- overview summary -->
 
@@ -158,17 +161,21 @@ table.summary tr:last-child td {
 					&nbsp;
 				</td>
 
+				<td class="oldest numeric {{$category_class_name}}">
+					{{humanize (timesince .Oldest)}}
+				</td>
+
+				<td class="newest numeric {{$category_class_name}}">
+					{{humanize (timesince .Newest)}}
+				</td>
+
 				<td class="rate numeric {{$category_class_name}}">
 					{{ $rate       := ratecalc $num_total (timediff .Newest .Oldest) }}
 					{{ $total_rate  = floatadd $total_rate $rate }}
 					{{ humanizefloat $rate }}/s
 				</td>
-
-				<td class="latest numeric {{$category_class_name}}">
-					{{humanize (timesince .Newest)}}
-				</td>
 			</tr>
-			{{ end -}} <!-- overview range categories -->
+				{{ end -}} <!-- overview range categories -->
 
 			{{ with .Stats.Overall -}} <!-- overall category -->
 			<tr class="category category-overall">
@@ -210,12 +217,16 @@ table.summary tr:last-child td {
 					&nbsp;
 				</td>
 
-				<td class="rate numeric">
-					{{ humanizefloat $total_rate }}/s
+				<td class="oldest numeric">
+					{{ if not .Oldest.IsZero -}} {{humanize (timesince .Oldest)}} {{ end -}}
 				</td>
 
-				<td class="latest numeric">
+				<td class="newest numeric">
 					{{ if not .Newest.IsZero -}} {{humanize (timesince .Newest)}} {{ end -}}
+				</td>
+
+				<td class="rate numeric">
+					{{ humanizefloat $total_rate }}/s
 				</td>
 			</tr>
 			{{ end -}} <!-- overall category -->
@@ -241,10 +252,9 @@ table.summary tr:last-child td {
 
 				<div class="metadata"> <!-- trace header line -->
 					<strong class="searchable"><a href="?id={{.ID}}">{{ .ID }}</a></strong>
-					&middot;
-					<a href="?id={{.ID}}&json">JSON</a>
-					&middot;
-					<span title="{{.Start}}">{{humanize (timesince .Start)}} ago</span>
+					&middot; <a href="?id={{.ID}}&json">JSON</a>
+					{{ if .Origin -}}&middot; <span class="searchable">via {{.Origin}}</span>{{ end -}}
+					&middot; <span title="{{.Start}}">{{humanize (timesince .Start)}} ago</span>
 
 					<span class="right">
 						<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">

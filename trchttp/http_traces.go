@@ -1,9 +1,11 @@
 package trchttp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -90,4 +92,40 @@ func TraceCollectorHandler(tq TraceQueryer) http.Handler {
 	})
 }
 
-type TraceQueryRequest trc.TraceQueryRequest
+type TraceCollectorClient struct {
+	Transport http.RoundTripper
+	Source    string
+}
+
+func (c TraceCollectorClient) TraceQuery(ctx context.Context, req *trc.TraceQueryRequest) (*trc.TraceQueryResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", "irrelevant?json", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("content-type", "application/json")
+
+	httpRes, err := c.Transport.RoundTrip(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		io.Copy(io.Discard, httpRes.Body)
+		httpRes.Body.Close()
+	}()
+
+	var res trc.TraceQueryResponse
+	if err := json.NewDecoder(httpRes.Body).Decode(&res); err != nil {
+		return nil, err
+	}
+
+	for _, tr := range res.Selected {
+		tr.StaticID = c.Source + "-" + tr.StaticID
+	}
+
+	return &res, nil
+}

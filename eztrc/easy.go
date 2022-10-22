@@ -7,18 +7,14 @@ import (
 	"github.com/peterbourgon/trc/trchttp"
 )
 
-var collector = trc.NewDefaultCollector()
+var collector = trc.NewDefaultTraceCollector()
 
 // Collector returns the default global collector used by package eztrc.
-func Collector() *trc.Collector { return collector }
+func Collector() *trc.TraceCollector { return collector }
 
 // TracesHandler is an HTTP handler that serves basic HTML and JSON
 // representations of the traces in the default collector.
-var TracesHandler = trchttp.HandleTraces(collector)
-
-// LogsHandler is an HTTP handler that serves basic HTML and JSON
-// representations of the logs in the default collector.
-var LogsHandler = trchttp.HandleLogs(collector)
+var TracesHandler = trchttp.TraceCollectorHandler(collector)
 
 // Create a new trace with the given category in the default collector. Return a
 // context containing that trace, and a function that should be called when the
@@ -73,18 +69,4 @@ func Errorf(ctx context.Context, format string, args ...interface{}) {
 // goroutines, so they must be safe for concurrent access.
 func LazyErrorf(ctx context.Context, format string, args ...interface{}) {
 	trc.LazyErrorf(ctx, format, args...)
-}
-
-// Logf adds a new log event with the given category to the default collector.
-// The arguments are evaluted immediately.
-func Logf(category string, format string, args ...interface{}) {
-	collector.Logf(category, format, args...)
-}
-
-// LazyLogf adds a new log event with the given category to the default
-// collector.
-// Arguments are stored for an indeterminate length of time and are evaluated
-// from multiple goroutines, so they must be safe for concurrent access.
-func LazyLogf(category string, format string, args ...interface{}) {
-	collector.LazyLogf(category, format, args...)
 }

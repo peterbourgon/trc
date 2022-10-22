@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 )
 
 type HTTPClient interface {
@@ -32,6 +33,7 @@ func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *TraceQ
 		err error
 	}
 
+	// Scatter a query request to each URI.
 	tuplec := make(chan tuple, len(tc.uris))
 	for _, uri := range tc.uris {
 		go func(uri string) {
@@ -46,6 +48,7 @@ func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *TraceQ
 				tuplec <- tuple{uri, nil, fmt.Errorf("create request: %w", err)}
 				return
 			}
+			req.Header.Set("content-type", "application/json")
 
 			resp, err := tc.client.Do(req)
 			if err != nil {
@@ -60,10 +63,15 @@ func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *TraceQ
 				return
 			}
 
+			for _, tr := range res.Selected {
+				tr.Origin = uri
+			}
+
 			tuplec <- tuple{uri, &res, nil}
 		}(uri)
 	}
 
+	// We'll merge responses into a single aggregate response.
 	aggregate := &TraceQueryResponse{
 		Request: tqr,
 		Stats:   newTraceQueryStats(tqr, nil),
@@ -73,14 +81,22 @@ func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *TraceQ
 		t := <-tuplec
 
 		if t.err == nil {
-			log.Printf("### %+v", t.res)
-			log.Printf("### stats: %+v", t.res.Stats)
+			log.Printf("### %d/%d %s matched %d selected %d", i+1, cap(tuplec), t.uri, t.res.Matched, len(t.res.Selected))
 			t.err = mergeTraceQueryResponse(aggregate, t.res)
 		}
 
 		if t.err != nil {
 			aggregate.Problems = append(aggregate.Problems, fmt.Sprintf("%s: %v", t.uri, t.err))
 		}
+	}
+
+	// The selected traces aren't sorted, and may be too many.
+	sort.Slice(aggregate.Selected, func(i, j int) bool {
+		return aggregate.Selected[i].Start().After(aggregate.Selected[j].Start())
+	})
+
+	if len(aggregate.Selected) > tqr.Limit {
+		aggregate.Selected = aggregate.Selected[:tqr.Limit]
 	}
 
 	return aggregate, nil
