@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +18,14 @@ type TraceQueryer interface {
 	TraceQuery(ctx context.Context, req *trc.TraceQueryRequest) (*trc.TraceQueryResponse, error)
 }
 
+func parseDurationPointer(s string) (*time.Duration, error) {
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
 func TraceCollectorHandler(tq TraceQueryer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var (
@@ -26,23 +33,13 @@ func TraceCollectorHandler(tq TraceQueryer) http.Handler {
 			tr        = trc.FromContext(ctx)
 			query     = r.URL.Query()
 			n         = parseDefault(query.Get("n"), strconv.Atoi, 10)
-			min       = parseDefault(query.Get("min"), time.ParseDuration, 0)
+			minptr    = parseDefault(query.Get("min"), parseDurationPointer, nil)
 			bucketing = parseBucketing(query["b"])
 			q         = query.Get("q")
 			remotes   = query["r"]
 			problems  = []string{}
+			begin     = time.Now()
 		)
-
-		var re *regexp.Regexp
-		if q != "" {
-			rr, err := regexp.Compile(q)
-			switch {
-			case err == nil:
-				re = rr
-			case err != nil:
-				problems = append(problems, fmt.Sprintf("bad query: %v", err))
-			}
-		}
 
 		req := &trc.TraceQueryRequest{
 			Bucketing:   bucketing,
@@ -53,8 +50,8 @@ func TraceCollectorHandler(tq TraceQueryer) http.Handler {
 			IsFinished:  query.Has("finished"),
 			IsSucceeded: query.Has("succeeded"),
 			IsErrored:   query.Has("errored"),
-			MinDuration: ifThenElse(query.Has("min"), &min, nil),
-			Regexp:      re,
+			MinDuration: minptr,
+			Search:      q,
 		}
 
 		if ct := r.Header.Get("content-type"); strings.Contains(ct, "application/json") {
@@ -74,10 +71,11 @@ func TraceCollectorHandler(tq TraceQueryer) http.Handler {
 
 		queryer := tq
 		if len(remotes) > 0 {
+			tr.Tracef("remotes count %d, using explicit distributed trace collector")
 			queryer = trc.NewDistributedTraceCollector(http.DefaultClient, remotes...)
 		}
 
-		tr.Tracef("querying")
+		tr.Tracef("request: %s", req)
 
 		res, err := queryer.TraceQuery(ctx, req)
 		if err != nil {
@@ -88,10 +86,11 @@ func TraceCollectorHandler(tq TraceQueryer) http.Handler {
 		tr.Tracef("matched %d, selected %d", res.Matched, len(res.Selected))
 
 		res.Problems = append(problems, res.Problems...)
+		res.Duration = time.Since(begin)
 
 		switch getBestContentType(r) {
 		case "text/html":
-			renderHTML(ctx, w, "traces2.html", res)
+			renderHTML(ctx, w, "traces.html", res)
 		default:
 			renderJSON(ctx, w, res)
 		}

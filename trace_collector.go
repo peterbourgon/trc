@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -126,6 +127,57 @@ type TraceQueryRequest struct {
 	Limit       int             `json:"limit,omitempty"`
 }
 
+func (req *TraceQueryRequest) String() string {
+	req.Sanitize()
+
+	var parts []string
+	if len(req.IDs) > 0 {
+		parts = append(parts, fmt.Sprintf("id=%v", req.IDs))
+	}
+
+	if req.Category != "" {
+		parts = append(parts, fmt.Sprintf("category=%q", req.Category))
+	}
+
+	if req.IsActive {
+		parts = append(parts, "active")
+	}
+
+	if req.IsFinished {
+		parts = append(parts, "finished")
+	}
+
+	if req.IsSucceeded {
+		parts = append(parts, "succeeded")
+	}
+
+	if req.IsErrored {
+		parts = append(parts, "errored")
+	}
+
+	if req.MinDuration != nil {
+		parts = append(parts, fmt.Sprintf("min=%s", req.MinDuration.String()))
+	}
+
+	if req.Bucketing != nil {
+		parts = append(parts, fmt.Sprintf("bucketing=%v", req.Bucketing))
+	}
+
+	if req.Regexp != nil {
+		parts = append(parts, fmt.Sprintf("regexp=%v", req.Regexp.String()))
+	}
+
+	if req.Limit > 0 {
+		parts = append(parts, fmt.Sprintf("limit=%d", req.Limit))
+	}
+
+	if len(parts) <= 0 {
+		return "*"
+	}
+
+	return strings.Join(parts, " ")
+}
+
 func (req *TraceQueryRequest) Sanitize() error {
 	if req.Bucketing == nil {
 		req.Bucketing = defaultBucketing
@@ -188,8 +240,13 @@ func (f *TraceQueryRequest) allow(tr Trace) bool {
 		return false
 	}
 
-	if f.MinDuration != nil && tr.Duration() < *f.MinDuration {
-		return false
+	if f.MinDuration != nil {
+		if tr.Active() { // we assert that a min duration query param excludes active traces
+			return false
+		}
+		if tr.Duration() < *f.MinDuration {
+			return false
+		}
 	}
 
 	if f.Regexp != nil {
@@ -226,6 +283,7 @@ type TraceQueryResponse struct {
 	Matched  int                `json:"matched"`
 	Selected []*TraceStatic     `json:"selected"`
 	Problems []string           `json:"problems,omitempty"`
+	Duration time.Duration      `json:"duration"`
 }
 
 func mergeTraceQueryResponse(dst, src *TraceQueryResponse) error {
@@ -236,6 +294,7 @@ func mergeTraceQueryResponse(dst, src *TraceQueryResponse) error {
 	dst.Matched += src.Matched
 	dst.Selected = append(dst.Selected, src.Selected...)
 	dst.Problems = append(dst.Problems, src.Problems...)
+	dst.Duration = ifThenElse(dst.Duration > src.Duration, dst.Duration, src.Duration)
 	return nil
 }
 
@@ -253,6 +312,13 @@ func mergeStringSlices(a, b []string) []string {
 	}
 	sort.Strings(r)
 	return r
+}
+
+func ifThenElse[T any](cond bool, yes, not T) T {
+	if cond {
+		return yes
+	}
+	return not
 }
 
 //

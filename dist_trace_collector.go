@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"time"
 )
 
 type HTTPClient interface {
@@ -34,6 +35,7 @@ func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *TraceQ
 	}
 
 	// Scatter a query request to each URI.
+	begin := time.Now()
 	tuplec := make(chan tuple, len(tc.uris))
 	for _, uri := range tc.uris {
 		go func(uri string) {
@@ -67,6 +69,7 @@ func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *TraceQ
 			for _, tr := range res.Selected {
 				tr.Origin = uri
 			}
+			res.Duration = time.Since(begin)
 
 			tuplec <- tuple{uri, &res, nil}
 		}(uri)

@@ -87,16 +87,26 @@ func main() {
 	taskGroup.Add(1)
 	go func() {
 		defer taskGroup.Done()
+
 		hostport := fmt.Sprintf("localhost:%d", 8080+len(instances))
 		var uris []string
 		for hostport := range instances {
 			uris = append(uris, fmt.Sprintf("http://%s/traces", hostport))
 		}
-		distcollector := trc.NewDistributedTraceCollector(http.DefaultClient, uris...)
-		handler := trchttp.TraceCollectorHandler(distcollector)
+
+		distCollector := trc.NewDistributedTraceCollector(http.DefaultClient, uris...)
+		distHandler := trchttp.TraceCollectorHandler(distCollector)
+		metaCollector := trc.NewTraceCollector(100)
+		distHandlerInst := trchttp.Middleware(metaCollector, getMethodPath)(distHandler)
+		metaHandler := trchttp.TraceCollectorHandler(metaCollector)
+		metaHandlerInst := trchttp.Middleware(metaCollector, getMethodPath)(metaHandler)
+
 		mux := http.NewServeMux()
-		mux.Handle("/metatraces", handler)
-		log.Printf("http://%s/metatraces", hostport)
+		mux.Handle("/traces", distHandlerInst)
+		mux.Handle("/metatraces", metaHandlerInst)
+		log.Printf("http://%s/traces -- proxying to other instances", hostport)
+		log.Printf("http://%s/metatraces -- for the meta instance itself", hostport)
+
 		server := &http.Server{Addr: hostport, Handler: mux}
 		errc := make(chan error, 1)
 		go func() { errc <- server.ListenAndServe() }()

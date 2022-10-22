@@ -89,10 +89,17 @@ table.summary td.errored div.progress-bar {
 
 div.header {
 	display: flex;
+	align-items: baseline;
+	gap: 1ch;
 }
 
 div.header div {
-	margin-right: 1ch;
+	display: flex;
+	gap: 1ch;
+}
+
+div.header div div {
+	gap: 0ch;
 }
 
 
