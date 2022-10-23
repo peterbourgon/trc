@@ -1,12 +1,11 @@
 package trc
 
-/*
 import (
 	"errors"
 	"sync"
 )
 
-type Stream[T any] struct {
+type stream[T any] struct {
 	mtx  sync.Mutex
 	subs map[chan<- T]*StreamStats
 }
@@ -16,13 +15,13 @@ type StreamStats struct {
 	Drops uint64
 }
 
-func NewStream[T any]() *Stream[T] {
-	return &Stream[T]{
+func newStream[T any]() *stream[T] {
+	return &stream[T]{
 		subs: map[chan<- T]*StreamStats{},
 	}
 }
 
-func (s *Stream[T]) Subscribe(c chan<- T) error {
+func (s *stream[T]) subscribe(c chan<- T) error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -34,17 +33,17 @@ func (s *Stream[T]) Subscribe(c chan<- T) error {
 	return nil
 }
 
-func (s *Stream[T]) Unsubscribe(c chan<- T) (StreamStats, error) {
+func (s *stream[T]) unsubscribe(c chan<- T) (sends, drops uint64, _ error) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
 	stats, ok := s.subs[c]
 	if !ok {
-		return StreamStats{}, ErrNotSubscribed
+		return 0, 0, ErrNotSubscribed
 	}
 
 	delete(s.subs, c)
-	return *stats, nil
+	return stats.Sends, stats.Drops, nil
 }
 
 var (
@@ -52,7 +51,7 @@ var (
 	ErrNotSubscribed     = errors.New("not subscribed")
 )
 
-func (s *Stream[T]) Broadcast(t T) {
+func (s *stream[T]) broadcast(t T) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -65,4 +64,3 @@ func (s *Stream[T]) Broadcast(t T) {
 		}
 	}
 }
-*/

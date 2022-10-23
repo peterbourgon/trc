@@ -406,7 +406,7 @@ func (ptr *PrefixedTrace) LazyErrorf(format string, args ...interface{}) {
 //
 //
 
-type TraceStatic struct {
+type StaticTrace struct {
 	Origin          string        `json:"origin,omitempty"`
 	StaticID        string        `json:"id"`
 	StaticCategory  string        `json:"category"`
@@ -419,10 +419,10 @@ type TraceStatic struct {
 	StaticEvents    []Event       `json:"events"`
 }
 
-var _ Trace = (*TraceStatic)(nil)
+var _ Trace = (*StaticTrace)(nil)
 
-func NewTraceStatic(tr Trace) *TraceStatic {
-	return &TraceStatic{
+func NewTraceStatic(tr Trace) *StaticTrace {
+	return &StaticTrace{
 		StaticID:        tr.ID(),
 		StaticCategory:  tr.Category(),
 		StaticStart:     tr.Start(),
@@ -435,17 +435,17 @@ func NewTraceStatic(tr Trace) *TraceStatic {
 	}
 }
 
-func (tr *TraceStatic) ID() string                                    { return tr.StaticID }
-func (tr *TraceStatic) Category() string                              { return tr.StaticCategory }
-func (tr *TraceStatic) Start() time.Time                              { return tr.StaticStart }
-func (tr *TraceStatic) Active() bool                                  { return tr.StaticActive }
-func (tr *TraceStatic) Finished() bool                                { return tr.StaticFinished }
-func (tr *TraceStatic) Succeeded() bool                               { return tr.StaticSucceeded }
-func (tr *TraceStatic) Errored() bool                                 { return tr.StaticErrored }
-func (tr *TraceStatic) Duration() time.Duration                       { return tr.StaticDuration }
-func (tr *TraceStatic) Finish()                                       { /* no-op */ }
-func (tr *TraceStatic) Tracef(format string, args ...interface{})     { /* no-op */ }
-func (tr *TraceStatic) LazyTracef(format string, args ...interface{}) { /* no-op */ }
-func (tr *TraceStatic) Errorf(format string, args ...interface{})     { /* no-op */ }
-func (tr *TraceStatic) LazyErrorf(format string, args ...interface{}) { /* no-op */ }
-func (tr *TraceStatic) Events() []Event                               { return tr.StaticEvents }
+func (tr *StaticTrace) ID() string                                    { return tr.StaticID }
+func (tr *StaticTrace) Category() string                              { return tr.StaticCategory }
+func (tr *StaticTrace) Start() time.Time                              { return tr.StaticStart }
+func (tr *StaticTrace) Active() bool                                  { return tr.StaticActive }
+func (tr *StaticTrace) Finished() bool                                { return tr.StaticFinished }
+func (tr *StaticTrace) Succeeded() bool                               { return tr.StaticSucceeded }
+func (tr *StaticTrace) Errored() bool                                 { return tr.StaticErrored }
+func (tr *StaticTrace) Duration() time.Duration                       { return tr.StaticDuration }
+func (tr *StaticTrace) Finish()                                       { /* no-op */ }
+func (tr *StaticTrace) Tracef(format string, args ...interface{})     { /* no-op */ }
+func (tr *StaticTrace) LazyTracef(format string, args ...interface{}) { /* no-op */ }
+func (tr *StaticTrace) Errorf(format string, args ...interface{})     { /* no-op */ }
+func (tr *StaticTrace) LazyErrorf(format string, args ...interface{}) { /* no-op */ }
+func (tr *StaticTrace) Events() []Event                               { return tr.StaticEvents }

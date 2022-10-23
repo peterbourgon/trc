@@ -36,6 +36,10 @@ table.summary th {
 	font-weight: normal;
 }
 
+table.summary td.category {
+	padding-right: 1ch;
+}
+
 table.summary th.separator {
 	width: 3ch;
 	min-width: 3ch;

@@ -12,28 +12,31 @@ import (
 	"github.com/peterbourgon/trc"
 )
 
-type HTTPClient interface {
-	Do(*http.Request) (*http.Response, error)
-}
-
-type DistributedTraceCollector struct {
+type DistributedQueryer struct {
 	client HTTPClient
 	uris   []string
 }
 
-func NewDistributedTraceCollector(c HTTPClient, uris ...string) *DistributedTraceCollector {
-	return &DistributedTraceCollector{
+var _ Queryer = (*DistributedQueryer)(nil)
+
+// TODO: origin/remote type with both URI and name?
+func NewDistributedQueryer(c HTTPClient, uris ...string) *DistributedQueryer {
+	return &DistributedQueryer{
 		client: c,
 		uris:   uris,
 	}
 }
 
-func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *trc.TraceQueryRequest) (*trc.TraceQueryResponse, error) {
+type HTTPClient interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
+func (tc *DistributedQueryer) Query(ctx context.Context, tqr *trc.QueryRequest) (*trc.QueryResponse, error) {
 	tr := trc.PrefixTracef(trc.FromContext(ctx), "[dist]")
 
 	type tuple struct {
 		uri string
-		res *trc.TraceQueryResponse
+		res *trc.QueryResponse
 		err error
 	}
 
@@ -62,12 +65,13 @@ func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *trc.Tr
 			}
 			defer resp.Body.Close()
 
-			var res trc.TraceQueryResponse
+			var res trc.QueryResponse
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 				tuplec <- tuple{uri, nil, fmt.Errorf("decode response: %w", err)}
 				return
 			}
 
+			// TODO: different types for QueryResponse, aggregate responses, template data?
 			res.Origins = []string{uri}
 			for _, tr := range res.Selected {
 				tr.Origin = uri
@@ -79,7 +83,7 @@ func (tc *DistributedTraceCollector) TraceQuery(ctx context.Context, tqr *trc.Tr
 	}
 
 	// We'll merge responses into a single aggregate response.
-	aggregate := trc.NewTraceQueryResponse(tqr, nil)
+	aggregate := trc.NewQueryResponse(tqr, nil)
 	for i := 0; i < cap(tuplec); i++ {
 		t := <-tuplec
 

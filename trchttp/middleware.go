@@ -8,22 +8,24 @@ import (
 	"github.com/peterbourgon/trc"
 )
 
-type TraceCreator interface {
-	GetOrCreateTrace(context.Context, string) (context.Context, trc.Trace)
+type NewTracer interface {
+	NewTrace(context.Context, string) (context.Context, trc.Trace)
 }
 
-// Middleware decorates an HTTP handler, creating a trace in the collector for
-// each incoming request. The trace category is determined by passing the HTTP
-// request to the getCategory function. Basic metadata, like method, path,
-// duration, and response code, is recorded.
+// Middleware decorates an HTTP handler and creates a trace for each incoming
+// request via the provided NewTracer. The category is determined by passing the
+// HTTP request to the getCategory function. Basic request metadata, like
+// method, path, duration, and response code, is recorded in the trace.
 //
-// This is meant primarily as an example, and convenience function for simple
-// use cases. Users who want different or more sophisticated behavior should
-// implement their own middlewares.
-func Middleware(c TraceCreator, getCategory func(*http.Request) string) func(http.Handler) http.Handler {
+// This is meant as a convenience function for basic use cases. Users who want
+// different or more sophisticated behavior should implement their own
+// middlewares.
+//
+// TODO: use a config, default getCategory
+func Middleware(nt NewTracer, getCategory func(*http.Request) string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx, tr := c.GetOrCreateTrace(r.Context(), getCategory(r))
+			ctx, tr := nt.NewTrace(r.Context(), getCategory(r))
 			defer tr.Finish()
 
 			tr.Tracef("%s %s %s", r.RemoteAddr, r.Method, r.URL.Path)

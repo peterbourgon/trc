@@ -234,8 +234,8 @@ table.summary tr:last-child td {
 
 		<div class="header">
 			<div>
-				<form method="GET" target="">
-					<input id="query-box" type="text" name="q" placeholder=".*" value="{{if .Request.Search}}{{.Request.Search}}{{end}}" size="32" autofocus onfocus="this.select();" />
+				<form method="GET" target="" >
+					<input id="query-box" type="text" name="q" placeholder=".*" {{if .Request.Search}}value="{{.Request.Search}}"{{end}} size="32" autofocus onfocus="this.select();" />
 					{{ if .Request.Category    -}}<input type="hidden" name="category"  value="{{.Request.Category}}"    />{{ end -}}
 					{{ if .Request.IsActive    -}}<input type="hidden" name="active"    value="{{.Request.IsActive}}"    />{{ end -}}
 					{{ if .Request.IsFinished  -}}<input type="hidden" name="finished"  value="{{.Request.IsFinished}}"  />{{ end -}}
@@ -250,7 +250,7 @@ table.summary tr:last-child td {
 						<option name="{{.Request.Limit}}" selected>{{.Request.Limit}}</option>
 						{{ end -}}
 					</select>
-					<input type="submit" value="search" />
+					<input type="submit" value="query" onclick="let elem = document.getElementById('query-box'); elem.disabled = elem.value == '';" />
 				</form>
 			</div>
 

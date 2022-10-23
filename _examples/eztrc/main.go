@@ -94,11 +94,11 @@ func main() {
 			uris = append(uris, fmt.Sprintf("http://%s/traces", hostport))
 		}
 
-		distCollector := trchttp.NewDistributedTraceCollector(http.DefaultClient, uris...)
-		distHandler := trchttp.TraceCollectorHandler(distCollector)
-		metaCollector := trc.NewTraceCollector(100)
+		distQueryer := trchttp.NewDistributedQueryer(http.DefaultClient, uris...)
+		distHandler := trchttp.TracesHandler(distQueryer)
+		metaCollector := trc.NewTraceCollector()
 		distHandlerInst := trchttp.Middleware(metaCollector, getMethodPath)(distHandler)
-		metaHandler := trchttp.TraceCollectorHandler(metaCollector)
+		metaHandler := trchttp.TracesHandler(metaCollector)
 		metaHandlerInst := trchttp.Middleware(metaCollector, getMethodPath)(metaHandler)
 
 		mux := http.NewServeMux()
@@ -143,13 +143,13 @@ type apiInstance struct {
 
 func newAPIInstance(id string) *apiInstance {
 	var (
-		collector = trc.NewTraceCollector(1000)
+		collector = trc.NewTraceCollector()
 		store     = NewStore()
 		api       = NewAPI(store)
 	)
 	return &apiInstance{
 		collector:  collector,
-		trcHandler: trchttp.Middleware(collector, getMethodPath)(trchttp.TraceCollectorHandler(collector)),
+		trcHandler: trchttp.Middleware(collector, getMethodPath)(trchttp.TracesHandler(collector)),
 		apiHandler: trchttp.Middleware(collector, getAPIMethod)(api),
 	}
 }
