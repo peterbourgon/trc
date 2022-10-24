@@ -23,15 +23,18 @@ type TraceQueryer interface {
 }
 
 type TraceStreamer interface {
-	Subscribe(ctx context.Context, c chan<- trc.Trace) error
-	Unsubscribe(ctx context.Context, c chan<- trc.Trace) (uint64, uint64, error)
+	Subscribe(ctx context.Context, ch chan<- trc.Trace) error
+	Unsubscribe(ctx context.Context, ch chan<- trc.Trace) (sends, drops uint64, _ error)
+	Subscription(ctx context.Context, ch chan<- trc.Trace) (sends, drops uint64, _ error)
 }
 
 func TracesHandler(c TraceCollector) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		tr := trc.FromContext(ctx)
+		defer tr.Finish()
+
 		var (
-			ctx         = r.Context()
-			tr          = trc.FromContext(ctx)
 			begin       = time.Now()
 			urlquery    = r.URL.Query()
 			limit       = parseDefault(urlquery.Get("n"), strconv.Atoi, 10)
@@ -106,37 +109,48 @@ func TracesHandler(c TraceCollector) http.Handler {
 
 func streamTraces(s TraceStreamer, req *trc.QueryTracesRequest, r *http.Request, w http.ResponseWriter) {
 	eventsource.Handler(func(lastID string, enc *eventsource.Encoder, stop <-chan bool) {
-		var (
-			ctx = r.Context()
-			tr  = trc.FromContext(ctx)
-			in  = make(chan trc.Trace, 1000)
-		)
+		ctx := r.Context()
+		tr := trc.PrefixTracef(trc.FromContext(ctx), "[stream]")
+		defer tr.Finish()
 
-		if err := s.Subscribe(ctx, in); err != nil {
+		tr.Tracef("%s %s", r.Method, r.URL.String())
+
+		ch := make(chan trc.Trace, 1000)
+
+		if err := s.Subscribe(ctx, ch); err != nil {
 			http.Error(w, fmt.Sprintf("subscribe: %v", err), http.StatusInternalServerError)
 			return
 		}
 
 		defer func(begin time.Time) {
-			sends, drops, err := s.Unsubscribe(ctx, in)
+			sends, drops, err := s.Unsubscribe(ctx, ch)
 			tr.Tracef("unsubscribe: sends=%d drops=%d err=%v", sends, drops, err)
 		}(time.Now())
 
 		var (
-			heartbeats uint64
-			filtered   uint64
-			emitted    uint64
-			// sends      uint64 // TODO
-			// drops      uint64 // TODO
+			beats    uint64
+			filtered uint64
+			emitted  uint64
+			sends    uint64
+			drops    uint64
 		)
 
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
+		defer func() {
+			tr.Tracef("stream end: beats=%d filtered=%d emitted=%v", beats, filtered, emitted)
+		}()
+
+		heartbeatTicker := time.NewTicker(time.Second)
+		defer heartbeatTicker.Stop()
+
+		traceTicker := time.NewTicker(time.Second)
+		defer traceTicker.Stop()
+
+		tr.Tracef("starting trace stream")
 
 		for {
 			select {
-			case tr := <-in:
-				sent, err := maybeSendTrace(tr, req, enc)
+			case tr := <-ch:
+				sent, err := maybeSendTrace(ctx, enc, req, tr)
 				if err != nil {
 					tr.Tracef("send trace error: %v", err)
 					return
@@ -148,14 +162,27 @@ func streamTraces(s TraceStreamer, req *trc.QueryTracesRequest, r *http.Request,
 					filtered++
 				}
 
-			case <-ticker.C:
-				if err := sendHeartbeat(enc); err != nil {
+			case <-traceTicker.C:
+				tr.Tracef("beats=%d filtered=%d emitted=%d", beats, filtered, emitted)
+
+			case ts := <-heartbeatTicker.C:
+				s, d, err := s.Subscription(ctx, ch)
+				if err != nil {
+					tr.Tracef("subscription stats: %v", err)
+					return
+				}
+				beats, sends, drops = beats+1, s, d
+				if err := sendHeartbeat(ctx, enc, ts, beats, sends, drops, filtered, emitted); err != nil {
 					tr.Tracef("send heartbeat error: %v", err)
 					return
 				}
-				heartbeats++
 
 			case <-stop:
+				tr.Tracef("stopped")
+				return
+
+			case <-ctx.Done():
+				tr.Tracef("context done")
 				return
 			}
 		}
@@ -167,7 +194,7 @@ const (
 	eventTypeHeartbeat = "heartbeat.1"
 )
 
-func maybeSendTrace(tr trc.Trace, req *trc.QueryTracesRequest, enc *eventsource.Encoder) (bool, error) {
+func maybeSendTrace(ctx context.Context, enc *eventsource.Encoder, req *trc.QueryTracesRequest, tr trc.Trace) (bool, error) {
 	if !req.Allow(tr) {
 		return false, nil
 	}
@@ -188,11 +215,34 @@ func maybeSendTrace(tr trc.Trace, req *trc.QueryTracesRequest, enc *eventsource.
 	return true, nil
 }
 
-func sendHeartbeat(enc *eventsource.Encoder) error {
-	return enc.Encode(eventsource.Event{
-		Type: eventTypeHeartbeat,
-		Data: []byte(`{}`),
+func sendHeartbeat(ctx context.Context, enc *eventsource.Encoder, ts time.Time, beats, sends, drops, filtered, emitted uint64) error {
+	data, err := json.Marshal(struct {
+		Timestamp time.Time `json:"ts"`
+		Beats     uint64    `json:"beats"`
+		Sends     uint64    `json:"sends"`
+		Drops     uint64    `json:"drops"`
+		Filtered  uint64    `json:"filtered"`
+		Emitted   uint64    `json:"emitted"`
+	}{
+		Timestamp: ts,
+		Beats:     beats,
+		Sends:     sends,
+		Drops:     drops,
+		Filtered:  filtered,
+		Emitted:   emitted,
 	})
+	if err != nil {
+		return fmt.Errorf("marshal heartbeat: %w", err)
+	}
+
+	if err := enc.Encode(eventsource.Event{
+		Type: eventTypeHeartbeat,
+		Data: data,
+	}); err != nil {
+		return fmt.Errorf("encode heartbeat: %w", err)
+	}
+
+	return nil
 }
 
 /*

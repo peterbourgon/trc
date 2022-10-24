@@ -1,0 +1,51 @@
+<script>
+	function addStreamTrace(event) {
+		var elem = document.createElement("div");
+		elem.setAttribute("class", "trace");
+		elem.setAttribute("id", event.ID);
+		pre.innerText = JSON.stringify(event, undefined, 4);
+		document.getElementById("traces").prepend(pre);
+	}
+
+	function addStreamMetadata(event) {
+		var pre = document.createElement("pre");
+		pre.innerText = JSON.stringify(event, undefined, 4);
+		document.getElementById("metadata").prepend(pre);
+	}
+
+	var source;
+
+	function onStream(event) {
+		switch (document.getElementById("stream-button").value) {
+			case "stream":
+				document.getElementById("stream-button").value = "cancel";
+				document.getElementById("stream-button").focus();
+				addStreamMetadata({ msg: "connecting...", uri: window.location.href });
+				source = new EventSource(window.location.href, { withCredentials: true });
+				source.onopen =                        function (event) { console.log("onopen", event);     addStreamMetadata({ msg: "connected" }); };
+				source.onmessage =                     function (event) { console.log("onmessage", event);  addStreamTrace(JSON.parse(event.data)); };
+				source.onerror =                       function (err)   { console.log("onerror", err);      addStreamMetadata({ msg: "ended with error", "err": err }); };
+				source.addEventListener("trace.1",     function (event) { console.log("trace", event);      addStreamTrace(JSON.parse(event.data)); });
+				source.addEventListener("heartbeat.1", function (event) { console.log("heartbeat", event);  addStreamMetadata(JSON.parse(event.data)); });
+				break;
+
+			case "cancel":
+				console.log("source.close", source.close());
+				addStreamMetadata({ msg: "canceled" });
+				document.getElementById("stream-button").value = "stream";
+				// document.getElementById("log-regex").disabled = false;
+				// document.getElementById("log-regex").setAttribute("placeholder", "Filter regex (optional)");
+				// document.getElementById("log-regex").focus();
+				break;
+		};
+		event.preventDefault();
+	}
+
+	function onClear(event) {
+	document.getElementById("stream-traces").innerHTML = "";
+	document.getElementById("stream-metadata").innerHTML = "";
+	event.preventDefault();
+	}
+
+	document.getElementById("stream-button").addEventListener("click", onStream);
+</script>

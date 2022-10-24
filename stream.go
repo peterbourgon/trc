@@ -46,6 +46,18 @@ func (s *stream[T]) unsubscribe(c chan<- T) (sends, drops uint64, _ error) {
 	return stats.Sends, stats.Drops, nil
 }
 
+func (s *stream[T]) stats(c chan<- T) (sends, drops uint64, _ error) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	stats, ok := s.subs[c]
+	if !ok {
+		return 0, 0, ErrNotSubscribed
+	}
+
+	return stats.Sends, stats.Drops, nil
+}
+
 var (
 	ErrAlreadySubscribed = errors.New("already subscribed")
 	ErrNotSubscribed     = errors.New("not subscribed")

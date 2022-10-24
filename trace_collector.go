@@ -92,8 +92,12 @@ func (c *TraceCollector) Subscribe(ctx context.Context, ch chan<- Trace) error {
 	return c.c.stream.subscribe(ch)
 }
 
-func (c *TraceCollector) Unsubscribe(ctx context.Context, ch chan<- Trace) (uint64, uint64, error) {
+func (c *TraceCollector) Unsubscribe(ctx context.Context, ch chan<- Trace) (sends, drops uint64, _ error) {
 	return c.c.stream.unsubscribe(ch)
+}
+
+func (c *TraceCollector) Subscription(ctx context.Context, ch chan<- Trace) (sends, drops uint64, err error) {
+	return c.c.stream.stats(ch)
 }
 
 //

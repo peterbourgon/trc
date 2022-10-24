@@ -106,6 +106,22 @@ div#topline div div {
 	gap: 0ch;
 }
 
+/*
+ * stream
+ */
+
+div#stream-metadata {
+	position: fixed;
+	top: 1em;
+	right: 1em;
+	display: flex;
+	flex-direction: column;
+	max-width: 66%;
+	font-size: smaller;
+
+	border: solid 1px #000;
+}
+
 
 /*
  * traces

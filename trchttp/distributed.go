@@ -121,3 +121,7 @@ func (tc *DistributedQueryer) Subscribe(ctx context.Context, ch chan<- trc.Trace
 func (tc *DistributedQueryer) Unsubscribe(ctx context.Context, ch chan<- trc.Trace) (uint64, uint64, error) {
 	return 0, 0, fmt.Errorf("not implemented")
 }
+
+func (tc *DistributedQueryer) Subscription(ctx context.Context, ch chan<- trc.Trace) (uint64, uint64, error) {
+	return 0, 0, fmt.Errorf("not implemented")
+}

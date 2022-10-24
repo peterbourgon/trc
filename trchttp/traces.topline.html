@@ -17,8 +17,8 @@
 				<option name="{{.Request.Limit}}" selected>{{.Request.Limit}}</option>
 				{{ end -}}
 			</select>
-			<input type="submit" value="query" onclick="let elem = document.getElementById('query-box'); elem.disabled = elem.value == '';" />
-			<input type="button" value="stream"/>
+			<input id="query-button" type="submit" value="query" onclick="let elem = document.getElementById('query-box'); elem.disabled = elem.value == '';" />
+			<input id="stream-button" type="button" value="stream"/>
 		</form>
 	</div>
 
