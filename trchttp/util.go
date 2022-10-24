@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
@@ -144,7 +145,7 @@ func sha256hex(name string) string {
 	return s
 }
 
-func highlightclasses(res *trc.QueryResponse) []string {
+func highlightclasses(res *trc.QueryTracesResponse) []string {
 	var classes []string
 
 	if len(res.Stats.Request.IDs) > 0 {
@@ -416,4 +417,30 @@ func parseMediaRange(mediaRange string) ([]string, []string, error) {
 	}
 
 	return rangeParams, typeSubtype, nil
+}
+
+//
+//
+//
+
+func parseAcceptMediaTypes(r *http.Request) map[string]map[string]string {
+	mediaTypes := map[string]map[string]string{} // type: params
+	for _, a := range strings.Split(r.Header.Get("accept"), ",") {
+		mediaType, params, err := mime.ParseMediaType(a)
+		if err != nil {
+			continue
+		}
+		mediaTypes[mediaType] = params
+	}
+	return mediaTypes
+}
+
+func requestExplicitlyAccepts(r *http.Request, acceptable ...string) bool {
+	accept := parseAcceptMediaTypes(r)
+	for _, want := range acceptable {
+		if _, ok := accept[want]; ok {
+			return true
+		}
+	}
+	return false
 }

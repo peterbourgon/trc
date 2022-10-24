@@ -23,55 +23,55 @@ div#c {
  * summary table
  */
 
-table.summary {
+table#summary {
 	margin: 1em;
 	border-collapse: collapse;
 	table-layout: fixed;
 }
 
-table.summary th {
+table#summary th {
 	display: table-cell;
 	width: fit-content;
 	min-width: 7ch;
 	font-weight: normal;
 }
 
-table.summary td.category {
+table#summary td.category {
 	padding-right: 1ch;
 }
 
-table.summary th.separator {
+table#summary th.separator {
 	width: 3ch;
 	min-width: 3ch;
 }
 
-table.summary td,
+table#summary td,
 th {
 	text-align: center;
 }
 
-table.summary tr {
+table#summary tr {
 	border-bottom: solid 1px #eee;
 }
 
-table.summary tr.header {
+table#summary tr.header {
 	border-bottom: solid 1px #000;
 }
 
-table.summary tr:nth-last-child(2) {
+table#summary tr:nth-last-child(2) {
 	border-bottom: solid 1px #000;
 }
 
-table.summary tr:last-child {
+table#summary tr:last-child {
 	border-bottom: 0;
 	background: none;
 }
 
-table.summary td.progress {
+table#summary td.progress {
 	position: relative;
 }
 
-table.summary td.progress div.progress-bar {
+table#summary td.progress div.progress-bar {
 	position: absolute;
 	top: 0;
 	bottom: 0;
@@ -82,46 +82,46 @@ table.summary td.progress div.progress-bar {
 }
 
 /* error cells show percent from the the right side */
-table.summary td.errored div.progress-bar {
+table#summary td.errored div.progress-bar {
 	right: 0;
 	background-color: rgba(224, 0, 0, 0.10);
 }
 
 /*
- * header line
+ * topline
  */
 
-div.header {
+div#topline {
 	display: flex;
 	align-items: baseline;
 	gap: 1ch;
 }
 
-div.header div {
+div#topline div {
 	display: flex;
 	gap: 1ch;
 }
 
-div.header div div {
+div#topline div div {
 	gap: 0ch;
 }
 
 
 /*
- * trace
+ * traces
  */
 
-div.trace {
+div#traces .trace {
 	display: flex;
 	flex-direction: column;
 	margin: 1em;
 }
 
-div.trace .div.metadata {
+div#traces .trace .metadata {
 	/* first line of a trace is a metadata header */
 }
 
-div.trace .metadata span.right {
+div#traces .trace .metadata span.right {
 	float: right;
 }
 
@@ -131,12 +131,12 @@ span.stacks-link a {
 }
 
 /* next section is the events table */
-div.trace div.events {
+div#traces .trace .events {
 	flex-grow: 10;
 }
 
 /* each row is an event */
-div.trace div.events div.event {
+div#traces .trace .events div.event {
 	display: flex;
 	flex-direction: row;
 	justify-content: space-between;
@@ -145,20 +145,20 @@ div.trace div.events div.event {
 	border-top: solid 1px #ccc;
 }
 
-div.trace div.events div.event:first-child,
+div#traces .trace .events div.event:first-child,
 div.event:last-child {
 	border-top: solid 1px #666;
 }
 
 /* first cell is timestamp, fixed width */
-div.trace div.events div.event div.timestamp {
+div#traces .trace .events div.event div.timestamp {
 	text-align: left;
 	width: 10em;
 	min-width: 10em;
 }
 
 /* next cell is delta, also fixed width, with progress bar */
-div.trace div.events div.event div.delta {
+div#traces .trace .events div.event div.delta {
 	text-align: left;
 	width: 5em;
 	min-width: 5em;
@@ -166,7 +166,7 @@ div.trace div.events div.event div.delta {
 	z-index: 1;
 }
 
-div.trace div.events div.event div.delta .progress-bar {
+div#traces .trace .events div.event div.delta .progress-bar {
 	position: absolute;
 	top: 0;
 	bottom: 0;
@@ -178,7 +178,7 @@ div.trace div.events div.event div.delta .progress-bar {
 }
 
 /* last cell is what, should fill the rest of the page */
-div.trace div.events div.event div.what {
+div#traces .trace .events div.event div.what {
 	flex: 10 0px;
 }
 

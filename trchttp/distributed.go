@@ -17,7 +17,7 @@ type DistributedQueryer struct {
 	uris   []string
 }
 
-var _ Queryer = (*DistributedQueryer)(nil)
+var _ TraceQueryer = (*DistributedQueryer)(nil)
 
 // TODO: origin/remote type with both URI and name?
 func NewDistributedQueryer(c HTTPClient, uris ...string) *DistributedQueryer {
@@ -31,12 +31,12 @@ type HTTPClient interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
-func (tc *DistributedQueryer) Query(ctx context.Context, tqr *trc.QueryRequest) (*trc.QueryResponse, error) {
+func (tc *DistributedQueryer) QueryTraces(ctx context.Context, tqr *trc.QueryTracesRequest) (*trc.QueryTracesResponse, error) {
 	tr := trc.PrefixTracef(trc.FromContext(ctx), "[dist]")
 
 	type tuple struct {
 		uri string
-		res *trc.QueryResponse
+		res *trc.QueryTracesResponse
 		err error
 	}
 
@@ -65,7 +65,7 @@ func (tc *DistributedQueryer) Query(ctx context.Context, tqr *trc.QueryRequest) 
 			}
 			defer resp.Body.Close()
 
-			var res trc.QueryResponse
+			var res trc.QueryTracesResponse
 			if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 				tuplec <- tuple{uri, nil, fmt.Errorf("decode response: %w", err)}
 				return
@@ -83,7 +83,7 @@ func (tc *DistributedQueryer) Query(ctx context.Context, tqr *trc.QueryRequest) 
 	}
 
 	// We'll merge responses into a single aggregate response.
-	aggregate := trc.NewQueryResponse(tqr, nil)
+	aggregate := trc.NewQueryTracesResponse(tqr, nil)
 	for i := 0; i < cap(tuplec); i++ {
 		t := <-tuplec
 
@@ -112,4 +112,12 @@ func (tc *DistributedQueryer) Query(ctx context.Context, tqr *trc.QueryRequest) 
 	}
 
 	return aggregate, nil
+}
+
+func (tc *DistributedQueryer) Subscribe(ctx context.Context, ch chan<- trc.Trace) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (tc *DistributedQueryer) Unsubscribe(ctx context.Context, ch chan<- trc.Trace) (uint64, uint64, error) {
+	return 0, 0, fmt.Errorf("not implemented")
 }

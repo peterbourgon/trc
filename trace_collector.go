@@ -34,7 +34,7 @@ func (c *TraceCollector) NewTrace(ctx context.Context, category string) (context
 	return ctx, tr
 }
 
-func (c *TraceCollector) Query(ctx context.Context, req *QueryRequest) (*QueryResponse, error) {
+func (c *TraceCollector) QueryTraces(ctx context.Context, req *QueryTracesRequest) (*QueryTracesResponse, error) {
 	tr := FromContext(ctx)
 
 	if err := req.Sanitize(); err != nil {
@@ -79,13 +79,21 @@ func (c *TraceCollector) Query(ctx context.Context, req *QueryRequest) (*QueryRe
 
 	tr.Tracef("selected %d", len(selected))
 
-	return &QueryResponse{
+	return &QueryTracesResponse{
 		Request:  req,
 		Stats:    stats,
 		Matched:  matched,
 		Selected: selected,
 		Problems: nil,
 	}, nil
+}
+
+func (c *TraceCollector) Subscribe(ctx context.Context, ch chan<- Trace) error {
+	return c.c.stream.subscribe(ch)
+}
+
+func (c *TraceCollector) Unsubscribe(ctx context.Context, ch chan<- Trace) (uint64, uint64, error) {
+	return c.c.stream.unsubscribe(ch)
 }
 
 //
@@ -180,7 +188,7 @@ func (tc *TraceCollector) QueryTrace(ctx context.Context, req *QueryRequest) (*Q
 //
 //
 
-type QueryRequest struct {
+type QueryTracesRequest struct {
 	IDs         []string        `json:"ids,omitempty"`
 	Category    string          `json:"category,omitempty"`
 	IsActive    bool            `json:"is_active,omitempty"`
@@ -194,7 +202,7 @@ type QueryRequest struct {
 	Limit       int             `json:"limit,omitempty"`
 }
 
-func (req *QueryRequest) String() string {
+func (req *QueryTracesRequest) String() string {
 	req.Sanitize()
 
 	var parts []string
@@ -245,7 +253,7 @@ func (req *QueryRequest) String() string {
 	return strings.Join(parts, " ")
 }
 
-func (req *QueryRequest) Sanitize() error {
+func (req *QueryTracesRequest) Sanitize() error {
 	if req.Bucketing == nil {
 		req.Bucketing = defaultBucketing
 	}
@@ -273,7 +281,7 @@ func (req *QueryRequest) Sanitize() error {
 	return nil
 }
 
-func (req *QueryRequest) Allow(tr Trace) bool {
+func (req *QueryTracesRequest) Allow(tr Trace) bool {
 	if len(req.IDs) > 0 {
 		var found bool
 		for _, id := range req.IDs {
@@ -342,24 +350,24 @@ func (req *QueryRequest) Allow(tr Trace) bool {
 //
 //
 
-type QueryResponse struct {
-	Request  *QueryRequest  `json:"request"`
-	Origins  []string       `json:"origins,omitempty"`
-	Stats    *TraceStats    `json:"stats"`
-	Matched  int            `json:"matched"`
-	Selected []*StaticTrace `json:"selected"`
-	Problems []string       `json:"problems,omitempty"`
-	Duration time.Duration  `json:"duration"`
+type QueryTracesResponse struct {
+	Request  *QueryTracesRequest `json:"request"`
+	Origins  []string            `json:"origins,omitempty"`
+	Stats    *TraceStats         `json:"stats"`
+	Matched  int                 `json:"matched"`
+	Selected []*StaticTrace      `json:"selected"`
+	Problems []string            `json:"problems,omitempty"`
+	Duration time.Duration       `json:"duration"`
 }
 
-func NewQueryResponse(req *QueryRequest, selected Traces) *QueryResponse {
-	return &QueryResponse{
+func NewQueryTracesResponse(req *QueryTracesRequest, selected Traces) *QueryTracesResponse {
+	return &QueryTracesResponse{
 		Request: req,
 		Stats:   newTraceQueryStats(req, selected),
 	}
 }
 
-func (res *QueryResponse) Merge(other *QueryResponse) error {
+func (res *QueryTracesResponse) Merge(other *QueryTracesResponse) error {
 	if res.Request == nil {
 		return fmt.Errorf("invalid response: missing request")
 	}
@@ -389,11 +397,11 @@ func (res *QueryResponse) Merge(other *QueryResponse) error {
 // part of a trace collector's query response, and in that case represents all
 // traces in the collector, with bucketing as specified in the query.
 type TraceStats struct {
-	Request    *QueryRequest         `json:"request"` // TODO: find a way to remove
+	Request    *QueryTracesRequest   `json:"request"` // TODO: find a way to remove
 	Categories []*TraceCategoryStats `json:"categories"`
 }
 
-func newTraceQueryStats(req *QueryRequest, trs Traces) *TraceStats {
+func newTraceQueryStats(req *QueryTracesRequest, trs Traces) *TraceStats {
 	// Group the traces into stats buckets by category.
 	byCategory := map[string]*TraceCategoryStats{}
 	for _, tr := range trs {
@@ -528,7 +536,7 @@ type TraceCategoryStats struct {
 	Newest       time.Time                   `json:"newest"`
 }
 
-func newTraceQueryCategoryStats(req *QueryRequest, name string) *TraceCategoryStats {
+func newTraceQueryCategoryStats(req *QueryTracesRequest, name string) *TraceCategoryStats {
 	return &TraceCategoryStats{
 		Name:      name,
 		Buckets:   newTraceQueryCategoryStatsBuckets(req),
@@ -562,7 +570,7 @@ func mergeTraceQueryCategoryStats(dst, src *TraceCategoryStats) error {
 //
 //
 
-func newTraceQueryCategoryStatsBuckets(req *QueryRequest) []*TraceCategoryBucketStats {
+func newTraceQueryCategoryStatsBuckets(req *QueryTracesRequest) []*TraceCategoryBucketStats {
 	res := make([]*TraceCategoryBucketStats, len(req.Bucketing))
 	for i := range req.Bucketing {
 		res[i] = &TraceCategoryBucketStats{

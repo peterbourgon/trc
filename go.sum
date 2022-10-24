@@ -1,3 +1,5 @@
+github.com/bernerdschaefer/eventsource v0.0.0-20130606115634-220e99a79763 h1:Xhc57KuvOszD8WMiNzIeTfmpfUJ9lodF/j/cTN0v0Is=
+github.com/bernerdschaefer/eventsource v0.0.0-20130606115634-220e99a79763/go.mod h1:Son4chyIHRln8G19kywUdR55p9OsyCC0zi9CY9Me92k=
 github.com/go-stack/stack v1.8.1 h1:ntEHSVwIt7PNXNpgPmVfMrNhLtgjlmnZha2kOpuRiDw=
 github.com/go-stack/stack v1.8.1/go.mod h1:dcoOX6HbPZSZptuspn9bctJ+N/CnF5gGygcUP3XYfe4=
 github.com/google/go-cmp v0.5.9 h1:O2Tfq5qg4qc4AmwVlvv0oLiVAGB7enBSJ2x2DqQFi38=
