@@ -1,0 +1,56 @@
+<script>
+
+function showstacks(id) {
+	let targetElem = document.getElementById(id);
+	let stacksLinkElem = document.getElementById(id+"-stacks");
+	let doExpand = stacksLinkElem.title == "Show stacks";
+	let stackDetails = targetElem.getElementsByClassName("stack-details");
+	for (let i = 0; i < stackDetails.length; i++) {
+		stackDetails[i].open = doExpand;
+	}
+	stacksLinkElem.title = doExpand ? "Hide stacks" : "Show stacks";
+}
+
+function timesince(s) {
+	var ts  = Date.parse(s);
+	var now = new Date();
+	var ms  = now - ts;
+
+	var days    = Math.floor(ms / (86400 * 1000)); if (days    > 0) { ms -= (days    * (86400 * 1000)) };
+	var hours   = Math.floor(ms / (3600  * 1000)); if (hours   > 0) { ms -= (hours   * (3600  * 1000)) };
+	var minutes = Math.floor(ms / (60    * 1000)); if (minutes > 0) { ms -= (minutes * (60    * 1000)) };
+	var seconds = Math.floor(ms / (1     * 1000)); if (seconds > 0) { ms -= (seconds * (1     * 1000)) };
+
+	switch (true) {
+		case    days > 0: return days+"d"    + hours+"h"   ;
+		case   hours > 0: return hours+"h"   + minutes+"m" ;
+		case minutes > 0: return minutes+"m" + seconds+"s" ;
+		case seconds > 0: return seconds+"s"               ;
+		case      ms > 0: return ms+"ms"                   ;
+		default:          return "fresh";
+	}
+}
+
+function calcdates() {
+	let timeSinces = document.getElementsByClassName("time-since");
+	for (let i = 0; i < timeSinces.length; i++) {
+		timeSinces[i].textContent = timesince(timeSinces[i].title);
+	}
+}
+
+setInterval(calcdates, 1000);
+
+function highlight(search) {
+	let re = new RegExp('('+search+')');
+	document.getElementById("traces").querySelectorAll(".searchable").forEach(elem => {
+		if (re.test(elem.textContent)) {
+			elem.classList.add("highlight");
+			let details = elem.closest("details");
+			if (details != null) {
+				details.open = true;
+			}
+		}
+	});
+}
+
+</script>

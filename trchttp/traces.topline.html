@@ -1,0 +1,34 @@
+<div id="topline">
+
+	<div>
+		<form method="GET" target="" >
+			<input id="query-box" type="text" name="q" placeholder=".*" {{if .Request.Search}}value="{{.Request.Search}}"{{end}} size="32" autofocus onfocus="this.select();" />
+			{{ if .Request.Category    -}}<input type="hidden" name="category"  value="{{.Request.Category}}"    />{{ end -}}
+			{{ if .Request.IsActive    -}}<input type="hidden" name="active"    value="{{.Request.IsActive}}"    />{{ end -}}
+			{{ if .Request.IsFinished  -}}<input type="hidden" name="finished"  value="{{.Request.IsFinished}}"  />{{ end -}}
+			{{ if .Request.IsSucceeded -}}<input type="hidden" name="succeeded" value="{{.Request.IsSucceeded}}" />{{ end -}}
+			{{ if .Request.IsErrored   -}}<input type="hidden" name="errored"   value="{{.Request.IsErrored}}"   />{{ end -}}
+			{{ if .Request.MinDuration -}}<input type="hidden" name="min"       value="{{.Request.MinDuration}}" />{{ end -}}
+			<select name="n">
+				<option name="10"   {{if eq .Request.Limit 10  }}selected{{end}}>10  </option>
+				<option name="100"  {{if eq .Request.Limit 100 }}selected{{end}}>100 </option>
+				<option name="1000" {{if eq .Request.Limit 1000}}selected{{end}}>1000</option>
+				{{ if not ( or ( or (eq .Request.Limit 10) (eq .Request.Limit 100) ) (eq .Request.Limit 1000) ) -}}
+				<option name="{{.Request.Limit}}" selected>{{.Request.Limit}}</option>
+				{{ end -}}
+			</select>
+			<input type="submit" value="query" onclick="let elem = document.getElementById('query-box'); elem.disabled = elem.value == '';" />
+			<input type="button" value="stream"/>
+		</form>
+	</div>
+
+	<div>
+		{{ if .Origins -}} <div>origins={{len .Origins}}</div> {{ end -}}
+		<div>traces={{ .Stats.Overall.NumTotal }}</div>
+		<div>matched={{ .Matched }}</div>
+		<div>shown={{ len .Selected }}</div>
+		<div>took={{ humanize .Duration }}</div>
+		<div>age=<span class="time-since" title="{{timenow}}"></span></div>
+	</div>
+
+</div>
