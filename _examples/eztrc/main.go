@@ -217,7 +217,7 @@ func (a *API) handleSet(w http.ResponseWriter, r *http.Request) {
 
 	eztrc.Tracef(ctx, "val %q", val)
 
-	a.s.Set(key, val)
+	a.s.Set(ctx, key, val)
 }
 
 func (a *API) handleGet(w http.ResponseWriter, r *http.Request) {
@@ -233,7 +233,7 @@ func (a *API) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	val, ok := a.s.Get(key)
+	val, ok := a.s.Get(ctx, key)
 	if !ok {
 		eztrc.Errorf(ctx, "key not found")
 		http.Error(w, "no content", http.StatusNoContent)
@@ -258,7 +258,7 @@ func (a *API) handleDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ok := a.s.Del(key)
+	ok := a.s.Del(ctx, key)
 
 	if !ok {
 		eztrc.Errorf(ctx, "key not found")
@@ -282,14 +282,16 @@ func NewStore() *Store {
 	}
 }
 
-func (s *Store) Set(key, val string) {
+func (s *Store) Set(ctx context.Context, key, val string) {
+	maybeCopyTrace(ctx, key)
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	time.Sleep(getDelay(key, 1000*time.Microsecond))
 	s.set[key] = val
 }
 
-func (s *Store) Get(key string) (string, bool) {
+func (s *Store) Get(ctx context.Context, key string) (string, bool) {
+	maybeCopyTrace(ctx, key)
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	val, ok := s.set[key]
@@ -297,13 +299,30 @@ func (s *Store) Get(key string) (string, bool) {
 	return val, ok
 }
 
-func (s *Store) Del(key string) bool {
+func (s *Store) Del(ctx context.Context, key string) bool {
+	maybeCopyTrace(ctx, key)
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	_, ok := s.set[key]
 	delete(s.set, key)
 	time.Sleep(getDelay(key, 10*time.Microsecond))
 	return ok
+}
+
+func maybeCopyTrace(ctx context.Context, key string) {
+	if key != words[0] {
+		eztrc.Tracef(ctx, "key %s not copying", key)
+		return
+	}
+
+	cat := fmt.Sprintf("operation on %s", words[0])
+	err := eztrc.CopyTrace(ctx, cat)
+	if err != nil {
+		eztrc.Errorf(ctx, "copy trace error: %w", err)
+		return
+	}
+
+	eztrc.Tracef(ctx, "key %s copied", key)
 }
 
 //
@@ -314,29 +333,30 @@ func getKey(path string) string {
 	return strings.TrimPrefix(path, "/")
 }
 
+var words = []string{
+	"air", "area", "art", "back", "body",
+	"book", "business", "car", "case", "change",
+	"child", "city", "community", "company", "country",
+	"day", "door", "education", "end", "eye",
+	"face", "fact", "family", "father", "force",
+	"friend", "game", "girl", "government", "group",
+	"guy", "hand", "head", "health", "history",
+	"home", "hour", "house", "idea", "information",
+	"issue", "job", "kid", "kind", "law",
+	"level", "life", "line", "lot", "man",
+	"member", "minute", "moment", "money", "month",
+	"morning", "mother", "name", "night", "number",
+	"office", "others", "parent", "part", "party",
+	"people", "person", "place", "point", "power",
+	"president", "problem", "program", "question", "reason",
+	"research", "result", "right", "room", "school",
+	"service", "side", "state", "story", "student",
+	"study", "system", "teacher", "team", "thing",
+	"time", "war", "water", "way", "week",
+	"woman", "word", "work", "world", "year",
+}
+
 func getWord() string {
-	words := []string{
-		"air", "area", "art", "back", "body",
-		"book", "business", "car", "case", "change",
-		"child", "city", "community", "company", "country",
-		"day", "door", "education", "end", "eye",
-		"face", "fact", "family", "father", "force",
-		"friend", "game", "girl", "government", "group",
-		"guy", "hand", "head", "health", "history",
-		"home", "hour", "house", "idea", "information",
-		"issue", "job", "kid", "kind", "law",
-		"level", "life", "line", "lot", "man",
-		"member", "minute", "moment", "money", "month",
-		"morning", "mother", "name", "night", "number",
-		"office", "others", "parent", "part", "party",
-		"people", "person", "place", "point", "power",
-		"president", "problem", "program", "question", "reason",
-		"research", "result", "right", "room", "school",
-		"service", "side", "state", "story", "student",
-		"study", "system", "teacher", "team", "thing",
-		"time", "war", "water", "way", "week",
-		"woman", "word", "work", "world", "year",
-	}
 	return words[rand.Intn(len(words))]
 }
 

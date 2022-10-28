@@ -1,15 +1,25 @@
 <script>
 	function addStreamTrace(event) {
+		var pre = document.createElement("pre");
+		pre.innerText = JSON.stringify(event, undefined, 4);
+
 		var elem = document.createElement("div");
 		elem.setAttribute("class", "trace");
 		elem.setAttribute("id", event.ID);
-		pre.innerText = JSON.stringify(event, undefined, 4);
-		document.getElementById("traces").prepend(pre);
+		elem.appendChild(pre);
+
+		var traces = document.getElementById("traces");
+		traces.prepend(elem);
+
+		while (traces.childNodes.length > {{ .Request.Limit }}) {
+			traces.removeChild(traces.lastChild);
+		}
 	}
 
 	function addStreamMetadata(event) {
 		var pre = document.createElement("pre");
 		pre.innerText = JSON.stringify(event, undefined, 4);
+
 		document.getElementById("metadata").prepend(pre);
 	}
 

@@ -34,8 +34,23 @@ func (c *TraceCollector) NewTrace(ctx context.Context, category string) (context
 	return ctx, tr
 }
 
+func (c *TraceCollector) CopyTrace(tr Trace, newCategory string) error {
+	if tr.Category() == newCategory {
+		return fmt.Errorf("trace is already in the requested category")
+	}
+
+	c.c.add(newCategory, tr)
+
+	tr.Tracef("CopyTrace added trace to category %q", newCategory)
+	tr.Tracef("debug: %v", c.c.debug())
+
+	return nil
+}
+
 func (c *TraceCollector) QueryTraces(ctx context.Context, req *QueryTracesRequest) (*QueryTracesResponse, error) {
 	tr := FromContext(ctx)
+
+	tr.Tracef("debug: %v", c.c.debug())
 
 	if err := req.Sanitize(); err != nil {
 		return nil, fmt.Errorf("sanitize request: %w", err)
