@@ -9,7 +9,7 @@
 			{{ if .Request.IsSucceeded -}}<input type="hidden" name="succeeded" value="{{.Request.IsSucceeded}}" />{{ end -}}
 			{{ if .Request.IsErrored   -}}<input type="hidden" name="errored"   value="{{.Request.IsErrored}}"   />{{ end -}}
 			{{ if .Request.MinDuration -}}<input type="hidden" name="min"       value="{{.Request.MinDuration}}" />{{ end -}}
-			<select name="n">
+			<select id="query-limit" name="n">
 				<option name="10"   {{if eq .Request.Limit 10  }}selected{{end}}>10  </option>
 				<option name="100"  {{if eq .Request.Limit 100 }}selected{{end}}>100 </option>
 				<option name="1000" {{if eq .Request.Limit 1000}}selected{{end}}>1000</option>
@@ -18,7 +18,7 @@
 				{{ end -}}
 			</select>
 			<input id="query-button" type="submit" value="query" onclick="let elem = document.getElementById('query-box'); elem.disabled = elem.value == '';" />
-			<!--<input id="stream-button" type="button" value="stream"/>-->
+			<input id="stream-button" type="button" value="stream"/>
 		</form>
 	</div>
 

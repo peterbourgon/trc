@@ -74,9 +74,9 @@ func TracesHandler(c TraceCollector) http.Handler {
 		}
 
 		if requestExplicitlyAccepts(r, "text/event-stream") {
-			tr.Tracef("text/event-stream")
+			tr.Tracef("text/event-stream request, so streaming traces")
 			streamTraces(c, req, r, w) // TODO: distributed streamer
-			return
+			return                     // TODO: superfluous WriteHeader call from trchttp.interceptor.WriteHeader
 		}
 
 		var queryer TraceQueryer = c // default queryer
@@ -118,6 +118,7 @@ func streamTraces(s TraceStreamer, req *trc.QueryTracesRequest, r *http.Request,
 		ch := make(chan trc.Trace, 1000)
 
 		if err := s.Subscribe(ctx, ch); err != nil {
+			tr.Errorf("subscribe: err=%v", err)
 			http.Error(w, fmt.Sprintf("subscribe: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -191,6 +192,7 @@ func streamTraces(s TraceStreamer, req *trc.QueryTracesRequest, r *http.Request,
 
 const (
 	eventTypeTrace     = "trace.1"
+	eventTypeTraceHTML = "trace.html"
 	eventTypeHeartbeat = "heartbeat.1"
 )
 
@@ -199,14 +201,13 @@ func maybeSendTrace(ctx context.Context, enc *eventsource.Encoder, req *trc.Quer
 		return false, nil
 	}
 
-	trs := trc.NewTraceStatic(tr)
-	data, err := json.Marshal(trs)
+	data, err := renderTemplate("traces.trace.html", trc.NewTraceStatic(tr))
 	if err != nil {
-		return false, fmt.Errorf("marshal trace: %w", err)
+		return false, fmt.Errorf("render trace: %w", err)
 	}
 
 	if err := enc.Encode(eventsource.Event{
-		Type: eventTypeTrace,
+		Type: eventTypeTraceHTML,
 		Data: data,
 	}); err != nil {
 		return false, fmt.Errorf("encode event: %w", err)

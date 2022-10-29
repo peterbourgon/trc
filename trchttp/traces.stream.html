@@ -1,26 +1,23 @@
 <script>
 	function addStreamTrace(event) {
-		var pre = document.createElement("pre");
-		pre.innerText = JSON.stringify(event, undefined, 4);
-
-		var elem = document.createElement("div");
-		elem.setAttribute("class", "trace");
-		elem.setAttribute("id", event.ID);
-		elem.appendChild(pre);
-
-		var traces = document.getElementById("traces");
-		traces.prepend(elem);
-
-		while (traces.childNodes.length > {{ .Request.Limit }}) {
-			traces.removeChild(traces.lastChild);
+		var elem = document.createElement('div');
+		elem.innerHTML = event;
+		var dst = document.getElementById("traces");
+		dst.prepend(elem);
+		while (dst.childNodes.length > {{ .Request.Limit }}) {
+			dst.removeChild(dst.lastChild);
 		}
+		highlight();
 	}
 
 	function addStreamMetadata(event) {
 		var pre = document.createElement("pre");
 		pre.innerText = JSON.stringify(event, undefined, 4);
-
-		document.getElementById("metadata").prepend(pre);
+		var dst = document.getElementById("stream-metadata");
+		dst.prepend(pre);
+		while (dst.childNodes.length > 5) {
+			dst.removeChild(dst.lastChild);
+		}
 	}
 
 	var source;
@@ -28,24 +25,30 @@
 	function onStream(event) {
 		switch (document.getElementById("stream-button").value) {
 			case "stream":
+				document.getElementById("query-box").disabled = true;
+				document.getElementById("query-limit").disabled = true;
+				document.getElementById("query-button").disabled = true;
 				document.getElementById("stream-button").value = "cancel";
 				document.getElementById("stream-button").focus();
+				document.getElementById("stream-metadata").style.display = "flex";
 				addStreamMetadata({ msg: "connecting...", uri: window.location.href });
 				source = new EventSource(window.location.href, { withCredentials: true });
 				source.onopen =                        function (event) { console.log("onopen", event);     addStreamMetadata({ msg: "connected" }); };
 				source.onmessage =                     function (event) { console.log("onmessage", event);  addStreamTrace(JSON.parse(event.data)); };
 				source.onerror =                       function (err)   { console.log("onerror", err);      addStreamMetadata({ msg: "ended with error", "err": err }); };
-				source.addEventListener("trace.1",     function (event) { console.log("trace", event);      addStreamTrace(JSON.parse(event.data)); });
+				source.addEventListener("trace.html",  function (event) { console.log("trace", event);      addStreamTrace(event.data); });
 				source.addEventListener("heartbeat.1", function (event) { console.log("heartbeat", event);  addStreamMetadata(JSON.parse(event.data)); });
 				break;
 
 			case "cancel":
 				console.log("source.close", source.close());
 				addStreamMetadata({ msg: "canceled" });
+				document.getElementById("stream-button").focus();
 				document.getElementById("stream-button").value = "stream";
-				// document.getElementById("log-regex").disabled = false;
-				// document.getElementById("log-regex").setAttribute("placeholder", "Filter regex (optional)");
-				// document.getElementById("log-regex").focus();
+				document.getElementById("query-button").disabled = false;
+				document.getElementById("query-limit").disabled = false;
+				document.getElementById("query-box").disabled = false;
+				document.getElementById("stream-metadata").style.display = "none";
 				break;
 		};
 		event.preventDefault();

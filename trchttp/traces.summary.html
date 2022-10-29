@@ -25,13 +25,13 @@
 	<th class="separator">
 		&nbsp;
 	</th>
-	<th class="newest numeric">
+	<th class="oldest">
 		Oldest
 	</th>
-	<th class="newest numeric">
+	<th class="newest">
 		Newest
 	</th>
-	<th class="rate numeric">
+	<th class="rate">
 		Rate
 	</th>
 </tr>
@@ -77,15 +77,15 @@
 		&nbsp;
 	</td>
 
-	<td class="oldest numeric {{$category_class_name}}">
+	<td class="oldest {{$category_class_name}}">
 		{{humanize (timesince .Oldest)}}
 	</td>
 
-	<td class="newest numeric {{$category_class_name}}">
+	<td class="newest {{$category_class_name}}">
 		{{humanize (timesince .Newest)}}
 	</td>
 
-	<td class="rate numeric {{$category_class_name}}">
+	<td class="rate {{$category_class_name}}">
 		{{ $rate       := ratecalc $num_total (timediff .Newest .Oldest) }}
 		{{ $total_rate  = floatadd $total_rate $rate }}
 		{{ humanizefloat $rate }}/s
@@ -133,15 +133,15 @@
 		&nbsp;
 	</td>
 
-	<td class="oldest numeric">
+	<td class="oldest">
 		{{ if not .Oldest.IsZero -}} {{humanize (timesince .Oldest)}} {{ end -}}
 	</td>
 
-	<td class="newest numeric">
+	<td class="newest">
 		{{ if not .Newest.IsZero -}} {{humanize (timesince .Newest)}} {{ end -}}
 	</td>
 
-	<td class="rate numeric">
+	<td class="rate">
 		{{ humanizefloat $total_rate }}/s
 	</td>
 </tr>

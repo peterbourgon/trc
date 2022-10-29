@@ -38,62 +38,9 @@ func renderJSON(ctx context.Context, w http.ResponseWriter, data interface{}) {
 func renderHTML(ctx context.Context, w http.ResponseWriter, filename string, data any) {
 	tr := trc.FromContext(ctx)
 
-	body, err := func() (_ []byte, err error) {
-		defer func() {
-			if x := recover(); x != nil {
-				err = fmt.Errorf("PANIC: %v", x)
-			}
-		}()
+	body, err := renderTemplate(filename, data)
 
-		// List everything in the base dir of the embedded fs.
-		entries, err := fs.ReadDir(".")
-		if err != nil {
-			return nil, fmt.Errorf("read embedded filesystem: %w", err)
-		}
-
-		// Get the names of all of those assets.
-		var assets []string
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			assets = append(assets, entry.Name())
-		}
-
-		// Use the embedded assets as the defaults in the template.
-		t, err := template.New("").Funcs(templateFuncs).ParseFS(fs, assets...)
-		if err != nil {
-			return nil, fmt.Errorf("parse assets: %w", err)
-		}
-
-		// As a convenience for development, if any asset exists on the local
-		// filesystem, parse and use it instead.
-		for _, asset := range assets {
-			if _, err := os.Stat(asset); err == nil {
-				tt, err := t.ParseFiles(asset)
-				if err != nil {
-					return nil, fmt.Errorf("template parse error: %w", err)
-				}
-				t = tt
-			}
-		}
-
-		// Get the requested asset.
-		tt := t.Lookup(filename)
-		if tt == nil {
-			return nil, fmt.Errorf("template (%s) not found", filename)
-		}
-
-		// Execute the template.
-		var buf bytes.Buffer
-		if err := tt.Execute(&buf, data); err != nil {
-			return nil, fmt.Errorf("execute template: %w", err)
-		}
-
-		return buf.Bytes(), nil
-	}()
-
-	tr.Tracef("rendered body (%dB)", len(body))
+	tr.Tracef("rendered tempate, filename %s, size %dB, error %v", filename, len(body), err)
 
 	code := http.StatusOK
 	if err != nil {
@@ -104,6 +51,61 @@ func renderHTML(ctx context.Context, w http.ResponseWriter, filename string, dat
 	w.Header().Set("content-type", "text/html; charset=utf-8")
 	w.WriteHeader(code)
 	w.Write(body)
+}
+
+func renderTemplate(filename string, data any) (_ []byte, err error) {
+	defer func() {
+		if x := recover(); x != nil {
+			err = fmt.Errorf("PANIC: %v", x)
+		}
+	}()
+
+	// List everything in the base dir of the embedded fs.
+	entries, err := fs.ReadDir(".")
+	if err != nil {
+		return nil, fmt.Errorf("read embedded filesystem: %w", err)
+	}
+
+	// Get the names of all of those assets.
+	var assets []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		assets = append(assets, entry.Name())
+	}
+
+	// Use the embedded assets as the defaults in the template.
+	t, err := template.New("").Funcs(templateFuncs).ParseFS(fs, assets...)
+	if err != nil {
+		return nil, fmt.Errorf("parse assets: %w", err)
+	}
+
+	// As a convenience for development, if any asset exists on the local
+	// filesystem, parse and use it instead.
+	for _, asset := range assets {
+		if _, err := os.Stat(asset); err == nil {
+			tt, err := t.ParseFiles(asset)
+			if err != nil {
+				return nil, fmt.Errorf("template parse error: %w", err)
+			}
+			t = tt
+		}
+	}
+
+	// Get the requested asset.
+	tt := t.Lookup(filename)
+	if tt == nil {
+		return nil, fmt.Errorf("template (%s) not found", filename)
+	}
+
+	// Execute the template.
+	var buf bytes.Buffer
+	if err := tt.Execute(&buf, data); err != nil {
+		return nil, fmt.Errorf("execute template: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
 
 //

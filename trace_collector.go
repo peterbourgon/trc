@@ -30,9 +30,17 @@ func (c *TraceCollector) NewTrace(ctx context.Context, category string) (context
 	}
 
 	ctx, tr := NewTrace(ctx, category)
-	c.c.add(category, tr)
-	return ctx, tr
+	btr := &broadcastDecorator{tr, c.c.stream.broadcast}
+	c.c.add(category, btr)
+	return ctx, btr
 }
+
+type broadcastDecorator struct {
+	Trace
+	broadcast func(Trace)
+}
+
+func (d *broadcastDecorator) Finish() { d.Trace.Finish(); d.broadcast(d.Trace) }
 
 func (c *TraceCollector) CopyTrace(tr Trace, newCategory string) error {
 	if tr.Category() == newCategory {

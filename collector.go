@@ -32,7 +32,6 @@ func (c *collector[T]) debug() string {
 
 func (c *collector[T]) add(cat string, val T) {
 	c.groups.getOrCreate(cat).add(val)
-	c.stream.broadcast(val)
 }
 
 func (c *collector[T]) subscribe(ch chan<- T) error {

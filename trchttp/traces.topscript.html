@@ -40,8 +40,9 @@ function calcdates() {
 
 setInterval(calcdates, 1000);
 
-function highlight(search) {
-	let re = new RegExp('('+search+')');
+function highlight() {
+	{{ if .Request.Search -}}
+	let re = new RegExp('('+{{.Request.Regexp.String}}+')');
 	document.getElementById("traces").querySelectorAll(".searchable").forEach(elem => {
 		if (re.test(elem.textContent)) {
 			elem.classList.add("highlight");
@@ -51,6 +52,7 @@ function highlight(search) {
 			}
 		}
 	});
+	{{ end -}}
 }
 
 </script>
