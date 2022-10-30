@@ -136,11 +136,11 @@ div#traces .trace {
 }
 
 div#traces .trace.streamed .metadata {
-	background-color: rgba(0, 0, 255, 0.15);
+	background-color: rgba(0, 255, 0, 0.2);
 }
 
 div#traces .trace.streamed .events {
-	background-color: rgba(0, 0, 255, 0.05);
+	background-color: rgba(0, 255, 0, 0.1);
 }
 
 div#traces .trace .metadata {
