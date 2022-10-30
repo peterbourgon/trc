@@ -12,16 +12,16 @@ import (
 	"github.com/peterbourgon/trc"
 )
 
-type DistributedQueryer struct {
+type DistributedCollector struct {
 	client HTTPClient
 	uris   []string
 }
 
-var _ TraceQueryer = (*DistributedQueryer)(nil)
+var _ TraceQueryer = (*DistributedCollector)(nil)
 
 // TODO: origin/remote type with both URI and name?
-func NewDistributedQueryer(c HTTPClient, uris ...string) *DistributedQueryer {
-	return &DistributedQueryer{
+func NewDistributedCollector(c HTTPClient, uris ...string) *DistributedCollector {
+	return &DistributedCollector{
 		client: c,
 		uris:   uris,
 	}
@@ -31,7 +31,7 @@ type HTTPClient interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
-func (tc *DistributedQueryer) QueryTraces(ctx context.Context, tqr *trc.QueryTracesRequest) (*trc.QueryTracesResponse, error) {
+func (dc *DistributedCollector) QueryTraces(ctx context.Context, tqr *trc.QueryTracesRequest) (*trc.QueryTracesResponse, error) {
 	tr := trc.PrefixTracef(trc.FromContext(ctx), "[dist]")
 
 	type tuple struct {
@@ -42,8 +42,8 @@ func (tc *DistributedQueryer) QueryTraces(ctx context.Context, tqr *trc.QueryTra
 
 	// Scatter a query request to each URI.
 	begin := time.Now()
-	tuplec := make(chan tuple, len(tc.uris))
-	for _, uri := range tc.uris {
+	tuplec := make(chan tuple, len(dc.uris))
+	for _, uri := range dc.uris {
 		go func(uri string) {
 			body, err := json.Marshal(tqr)
 			if err != nil {
@@ -58,7 +58,7 @@ func (tc *DistributedQueryer) QueryTraces(ctx context.Context, tqr *trc.QueryTra
 			}
 			req.Header.Set("content-type", "application/json")
 
-			resp, err := tc.client.Do(req)
+			resp, err := dc.client.Do(req)
 			if err != nil {
 				tuplec <- tuple{uri, nil, fmt.Errorf("execute request: %w", err)}
 				return
@@ -114,14 +114,14 @@ func (tc *DistributedQueryer) QueryTraces(ctx context.Context, tqr *trc.QueryTra
 	return aggregate, nil
 }
 
-func (tc *DistributedQueryer) Subscribe(ctx context.Context, ch chan<- trc.Trace) error {
+func (dc *DistributedCollector) Subscribe(ctx context.Context, ch chan<- trc.Trace) error {
 	return fmt.Errorf("not implemented")
 }
 
-func (tc *DistributedQueryer) Unsubscribe(ctx context.Context, ch chan<- trc.Trace) (uint64, uint64, error) {
+func (dc *DistributedCollector) Unsubscribe(ctx context.Context, ch chan<- trc.Trace) (uint64, uint64, error) {
 	return 0, 0, fmt.Errorf("not implemented")
 }
 
-func (tc *DistributedQueryer) Subscription(ctx context.Context, ch chan<- trc.Trace) (uint64, uint64, error) {
+func (dc *DistributedCollector) Subscription(ctx context.Context, ch chan<- trc.Trace) (uint64, uint64, error) {
 	return 0, 0, fmt.Errorf("not implemented")
 }

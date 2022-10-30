@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -19,7 +20,7 @@ type TraceCollector interface {
 }
 
 type TraceQueryer interface {
-	QueryTraces(ctx context.Context, req *trc.QueryTracesRequest) (*trc.QueryTracesResponse, error)
+	QueryTraces(ctx context.Context, qtreq *trc.QueryTracesRequest) (*trc.QueryTracesResponse, error)
 }
 
 type TraceStreamer interface {
@@ -45,7 +46,7 @@ func TracesHandler(c TraceCollector) http.Handler {
 			problems    = []string{}
 		)
 
-		req := &trc.QueryTracesRequest{
+		qtreq := &trc.QueryTracesRequest{
 			Bucketing:   bucketing,
 			Limit:       limit,
 			IDs:         urlquery["id"],
@@ -60,54 +61,54 @@ func TracesHandler(c TraceCollector) http.Handler {
 
 		if ct := r.Header.Get("content-type"); strings.Contains(ct, "application/json") {
 			tr.Tracef("parsing request body as JSON")
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			if err := json.NewDecoder(r.Body).Decode(&qtreq); err != nil {
 				err = fmt.Errorf("parse JSON request from body: %w", err)
 				problems = append(problems, err.Error())
 				tr.Errorf(err.Error())
 			}
 		}
 
-		if err := req.Sanitize(); err != nil {
+		if err := qtreq.Sanitize(); err != nil {
 			err = fmt.Errorf("sanitize request: %w", err)
 			problems = append(problems, err.Error())
 			tr.Errorf(err.Error())
 		}
 
-		if requestExplicitlyAccepts(r, "text/event-stream") {
-			tr.Tracef("text/event-stream request, so streaming traces")
-			streamTraces(c, req, r, w) // TODO: distributed streamer
-			return                     // TODO: superfluous WriteHeader call from trchttp.interceptor.WriteHeader
-		}
-
-		var queryer TraceQueryer = c // default queryer
+		var collector TraceCollector = c // default collector
 		if len(remotes) > 0 {
 			tr.Tracef("remotes count %d, using explicit distributed trace collector")
-			queryer = NewDistributedQueryer(http.DefaultClient, remotes...)
+			collector = NewDistributedCollector(http.DefaultClient, remotes...)
 		}
 
-		tr.Tracef("query starting: %s", req)
+		if requestExplicitlyAccepts(r, "text/event-stream") {
+			tr.Tracef("text/event-stream request, using SSE handler")
+			streamTraces(r, qtreq, collector, w) // TODO: distributed streamer
+			return                               // TODO: superfluous WriteHeader call from trchttp.interceptor.WriteHeader
+		}
 
-		res, err := queryer.QueryTraces(ctx, req)
+		tr.Tracef("query starting: %s", qtreq)
+
+		qtres, err := collector.QueryTraces(ctx, qtreq)
 		if err != nil {
 			tr.Errorf("query errored: %v", err)
-			res = trc.NewQueryTracesResponse(req, nil)
+			qtres = trc.NewQueryTracesResponse(qtreq, nil)
 			problems = append(problems, err.Error())
 		}
-		res.Duration = time.Since(begin)
-		res.Problems = append(problems, res.Problems...)
+		qtres.Duration = time.Since(begin)
+		qtres.Problems = append(problems, qtres.Problems...)
 
-		tr.Tracef("query finished: matched=%d selected=%d duration=%s", res.Matched, len(res.Selected), res.Duration)
+		tr.Tracef("query finished: matched=%d selected=%d duration=%s", qtres.Matched, len(qtres.Selected), qtres.Duration)
 
 		switch {
 		case requestExplicitlyAccepts(r, "text/html"):
-			renderHTML(ctx, w, "traces.html", res)
+			renderHTML(ctx, w, "traces.html", qtres)
 		default:
-			renderJSON(ctx, w, res)
+			renderJSON(ctx, w, qtres)
 		}
 	})
 }
 
-func streamTraces(s TraceStreamer, req *trc.QueryTracesRequest, r *http.Request, w http.ResponseWriter) {
+func streamTraces(r *http.Request, qtreq *trc.QueryTracesRequest, s TraceStreamer, w http.ResponseWriter) {
 	eventsource.Handler(func(lastID string, enc *eventsource.Encoder, stop <-chan bool) {
 		ctx := r.Context()
 		tr := trc.PrefixTracef(trc.FromContext(ctx), "[stream]")
@@ -151,7 +152,7 @@ func streamTraces(s TraceStreamer, req *trc.QueryTracesRequest, r *http.Request,
 		for {
 			select {
 			case tr := <-ch:
-				sent, err := maybeSendTrace(ctx, enc, req, tr)
+				sent, err := maybeSendTrace(ctx, enc, r, qtreq, tr)
 				if err != nil {
 					tr.Tracef("send trace error: %v", err)
 					return
@@ -191,25 +192,47 @@ func streamTraces(s TraceStreamer, req *trc.QueryTracesRequest, r *http.Request,
 }
 
 const (
-	eventTypeTrace     = "trace.1"
-	eventTypeTraceHTML = "trace.html"
-	eventTypeHeartbeat = "heartbeat.1"
+	eventTypeTraceJSON = "trace.json.v1"
+	eventTypeTraceHTML = "trace.html.v1"
+	eventTypeHeartbeat = "heartbeat.v1"
 )
 
-func maybeSendTrace(ctx context.Context, enc *eventsource.Encoder, req *trc.QueryTracesRequest, tr trc.Trace) (bool, error) {
-	if !req.Allow(tr) {
+func maybeSendTrace(ctx context.Context, enc *eventsource.Encoder, r *http.Request, qtreq *trc.QueryTracesRequest, tr trc.Trace) (bool, error) {
+	ctxtr := trc.FromContext(ctx)
+
+	if !qtreq.Allow(tr) {
 		return false, nil
 	}
 
-	data, err := renderTemplate("traces.trace.html", trc.NewTraceStatic(tr))
+	staticTrace := trc.NewTraceStatic(tr)
+	staticTrace.IsStreamed = true
+
+	var (
+		eventType string
+		eventData []byte
+		err       error
+	)
+	switch {
+	case r.URL.Query().Has("json"):
+		ctxtr.Tracef("building JSON trace")
+		eventType = eventTypeTraceJSON
+		eventData, err = json.Marshal(staticTrace)
+	default:
+		ctxtr.Tracef("building HTML trace")
+		eventType = eventTypeTraceHTML
+		eventData, err = renderTemplate("traces.trace.html", staticTrace)
+	}
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "### render err %v\n", err)
+		ctxtr.Errorf("render trace error: %v", err)
 		return false, fmt.Errorf("render trace: %w", err)
 	}
 
 	if err := enc.Encode(eventsource.Event{
-		Type: eventTypeTraceHTML,
-		Data: data,
+		Type: eventType,
+		Data: eventData,
 	}); err != nil {
+		ctxtr.Errorf("encode trace error: %v", err)
 		return false, fmt.Errorf("encode event: %w", err)
 	}
 

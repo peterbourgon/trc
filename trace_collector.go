@@ -55,12 +55,12 @@ func (c *TraceCollector) CopyTrace(tr Trace, newCategory string) error {
 	return nil
 }
 
-func (c *TraceCollector) QueryTraces(ctx context.Context, req *QueryTracesRequest) (*QueryTracesResponse, error) {
+func (c *TraceCollector) QueryTraces(ctx context.Context, qtreq *QueryTracesRequest) (*QueryTracesResponse, error) {
 	tr := FromContext(ctx)
 
 	tr.Tracef("debug: %v", c.c.debug())
 
-	if err := req.Sanitize(); err != nil {
+	if err := qtreq.Sanitize(); err != nil {
 		return nil, fmt.Errorf("sanitize request: %w", err)
 	}
 
@@ -71,7 +71,7 @@ func (c *TraceCollector) QueryTraces(ctx context.Context, req *QueryTracesReques
 		for cat, rb := range c.c.groups.getAll() {
 			if err := rb.walk(func(tr Trace) error {
 				overall = append(overall, tr)
-				if req.Allow(tr) {
+				if qtreq.Allow(tr) {
 					allowed = append(allowed, tr)
 				}
 				return nil
@@ -86,13 +86,13 @@ func (c *TraceCollector) QueryTraces(ctx context.Context, req *QueryTracesReques
 
 	tr.Tracef("evaluated %d, matched %d, took %s, %s/trace", len(overall), matched, took, perTrace)
 
-	stats := newTraceQueryStats(req, overall)
+	stats := newTraceQueryStats(qtreq, overall)
 
 	tr.Tracef("computed stats")
 
 	sort.Sort(allowed)
-	if len(allowed) > req.Limit {
-		allowed = allowed[:req.Limit]
+	if len(allowed) > qtreq.Limit {
+		allowed = allowed[:qtreq.Limit]
 	}
 
 	selected := make([]*StaticTrace, len(allowed))
@@ -103,7 +103,7 @@ func (c *TraceCollector) QueryTraces(ctx context.Context, req *QueryTracesReques
 	tr.Tracef("selected %d", len(selected))
 
 	return &QueryTracesResponse{
-		Request:  req,
+		Request:  qtreq,
 		Stats:    stats,
 		Matched:  matched,
 		Selected: selected,
@@ -229,48 +229,48 @@ type QueryTracesRequest struct {
 	Limit       int             `json:"limit,omitempty"`
 }
 
-func (req *QueryTracesRequest) String() string {
-	req.Sanitize()
+func (qtreq *QueryTracesRequest) String() string {
+	qtreq.Sanitize()
 
 	var parts []string
-	if len(req.IDs) > 0 {
-		parts = append(parts, fmt.Sprintf("id=%v", req.IDs))
+	if len(qtreq.IDs) > 0 {
+		parts = append(parts, fmt.Sprintf("id=%v", qtreq.IDs))
 	}
 
-	if req.Category != "" {
-		parts = append(parts, fmt.Sprintf("category=%q", req.Category))
+	if qtreq.Category != "" {
+		parts = append(parts, fmt.Sprintf("category=%q", qtreq.Category))
 	}
 
-	if req.IsActive {
+	if qtreq.IsActive {
 		parts = append(parts, "active")
 	}
 
-	if req.IsFinished {
+	if qtreq.IsFinished {
 		parts = append(parts, "finished")
 	}
 
-	if req.IsSucceeded {
+	if qtreq.IsSucceeded {
 		parts = append(parts, "succeeded")
 	}
 
-	if req.IsErrored {
+	if qtreq.IsErrored {
 		parts = append(parts, "errored")
 	}
 
-	if req.MinDuration != nil {
-		parts = append(parts, fmt.Sprintf("min=%s", req.MinDuration.String()))
+	if qtreq.MinDuration != nil {
+		parts = append(parts, fmt.Sprintf("min=%s", qtreq.MinDuration.String()))
 	}
 
-	if req.Bucketing != nil {
-		parts = append(parts, fmt.Sprintf("bucketing=%v", req.Bucketing))
+	if qtreq.Bucketing != nil {
+		parts = append(parts, fmt.Sprintf("bucketing=%v", qtreq.Bucketing))
 	}
 
-	if req.Regexp != nil {
-		parts = append(parts, fmt.Sprintf("regexp=%q", req.Regexp.String()))
+	if qtreq.Regexp != nil {
+		parts = append(parts, fmt.Sprintf("regexp=%q", qtreq.Regexp.String()))
 	}
 
-	if req.Limit > 0 {
-		parts = append(parts, fmt.Sprintf("limit=%d", req.Limit))
+	if qtreq.Limit > 0 {
+		parts = append(parts, fmt.Sprintf("limit=%d", qtreq.Limit))
 	}
 
 	if len(parts) <= 0 {
@@ -280,38 +280,38 @@ func (req *QueryTracesRequest) String() string {
 	return strings.Join(parts, " ")
 }
 
-func (req *QueryTracesRequest) Sanitize() error {
-	if req.Bucketing == nil {
-		req.Bucketing = defaultBucketing
+func (qtreq *QueryTracesRequest) Sanitize() error {
+	if qtreq.Bucketing == nil {
+		qtreq.Bucketing = defaultBucketing
 	}
 
 	switch {
-	case req.Regexp != nil && req.Search == "":
-		req.Search = req.Regexp.String()
-	case req.Regexp == nil && req.Search != "":
-		re, err := regexp.Compile(req.Search)
+	case qtreq.Regexp != nil && qtreq.Search == "":
+		qtreq.Search = qtreq.Regexp.String()
+	case qtreq.Regexp == nil && qtreq.Search != "":
+		re, err := regexp.Compile(qtreq.Search)
 		if err != nil {
-			return fmt.Errorf("%q: %w", req.Search, err)
+			return fmt.Errorf("%q: %w", qtreq.Search, err)
 		}
-		req.Regexp = re
+		qtreq.Regexp = re
 	}
 
 	switch {
-	case req.Limit <= 0:
-		req.Limit = traceQueryLimitDef
-	case req.Limit < traceQueryLimitMin:
-		req.Limit = traceQueryLimitMin
-	case req.Limit > traceQueryLimitMax:
-		req.Limit = traceQueryLimitMax
+	case qtreq.Limit <= 0:
+		qtreq.Limit = traceQueryLimitDef
+	case qtreq.Limit < traceQueryLimitMin:
+		qtreq.Limit = traceQueryLimitMin
+	case qtreq.Limit > traceQueryLimitMax:
+		qtreq.Limit = traceQueryLimitMax
 	}
 
 	return nil
 }
 
-func (req *QueryTracesRequest) Allow(tr Trace) bool {
-	if len(req.IDs) > 0 {
+func (qtreq *QueryTracesRequest) Allow(tr Trace) bool {
+	if len(qtreq.IDs) > 0 {
 		var found bool
-		for _, id := range req.IDs {
+		for _, id := range qtreq.IDs {
 			if id == tr.ID() {
 				found = true
 				break
@@ -322,45 +322,45 @@ func (req *QueryTracesRequest) Allow(tr Trace) bool {
 		}
 	}
 
-	if req.Category != "" && tr.Category() != req.Category {
+	if qtreq.Category != "" && tr.Category() != qtreq.Category {
 		return false
 	}
 
-	if req.IsActive && !tr.Active() {
+	if qtreq.IsActive && !tr.Active() {
 		return false
 	}
 
-	if req.IsFinished && !tr.Finished() {
+	if qtreq.IsFinished && !tr.Finished() {
 		return false
 	}
 
-	if req.IsSucceeded && !tr.Succeeded() {
+	if qtreq.IsSucceeded && !tr.Succeeded() {
 		return false
 	}
 
-	if req.IsErrored && !tr.Errored() {
+	if qtreq.IsErrored && !tr.Errored() {
 		return false
 	}
 
-	if req.MinDuration != nil {
+	if qtreq.MinDuration != nil {
 		if tr.Active() { // we assert that a min duration query param excludes active traces
 			return false
 		}
-		if tr.Duration() < *req.MinDuration {
+		if tr.Duration() < *qtreq.MinDuration {
 			return false
 		}
 	}
 
-	if req.Regexp != nil {
+	if qtreq.Regexp != nil {
 		if matchedSomething := func() bool {
-			if req.Regexp.MatchString(tr.ID()) {
+			if qtreq.Regexp.MatchString(tr.ID()) {
 				return true
 			}
-			if req.Regexp.MatchString(tr.Category()) {
+			if qtreq.Regexp.MatchString(tr.Category()) {
 				return true
 			}
 			for _, ev := range tr.Events() {
-				if ev.MatchRegexp(req.Regexp) {
+				if ev.MatchRegexp(qtreq.Regexp) {
 					return true
 				}
 			}
@@ -394,23 +394,23 @@ func NewQueryTracesResponse(req *QueryTracesRequest, selected Traces) *QueryTrac
 	}
 }
 
-func (res *QueryTracesResponse) Merge(other *QueryTracesResponse) error {
-	if res.Request == nil {
+func (qtres *QueryTracesResponse) Merge(other *QueryTracesResponse) error {
+	if qtres.Request == nil {
 		return fmt.Errorf("invalid response: missing request")
 	}
 
-	res.Origins = mergeStringSlices(res.Origins, other.Origins)
-	if err := mergeTraceQueryStats(res.Stats, other.Stats); err != nil {
+	qtres.Origins = mergeStringSlices(qtres.Origins, other.Origins)
+	if err := mergeTraceQueryStats(qtres.Stats, other.Stats); err != nil {
 		return fmt.Errorf("merge stats: %w", err)
 	}
 
-	res.Matched += other.Matched
+	qtres.Matched += other.Matched
 
-	res.Selected = append(res.Selected, other.Selected...)
+	qtres.Selected = append(qtres.Selected, other.Selected...)
 
-	res.Problems = append(res.Problems, other.Problems...)
+	qtres.Problems = append(qtres.Problems, other.Problems...)
 
-	res.Duration = ifThenElse(res.Duration > other.Duration, res.Duration, other.Duration)
+	qtres.Duration = ifThenElse(qtres.Duration > other.Duration, qtres.Duration, other.Duration)
 
 	return nil
 

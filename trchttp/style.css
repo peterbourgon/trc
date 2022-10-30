@@ -91,19 +91,19 @@ table#summary td.errored div.progress-bar {
  * topline
  */
 
+div#topline-metadata {
+	margin-left: 1ch;
+}
+
 div#topline {
 	display: flex;
 	align-items: baseline;
-	gap: 1ch;
 }
 
-div#topline div {
+div#topline>div {
 	display: flex;
+	align-items: baseline;
 	gap: 1ch;
-}
-
-div#topline div div {
-	gap: 0ch;
 }
 
 /*
@@ -133,6 +133,14 @@ div#traces .trace {
 	display: flex;
 	flex-direction: column;
 	margin: 1em;
+}
+
+div#traces .trace.streamed .metadata {
+	background-color: rgba(0, 0, 255, 0.15);
+}
+
+div#traces .trace.streamed .events {
+	background-color: rgba(0, 0, 255, 0.05);
 }
 
 div#traces .trace .metadata {

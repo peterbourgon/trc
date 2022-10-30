@@ -4,19 +4,48 @@
 		elem.innerHTML = event;
 		var dst = document.getElementById("traces");
 		dst.prepend(elem);
-		while (dst.childNodes.length > {{ .Request.Limit }}) {
+
+		while (dst.children.length > {{.Request.Limit}}) {
+			console.log("childNodes.length", dst.childNodes.length, "more than", {{.Request.Limit}}, "so removing last child");
 			dst.removeChild(dst.lastChild);
 		}
+
 		highlight();
 	}
 
+	function setStreamMode(active) {
+		document.getElementById("summary").style.opacity = "0.25"; // summary is less valid
+
+		var queryElems = document.getElementsByClassName("topline-query");
+		for (var i = 0; i < queryElems.length; i++) {
+			queryElems[i].style.display = "none";
+		}
+
+		if (active) {
+			document.getElementById("topline-stream-state").innerText = "streaming=active";
+			document.getElementById("topline-stream-state").style.visibility = "visible";
+			document.getElementById("topline-stream-filtered").style.visibility = "visible";
+			document.getElementById("topline-stream-emitted").style.visibility = "visible";
+			document.getElementById("topline-stream-drops").style.visibility = "visible";
+
+		} else {
+			document.getElementById("topline-stream-state").innerText = "streaming=canceled";
+			document.getElementById("topline-stream-state").style.visibility = "visible";
+			document.getElementById("topline-stream-filtered").style.visibility = "hidden";
+			document.getElementById("topline-stream-emitted").style.visibility = "hidden";
+			document.getElementById("topline-stream-drops").style.visibility = "hidden";
+		}
+	}
+
 	function addStreamMetadata(event) {
-		var pre = document.createElement("pre");
-		pre.innerText = JSON.stringify(event, undefined, 4);
-		var dst = document.getElementById("stream-metadata");
-		dst.prepend(pre);
-		while (dst.childNodes.length > 5) {
-			dst.removeChild(dst.lastChild);
+		if (event.filtered) {
+			document.getElementById("topline-stream-filtered").innerText = "filtered=" + event.filtered;
+		}
+		if (event.emitted) {
+			document.getElementById("topline-stream-emitted").innerText = "emitted=" + event.emitted;
+		}
+		if (event.drops) {
+			document.getElementById("topline-stream-drops").innerText = "dropped=" + event.drops;
 		}
 	}
 
@@ -25,39 +54,42 @@
 	function onStream(event) {
 		switch (document.getElementById("stream-button").value) {
 			case "stream":
+				setStreamMode(true);
 				document.getElementById("query-box").disabled = true;
 				document.getElementById("query-limit").disabled = true;
 				document.getElementById("query-button").disabled = true;
 				document.getElementById("stream-button").value = "cancel";
 				document.getElementById("stream-button").focus();
-				document.getElementById("stream-metadata").style.display = "flex";
 				addStreamMetadata({ msg: "connecting...", uri: window.location.href });
 				source = new EventSource(window.location.href, { withCredentials: true });
-				source.onopen =                        function (event) { console.log("onopen", event);     addStreamMetadata({ msg: "connected" }); };
-				source.onmessage =                     function (event) { console.log("onmessage", event);  addStreamTrace(JSON.parse(event.data)); };
-				source.onerror =                       function (err)   { console.log("onerror", err);      addStreamMetadata({ msg: "ended with error", "err": err }); };
-				source.addEventListener("trace.html",  function (event) { console.log("trace", event);      addStreamTrace(event.data); });
-				source.addEventListener("heartbeat.1", function (event) { console.log("heartbeat", event);  addStreamMetadata(JSON.parse(event.data)); });
+				source.onopen =                          function (event) { /*console.log("onopen", event);   */  addStreamMetadata({ msg: "connected" }); };
+				source.onmessage =                       function (event) { /*console.log("onmessage", event);*/  addStreamTrace(JSON.parse(event.data)); };
+				source.onerror =                         function (err)   { /*console.log("onerror", err);    */  addStreamMetadata({ msg: "ended with error", "err": err }); };
+				source.addEventListener("trace.html.v1", function (event) { /*console.log("trace", event);    */  addStreamTrace(event.data); });
+				source.addEventListener("heartbeat.v1",  function (event) { /*console.log("heartbeat", event);*/  addStreamMetadata(JSON.parse(event.data)); });
 				break;
 
 			case "cancel":
-				console.log("source.close", source.close());
+				source.close();
+				setStreamMode(false);
 				addStreamMetadata({ msg: "canceled" });
 				document.getElementById("stream-button").focus();
 				document.getElementById("stream-button").value = "stream";
 				document.getElementById("query-button").disabled = false;
 				document.getElementById("query-limit").disabled = false;
 				document.getElementById("query-box").disabled = false;
-				document.getElementById("stream-metadata").style.display = "none";
+				document.getElementById("stream-topline-state").innerText = "state=stopped";
+				// document.getElementById("stream-metadata").style.display = "none";
+				// document.getElementById("stream-topline").style.display = "none";
 				break;
 		};
 		event.preventDefault();
 	}
 
 	function onClear(event) {
-	document.getElementById("stream-traces").innerHTML = "";
-	document.getElementById("stream-metadata").innerHTML = "";
-	event.preventDefault();
+		document.getElementById("stream-traces").innerHTML = "";
+		document.getElementById("stream-metadata").innerHTML = "";
+		event.preventDefault();
 	}
 
 	document.getElementById("stream-button").addEventListener("click", onStream);

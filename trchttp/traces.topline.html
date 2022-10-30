@@ -1,6 +1,6 @@
 <div id="topline">
 
-	<div>
+	<div id="topline-form">
 		<form method="GET" target="" >
 			<input id="query-box" type="text" name="q" placeholder=".*" {{if .Request.Search}}value="{{.Request.Search}}"{{end}} size="32" autofocus onfocus="this.select();" />
 			{{ if .Request.Category    -}}<input type="hidden" name="category"  value="{{.Request.Category}}"    />{{ end -}}
@@ -22,13 +22,19 @@
 		</form>
 	</div>
 
-	<div>
-		{{ if .Origins -}} <div>origins={{len .Origins}}</div> {{ end -}}
-		<div>traces={{ .Stats.Overall.NumTotal }}</div>
-		<div>matched={{ .Matched }}</div>
-		<div>shown={{ len .Selected }}</div>
-		<div>took={{ humanize .Duration }}</div>
-		<div>age=<span class="time-since" title="{{timenow}}"></span></div>
+	<div id="topline-metadata">
+		{{ if .Origins -}}<div id="topline-origins">origins={{len .Origins}}</div>{{ end -}}
+
+		<div id="topline-query-traces"  class="topline-query">traces={{ .Stats.Overall.NumTotal }}</div>
+		<div id="topline-query-matched" class="topline-query">matched={{ .Matched }}</div>
+		<div id="topline-query-shown"   class="topline-query">shown={{ len .Selected }}</div>
+		<div id="topline-query-took"    class="topline-query">took={{ humanize .Duration }}</div>
+		<div id="topline-query-age"     class="topline-query">age=<span class="time-since" title="{{timenow}}"></span></div>
+
+		<div id="topline-stream-state"    class="topline-stream"></div>
+		<div id="topline-stream-filtered" class="topline-stream"></div>
+		<div id="topline-stream-emitted"  class="topline-stream"></div>
+		<div id="topline-stream-drops"    class="topline-stream"></div>
 	</div>
 
 </div>
