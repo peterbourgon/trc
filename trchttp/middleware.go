@@ -30,6 +30,12 @@ func Middleware(nt NewTracer, getCategory func(*http.Request) string) func(http.
 
 			tr.Tracef("%s %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 
+			for k, vs := range r.Header {
+				for _, v := range vs {
+					tr.Tracef("> %s: %v", k, v)
+				}
+			}
+
 			iw := newInterceptor(w)
 			defer func(b time.Time) {
 				code := iw.Code()

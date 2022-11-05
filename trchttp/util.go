@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log"
 	"mime"
 	"net/http"
 	"net/url"
@@ -21,7 +22,7 @@ import (
 	"github.com/peterbourgon/trc"
 )
 
-//go:embed *.html *.css
+//go:embed assets/*
 var fs embed.FS
 
 //
@@ -60,37 +61,49 @@ func renderTemplate(filename string, data any) (_ []byte, err error) {
 		}
 	}()
 
-	// List everything in the base dir of the embedded fs.
-	entries, err := fs.ReadDir(".")
-	if err != nil {
-		return nil, fmt.Errorf("read embedded filesystem: %w", err)
-	}
+	log.Printf("### renderTemplate %s", filename)
 
-	// Get the names of all of those assets.
-	var assets []string
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		assets = append(assets, entry.Name())
-	}
+	// List everything in the base dir of the embedded fs.
+	embeddedFS := fs // assets.Embedded
+	// entries, err := embeddedFS.ReadDir(".")
+	// if err != nil {
+	// return nil, fmt.Errorf("read embedded filesystem: %w", err)
+	// }
+
+	// Get the names of all of those assetNames.
+	// var assetNames []string
+	// for _, entry := range entries {
+	// if entry.IsDir() {
+	// continue
+	// }
+	// assetNames = append(assetNames, entry.Name())
+	// }
+	//
+	// log.Printf("### assetNames %#+v", assetNames)
 
 	// Use the embedded assets as the defaults in the template.
-	t, err := template.New("").Funcs(templateFuncs).ParseFS(fs, assets...)
+	t, err := template.New("").Funcs(templateFuncs).ParseFS(embeddedFS, "assets/*")
 	if err != nil {
 		return nil, fmt.Errorf("parse assets: %w", err)
 	}
 
-	// As a convenience for development, if any asset exists on the local
-	// filesystem, parse and use it instead.
-	for _, asset := range assets {
-		if _, err := os.Stat(asset); err == nil {
-			tt, err := t.ParseFiles(asset)
-			if err != nil {
-				return nil, fmt.Errorf("template parse error: %w", err)
-			}
-			t = tt
+	// As a convenience for development, if any asset exists in the current
+	// directory on the local filesystem, parse and use it instead of the
+	// embedded version.
+	for _, tp := range t.Templates() {
+		name := tp.Name()
+		if name == "" {
+			continue
 		}
+		if _, err := os.Stat(name); err != nil {
+			continue
+		}
+		log.Printf("using local file for %s", name)
+		tt, err := t.ParseFiles(name)
+		if err != nil {
+			return nil, fmt.Errorf("parse local template error: %w", err)
+		}
+		t = tt
 	}
 
 	// Get the requested asset.
@@ -132,6 +145,7 @@ var templateFuncs = template.FuncMap{
 	"intpercent":       func(n, d int) int { return int(100 * float64(n) / float64(d)) },
 	"queryescape":      func(s string) string { return url.QueryEscape(s) },
 	"pathescape":       func(s string) string { return url.PathEscape(s) },
+	"htmlescape":       func(s string) string { return template.HTMLEscapeString(s) },
 	"insertbreaks":     func(s string) template.HTML { return template.HTML(breaksReplacer.Replace(s)) },
 	"highlightclasses": highlightclasses,
 	"truncateduration": truncateduration,

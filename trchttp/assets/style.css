@@ -107,25 +107,6 @@ div#topline>div {
 }
 
 /*
- * stream
- */
-
-div#stream-metadata {
-	position: fixed;
-	top: 1em;
-	right: 1em;
-	padding: 1em;
-	display: none;
-	flex-direction: column;
-	width: 25%;
-	max-width: 25%;
-	font-size: smaller;
-	border: solid 1px #000;
-	background-color: rgba(255, 255, 255, 0.9);
-}
-
-
-/*
  * traces
  */
 
@@ -133,14 +114,6 @@ div#traces .trace {
 	display: flex;
 	flex-direction: column;
 	margin: 1em;
-}
-
-div#traces .trace.streamed .metadata {
-	background-color: rgba(0, 255, 0, 0.2);
-}
-
-div#traces .trace.streamed .events {
-	background-color: rgba(0, 255, 0, 0.1);
 }
 
 div#traces .trace .metadata {
@@ -206,6 +179,10 @@ div#traces .trace .events div.event div.delta .progress-bar {
 /* last cell is what, should fill the rest of the page */
 div#traces .trace .events div.event div.what {
 	flex: 10 0px;
+	min-width: 25%;
+	padding-left: 2em;
+	text-indent: -2em;
+	overflow: scroll;
 }
 
 /*

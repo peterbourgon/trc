@@ -417,7 +417,6 @@ type StaticTrace struct {
 	StaticErrored   bool          `json:"errored"`
 	StaticDuration  time.Duration `json:"duration"`
 	StaticEvents    []Event       `json:"events"`
-	IsStreamed      bool          `json:"is_streamed,omitempty"`
 }
 
 var _ Trace = (*StaticTrace)(nil)

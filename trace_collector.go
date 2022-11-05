@@ -30,17 +30,10 @@ func (c *TraceCollector) NewTrace(ctx context.Context, category string) (context
 	}
 
 	ctx, tr := NewTrace(ctx, category)
-	btr := &broadcastDecorator{tr, c.c.stream.broadcast}
-	c.c.add(category, btr)
-	return ctx, btr
+	// tr = &broadcastDecorator{tr, c.c.stream.broadcast}
+	c.c.add(category, tr)
+	return ctx, tr
 }
-
-type broadcastDecorator struct {
-	Trace
-	broadcast func(Trace)
-}
-
-func (d *broadcastDecorator) Finish() { d.Trace.Finish(); d.broadcast(d.Trace) }
 
 func (c *TraceCollector) CopyTrace(tr Trace, newCategory string) error {
 	if tr.Category() == newCategory {
@@ -127,89 +120,19 @@ func (c *TraceCollector) Subscription(ctx context.Context, ch chan<- Trace) (sen
 //
 //
 
-/*
-type TraceCollector struct {
-	byCategory *ringBuffers[Trace]
+//
+//
+//
+
+type broadcastDecorator struct {
+	Trace
+	broadcast func(Trace)
 }
 
-func NewDefaultTraceCollector() *TraceCollector {
-	return NewTraceCollector(DefaultTraceCollectorMaxEvents)
+func (d *broadcastDecorator) Finish() {
+	d.Trace.Finish()
+	d.broadcast(d.Trace)
 }
-
-func NewTraceCollector(max int) *TraceCollector {
-	return &TraceCollector{
-		byCategory: newRingBuffers[Trace](max),
-	}
-}
-
-func (tc *TraceCollector) NewTrace(ctx context.Context, category string) (context.Context, Trace) {
-	ctx, tr := NewTrace(ctx, category)
-	tc.byCategory.getOrCreate(category).add(tr)
-	return ctx, tr
-}
-
-func (tc *TraceCollector) GetOrCreateTrace(ctx context.Context, category string) (context.Context, Trace) {
-	if tr, ok := MaybeFromContext(ctx); ok {
-		tr.Tracef("(+ %s)", category)
-		return ctx, tr
-	}
-	return tc.NewTrace(ctx, category)
-}
-
-func (tc *TraceCollector) QueryTrace(ctx context.Context, req *QueryRequest) (*QueryResponse, error) {
-	tr := FromContext(ctx)
-
-	if err := req.Sanitize(); err != nil {
-		return nil, fmt.Errorf("trace query request: %w", err)
-	}
-
-	var begin = time.Now()
-	var overall Traces
-	var allowed Traces
-	{
-		for cat, rb := range tc.byCategory.getAll() {
-			if err := rb.walk(func(tr Trace) error {
-				overall = append(overall, tr)
-				if req.Allow(tr) {
-					allowed = append(allowed, tr)
-				}
-				return nil
-			}); err != nil {
-				return nil, fmt.Errorf("gathering traces (%s): %w", cat, err)
-			}
-		}
-	}
-	matched := len(allowed)
-	took := time.Since(begin)
-	perTrace := time.Duration(float64(took) / float64(len(overall)))
-
-	tr.Tracef("evaluated %d, matched %d, took %s, %s/trace", len(overall), matched, took, perTrace)
-
-	stats := newTraceQueryStats(req, overall)
-
-	tr.Tracef("computed stats")
-
-	sort.Sort(allowed)
-	if len(allowed) > req.Limit {
-		allowed = allowed[:req.Limit]
-	}
-
-	selected := make([]*StaticTrace, len(allowed))
-	for i := range allowed {
-		selected[i] = NewTraceStatic(allowed[i])
-	}
-
-	tr.Tracef("selected %d", len(selected))
-
-	return &QueryResponse{
-		Request:  req,
-		Stats:    stats,
-		Matched:  matched,
-		Selected: selected,
-		Problems: nil,
-	}, nil
-}
-*/
 
 //
 //

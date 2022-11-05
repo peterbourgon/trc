@@ -1,13 +1,9 @@
-<div id="{{.ID}}" class="trace {{if .IsStreamed -}}streamed{{ end -}}">
+<div id="{{.ID}}">
 
 	<div class="metadata">
 		<strong class="searchable"><a href="?id={{.ID}}">{{ .ID }}</a></strong>
 		&middot; <a href="?id={{.ID}}&json">JSON</a>
-		{{ if .IsStreamed -}}
-			&middot; <span class="streamed">streamed</span>
-		{{ else -}}
-			&middot; <span title="{{.Start}}">{{humanize (timesince .Start)}} ago</span>
-		{{ end -}}
+		&middot; <span title="{{.Start}}">{{humanize (timesince .Start)}} ago</span>
 		{{ if .Origin -}}&middot; <span class="via searchable">via {{.Origin}}</span>{{ end -}}
 
 		<span class="right">
@@ -56,7 +52,8 @@
 			</div>
 
 			<div class="what searchable">
-				{{ .What.String | insertbreaks }}
+				{{ .What.String | htmlescape | insertbreaks }}
+				<!-- {{ .What.String }} -->
 			</div>
 
 			<div class="stack">
