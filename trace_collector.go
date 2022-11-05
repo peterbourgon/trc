@@ -30,22 +30,9 @@ func (c *TraceCollector) NewTrace(ctx context.Context, category string) (context
 	}
 
 	ctx, tr := NewTrace(ctx, category)
-	// tr = &broadcastDecorator{tr, c.c.stream.broadcast}
+	tr = &broadcastDecorator{tr, c.c.stream.broadcast}
 	c.c.add(category, tr)
 	return ctx, tr
-}
-
-func (c *TraceCollector) CopyTrace(tr Trace, newCategory string) error {
-	if tr.Category() == newCategory {
-		return fmt.Errorf("trace is already in the requested category")
-	}
-
-	c.c.add(newCategory, tr)
-
-	tr.Tracef("CopyTrace added trace to category %q", newCategory)
-	tr.Tracef("debug: %v", c.c.debug())
-
-	return nil
 }
 
 func (c *TraceCollector) QueryTraces(ctx context.Context, qtreq *QueryTracesRequest) (*QueryTracesResponse, error) {
@@ -62,6 +49,7 @@ func (c *TraceCollector) QueryTraces(ctx context.Context, qtreq *QueryTracesRequ
 	var allowed Traces
 	{
 		for cat, rb := range c.c.groups.getAll() {
+			tr.Tracef("debug: QueryTraces walking group %q", cat)
 			if err := rb.walk(func(tr Trace) error {
 				overall = append(overall, tr)
 				if qtreq.Allow(tr) {

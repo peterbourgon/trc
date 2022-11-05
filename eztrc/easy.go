@@ -2,7 +2,6 @@ package eztrc
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/trchttp"
@@ -70,15 +69,4 @@ func Errorf(ctx context.Context, format string, args ...interface{}) {
 // goroutines, so they must be safe for concurrent access.
 func LazyErrorf(ctx context.Context, format string, args ...interface{}) {
 	trc.LazyErrorf(ctx, format, args...)
-}
-
-func CopyTrace(ctx context.Context, newCategory string) error {
-	tr, ok := trc.MaybeFromContext(ctx)
-	if !ok {
-		return fmt.Errorf("no trace in context")
-	}
-
-	Tracef(ctx, "CopyTrace existing trace has %d events", len(tr.Events()))
-
-	return collector.CopyTrace(tr, newCategory)
 }

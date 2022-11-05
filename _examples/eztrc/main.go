@@ -283,7 +283,6 @@ func NewStore() *Store {
 }
 
 func (s *Store) Set(ctx context.Context, key, val string) {
-	maybeCopyTrace(ctx, key)
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	time.Sleep(getDelay(key, 1000*time.Microsecond))
@@ -291,7 +290,6 @@ func (s *Store) Set(ctx context.Context, key, val string) {
 }
 
 func (s *Store) Get(ctx context.Context, key string) (string, bool) {
-	maybeCopyTrace(ctx, key)
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	val, ok := s.set[key]
@@ -300,29 +298,12 @@ func (s *Store) Get(ctx context.Context, key string) (string, bool) {
 }
 
 func (s *Store) Del(ctx context.Context, key string) bool {
-	maybeCopyTrace(ctx, key)
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	_, ok := s.set[key]
 	delete(s.set, key)
 	time.Sleep(getDelay(key, 10*time.Microsecond))
 	return ok
-}
-
-func maybeCopyTrace(ctx context.Context, key string) {
-	if key != words[0] {
-		eztrc.Tracef(ctx, "key %s not copying", key)
-		return
-	}
-
-	cat := fmt.Sprintf("operation on %s", words[0])
-	err := eztrc.CopyTrace(ctx, cat)
-	if err != nil {
-		eztrc.Errorf(ctx, "copy trace error: %w", err)
-		return
-	}
-
-	eztrc.Tracef(ctx, "key %s copied", key)
 }
 
 //
