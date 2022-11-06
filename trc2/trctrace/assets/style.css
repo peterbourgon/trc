@@ -1,0 +1,307 @@
+body {
+	font-family: monospace;
+}
+
+form,
+input,
+select {
+	font-family: monospace;
+}
+
+a,
+a:visited {
+	text-decoration: none;
+	color: blue;
+}
+
+div#c {
+	margin: 1em;
+}
+
+/*
+ * summary table
+ */
+
+table#summary {
+	margin: 1em;
+	border-collapse: collapse;
+	table-layout: fixed;
+}
+
+table#summary th {
+	display: table-cell;
+	width: fit-content;
+	min-width: 7ch;
+	font-weight: normal;
+}
+
+table#summary td.category {
+	padding-right: 1ch;
+}
+
+table#summary th.separator {
+	width: 3ch;
+	min-width: 3ch;
+}
+
+table#summary td,
+th {
+	text-align: center;
+}
+
+table#summary tr {
+	border-bottom: solid 1px #eee;
+}
+
+table#summary tr.header {
+	border-bottom: solid 1px #000;
+}
+
+table#summary tr:nth-last-child(2) {
+	border-bottom: solid 1px #000;
+}
+
+table#summary tr:last-child {
+	border-bottom: 0;
+	background: none;
+}
+
+table#summary td.progress {
+	position: relative;
+}
+
+table#summary td.progress div.progress-bar {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	min-width: 1%;
+	max-width: 99%;
+	background-color: rgba(0, 0, 0, 0.10);
+	z-index: -1;
+}
+
+/* error cells show percent from the the right side */
+table#summary td.errored div.progress-bar {
+	right: 0;
+	background-color: rgba(224, 0, 0, 0.10);
+}
+
+/*
+ * topline
+ */
+
+div#topline-metadata {
+	margin-left: 1ch;
+}
+
+div#topline {
+	display: flex;
+	align-items: baseline;
+}
+
+div#topline>div {
+	display: flex;
+	align-items: baseline;
+	gap: 1ch;
+}
+
+div#topline-origins {
+	font-weight: bold;
+}
+
+/*
+ * traces
+ */
+
+div#traces .trace {
+	display: flex;
+	flex-direction: column;
+	margin: 1em;
+}
+
+div#traces .trace .metadata {
+	/* first line of a trace is a metadata header */
+}
+
+div#traces .trace .metadata span.right {
+	float: right;
+}
+
+div#traces .trace .metadata .via {
+	font-style: italic;
+}
+
+span.stacks-link a {
+	color: #000;
+	text-decoration: none;
+}
+
+/* next section is the events table */
+div#traces .trace .events {
+	flex-grow: 10;
+}
+
+/* each row is an event */
+div#traces .trace .events div.event {
+	display: flex;
+	flex-direction: row;
+	justify-content: space-between;
+	align-items: center;
+	flex-wrap: nowrap;
+	border-top: solid 1px #ccc;
+}
+
+div#traces .trace .events div.event:first-child,
+div.event:last-child {
+	border-top: solid 1px #666;
+}
+
+/* first cell is timestamp, fixed width */
+div#traces .trace .events div.event div.timestamp {
+	text-align: left;
+	width: 10em;
+	min-width: 10em;
+}
+
+/* next cell is delta, also fixed width, with progress bar */
+div#traces .trace .events div.event div.delta {
+	text-align: left;
+	width: 5em;
+	min-width: 5em;
+	position: relative;
+	z-index: 1;
+}
+
+div#traces .trace .events div.event div.delta .progress-bar {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	min-width: 1%;
+	max-width: 99%;
+	background-color: rgba(0, 0, 0, 0.10);
+	z-index: -1;
+}
+
+/* last cell is what, should fill the rest of the page */
+div#traces .trace .events div.event div.what {
+	flex: 10 0px;
+	min-width: 25%;
+	padding-left: 2em;
+	text-indent: -2em;
+	overflow: scroll;
+}
+
+/*
+ * stack
+ */
+
+.stack {
+	display: flex;
+	flex-direction: column;
+	color: #666;
+}
+
+.stack>div table {
+	color: #666;
+}
+
+details summary::-webkit-details-marker {
+	display: none;
+}
+
+details summary::marker {
+	display: none;
+}
+
+details {
+	text-align: right;
+}
+
+details>summary {
+	float: right;
+	list-style-type: none;
+	cursor: pointer;
+}
+
+details[open] {
+	margin-left: 1rem;
+	padding-left: 1rem;
+}
+
+details[open]>summary {
+	font-weight: bold;
+}
+
+div.stack div.frame {
+	margin-right: 2rem;
+}
+
+div.stack table td {
+	text-align: left;
+	color: #666;
+}
+
+/*
+ * problems
+ */
+
+div#problems {
+	position: fixed;
+	bottom: 1em;
+	right: 1em;
+	display: flex;
+	flex-direction: column;
+	max-width: 66%;
+	font-size: smaller;
+
+	/* animation: problems 2s 1; */
+	/* animation-delay: 4s; */
+	/* animation-fill-mode: forwards; */
+	/* -webkit-animation: problems 2s 1; */
+	/* -webkit-animation-delay: 4s; */
+	/* -webkit-animation-fill-mode: forwards; */
+}
+
+@keyframes problems {
+	from {
+		opacity: 1;
+	}
+
+	to {
+		opacity: 0.5;
+	}
+}
+
+@-webkit-keyframes problems {
+	from {
+		opacity: 1;
+	}
+
+	to {
+		opacity: 0.5;
+	}
+}
+
+div#problems .problem {
+	margin: 0.1em;
+	padding: 0.1em 1em;
+	background-color: pink;
+	border: solid 1px red;
+}
+
+/*
+ * overrides
+ */
+
+.highlight {
+	background-color: yellow;
+}
+
+.numeric {
+	text-align: right !important;
+}
+
+.text {
+	text-align: left !important;
+}
