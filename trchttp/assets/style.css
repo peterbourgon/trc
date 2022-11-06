@@ -18,7 +18,6 @@ div#c {
 	margin: 1em;
 }
 
-
 /*
  * summary table
  */
@@ -106,6 +105,10 @@ div#topline>div {
 	gap: 1ch;
 }
 
+div#topline-origins {
+	font-weight: bold;
+}
+
 /*
  * traces
  */
@@ -124,6 +127,10 @@ div#traces .trace .metadata span.right {
 	float: right;
 }
 
+div#traces .trace .metadata .via {
+	font-style: italic;
+}
+
 span.stacks-link a {
 	color: #000;
 	text-decoration: none;
@@ -139,7 +146,7 @@ div#traces .trace .events div.event {
 	display: flex;
 	flex-direction: row;
 	justify-content: space-between;
-	align-items: stretch;
+	align-items: center;
 	flex-wrap: nowrap;
 	border-top: solid 1px #ccc;
 }

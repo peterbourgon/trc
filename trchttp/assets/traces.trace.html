@@ -4,7 +4,7 @@
 		<strong class="searchable"><a href="?id={{.ID}}">{{ .ID }}</a></strong>
 		&middot; <a href="?id={{.ID}}&json">JSON</a>
 		&middot; <span title="{{.Start}}">{{humanize (timesince .Start)}} ago</span>
-		{{ if .Origin -}}&middot; <span class="via searchable">via {{.Origin}}</span>{{ end -}}
+		{{ if .URI -}} &middot; <span class="via searchable"><a href="{{.URI}}?id={{.ID}}">via</a></span> {{ end -}}
 
 		<span class="right">
 			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">

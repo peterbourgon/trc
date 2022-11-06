@@ -14,7 +14,7 @@ func Collector() *trc.TraceCollector { return collector }
 
 // TracesHandler is an HTTP handler that serves basic HTML and JSON
 // representations of the traces in the default collector.
-var TracesHandler = trchttp.TracesHandler(collector)
+var TracesHandler = trchttp.NewTracesHandler(collector)
 
 // Create a new trace with the given category in the default collector. Return a
 // context containing that trace, and a function that should be called when the

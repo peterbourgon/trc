@@ -22,8 +22,7 @@
 	</div>
 
 	<div id="topline-metadata">
-		{{ if .Origins -}}<div id="topline-origins">origins={{len .Origins}}</div>{{ end -}}
-
+		{{ if .Origins -}} <div id="topline-origins" title="{{stringsjoinnewline .Origins}}">origins={{len .Origins}}</div> {{ end -}}
 		<div id="topline-query-traces"  class="topline-query">traces={{ .Stats.Overall.NumTotal }}</div>
 		<div id="topline-query-matched" class="topline-query">matched={{ .Matched }}</div>
 		<div id="topline-query-shown"   class="topline-query">shown={{ len .Selected }}</div>

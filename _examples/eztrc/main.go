@@ -17,20 +17,29 @@ import (
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/eztrc"
 	"github.com/peterbourgon/trc/trchttp"
+	"github.com/peterbourgon/trc/trchttp/trchttpdist"
 )
 
 func main() {
+	// Define the API instances.
+	ports := []int{8080, 8081, 8082}
+	peers := []*trchttpdist.RemoteCollector{}
+	for i, p := range ports {
+		peers = append(peers, &trchttpdist.RemoteCollector{
+			URI:  fmt.Sprintf("http://localhost:%d/local", p),
+			Name: fmt.Sprintf("instance %d/%d", i+1, len(ports)),
+		})
+	}
+
+	// Make the API instances.
+	instances := map[string]*apiInstance{}
 	ctx, cancel := context.WithCancel(context.Background())
 	taskGroup := &sync.WaitGroup{}
+	for _, p := range ports {
+		hostport := fmt.Sprintf("localhost:%d", p)
+		instance := newAPIInstance(hostport, peers)
 
-	// Make some API instances.
-	instances := map[string]*apiInstance{}
-	for i := 0; i < 3; i++ {
-		// Each one sits on a port.
-		hostport := fmt.Sprintf("localhost:%d", 8080+i)
-		instance := newAPIInstance(hostport)
-
-		// Load the API with requests, but directly, to the API handler.
+		// Spawn a goroutine that produces API requests to this instance.
 		taskGroup.Add(1)
 		go func() {
 			defer taskGroup.Done()
@@ -62,14 +71,12 @@ func main() {
 			}
 		}()
 
-		// Serve the traces endpoint over proper HTTP.
+		// Spawn a goroutine to serve this instance's traces endpoints.
 		taskGroup.Add(1)
 		go func() {
 			defer taskGroup.Done()
-			mux := http.NewServeMux()
-			mux.Handle("/traces", instance.trcHandler)
-			log.Printf("http://%s/traces", hostport)
-			server := &http.Server{Addr: hostport, Handler: mux}
+			log.Printf("http://%[1]s/local or http://%[1]s/peers", hostport)
+			server := &http.Server{Addr: hostport, Handler: instance}
 			errc := make(chan error, 1)
 			go func() { errc <- server.ListenAndServe() }()
 			<-ctx.Done()
@@ -83,40 +90,39 @@ func main() {
 		instances[hostport] = instance
 	}
 
-	// An HTTP server for the meta-traces endpoint by itself.
-	taskGroup.Add(1)
-	go func() {
-		defer taskGroup.Done()
+	// taskGroup.Add(1)
+	// go func() {
+	// 	defer taskGroup.Done()
 
-		hostport := fmt.Sprintf("localhost:%d", 8080+len(instances))
-		var uris []string
-		for hostport := range instances {
-			uris = append(uris, fmt.Sprintf("http://%s/traces", hostport))
-		}
+	// 	hostport := fmt.Sprintf("localhost:%d", 8080+len(instances))
+	// 	var uris []string
+	// 	for hostport := range instances {
+	// 		uris = append(uris, fmt.Sprintf("http://%s/traces", hostport))
+	// 	}
 
-		distCollector := trchttp.NewDistributedCollector(http.DefaultClient, uris...)
-		distHandler := trchttp.TracesHandler(distCollector)
-		metaCollector := trc.NewTraceCollector()
-		distHandlerInst := trchttp.Middleware(metaCollector, getMethodPath)(distHandler)
-		metaHandler := trchttp.TracesHandler(metaCollector)
-		metaHandlerInst := trchttp.Middleware(metaCollector, getMethodPath)(metaHandler)
+	// 	distCollector := trchttp.NewDistributedCollectorBasic(http.DefaultClient, uris...)
+	// 	distHandler := trchttp.NewBasicTracesHandler(distCollector)
+	// 	metaCollector := trc.NewTraceCollector()
+	// 	distHandlerInst := trchttp.Middleware(metaCollector, getMethodPath)(distHandler)
+	// 	metaHandler := trchttp.NewBasicTracesHandler(metaCollector)
+	// 	metaHandlerInst := trchttp.Middleware(metaCollector, getMethodPath)(metaHandler)
 
-		mux := http.NewServeMux()
-		mux.Handle("/dist", distHandlerInst)
-		mux.Handle("/meta", metaHandlerInst)
-		log.Printf("http://%s/dist -- proxy to other instances", hostport)
-		log.Printf("http://%s/meta -- traces for this instance", hostport)
+	// 	mux := http.NewServeMux()
+	// 	mux.Handle("/dist", distHandlerInst)
+	// 	mux.Handle("/meta", metaHandlerInst)
+	// 	log.Printf("http://%s/dist -- proxy to other instances", hostport)
+	// 	log.Printf("http://%s/meta -- traces for this instance", hostport)
 
-		server := &http.Server{Addr: hostport, Handler: mux}
-		errc := make(chan error, 1)
-		go func() { errc <- server.ListenAndServe() }()
-		<-ctx.Done()
-		log.Printf("%s shutting down", hostport)
-		server.Close()
-		log.Printf("%s waiting for done", hostport)
-		<-errc
-		log.Printf("%s done", hostport)
-	}()
+	// 	server := &http.Server{Addr: hostport, Handler: mux}
+	// 	errc := make(chan error, 1)
+	// 	go func() { errc <- server.ListenAndServe() }()
+	// 	<-ctx.Done()
+	// 	log.Printf("%s shutting down", hostport)
+	// 	server.Close()
+	// 	log.Printf("%s waiting for done", hostport)
+	// 	<-errc
+	// 	log.Printf("%s done", hostport)
+	// }()
 
 	log.Printf("running")
 
@@ -136,28 +142,48 @@ func main() {
 //
 
 type apiInstance struct {
-	collector  *trc.TraceCollector
-	trcHandler http.Handler
-	apiHandler http.Handler
+	apiHandler         http.Handler
+	localTracesHandler http.Handler
+	peersTracesHandler http.Handler
 }
 
-func newAPIInstance(id string) *apiInstance {
-	var (
-		collector = trc.NewTraceCollector()
-		store     = NewStore()
-		api       = NewAPI(store)
-	)
+func newAPIInstance(id string, peers []*trchttpdist.RemoteCollector) *apiInstance {
+	store := NewStore()
+	api := NewAPI(store)
+
+	localCollector := trc.NewTraceCollector()
+	peersCollector := trchttpdist.NewTraceCollector(http.DefaultClient, peers...)
+
+	var apiHandler http.Handler
+	apiHandler = api
+	apiHandler = trchttp.Middleware(localCollector, getAPIMethod)(apiHandler)
+
+	var localTracesHandler http.Handler
+	localTracesHandler = trchttp.NewTracesHandler(localCollector)
+	localTracesHandler = trchttp.Middleware(localCollector, getMethodPath)(localTracesHandler)
+
+	var peersTracesHandler http.Handler
+	peersTracesHandler = trchttp.NewTracesHandler(peersCollector)
+	peersTracesHandler = trchttp.Middleware(localCollector, getMethodPath)(peersTracesHandler)
+
 	return &apiInstance{
-		collector:  collector,
-		trcHandler: trchttp.Middleware(collector, getMethodPath)(trchttp.TracesHandler(collector)),
-		apiHandler: trchttp.Middleware(collector, getAPIMethod)(api),
+		apiHandler:         apiHandler,
+		localTracesHandler: localTracesHandler,
+		peersTracesHandler: peersTracesHandler,
 	}
 }
 
 func (i *apiInstance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var (
+		path    = r.URL.Path
+		isLocal = strings.HasPrefix(path, "/local")
+		isPeers = strings.HasPrefix(path, "/peers")
+	)
 	switch {
-	case strings.HasPrefix(r.URL.Path, "/traces"):
-		i.trcHandler.ServeHTTP(w, r)
+	case isLocal:
+		i.localTracesHandler.ServeHTTP(w, r)
+	case isPeers:
+		i.peersTracesHandler.ServeHTTP(w, r)
 	default:
 		i.apiHandler.ServeHTTP(w, r)
 	}

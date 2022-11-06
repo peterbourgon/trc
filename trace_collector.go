@@ -311,6 +311,7 @@ func (qtres *QueryTracesResponse) Merge(other *QueryTracesResponse) error {
 	}
 
 	qtres.Origins = mergeStringSlices(qtres.Origins, other.Origins)
+
 	if err := mergeTraceQueryStats(qtres.Stats, other.Stats); err != nil {
 		return fmt.Errorf("merge stats: %w", err)
 	}

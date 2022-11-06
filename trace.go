@@ -22,6 +22,8 @@ import (
 //
 // Implementations of Trace are expected to be safe for concurrent access.
 type Trace interface {
+	URI() string
+
 	// ID should return a unique identifier for the trace.
 	ID() string
 
@@ -108,7 +110,7 @@ func (trs Traces) Len() int { return len(trs) }
 // TraceCore is the default, mutable implementation of the Trace interface.
 type TraceCore struct {
 	mtx       sync.Mutex
-	source    string
+	uri       string
 	id        string
 	category  string
 	start     time.Time
@@ -119,20 +121,17 @@ type TraceCore struct {
 	truncated int
 }
 
+var _ Trace = (*TraceCore)(nil)
+
 // NewTraceCore creates a new TraceCore with the given category.
 func NewTraceCore(category string) *TraceCore {
 	now := time.Now().UTC()
 	id := ulid.MustNew(ulid.Timestamp(now), traceIDEntropy).String()
 	return &TraceCore{
-		source:   "",
 		id:       id,
 		category: category,
 		start:    now,
 	}
-}
-
-func (tr *TraceCore) Source() string {
-	return tr.source // immutable
 }
 
 // Tracef implements Trace.
@@ -218,6 +217,10 @@ func (tr *TraceCore) Finish() {
 
 	tr.finished = true
 	tr.duration = time.Since(tr.start)
+}
+
+func (tr *TraceCore) URI() string {
+	return tr.uri
 }
 
 // ID implements Trace.
@@ -407,7 +410,7 @@ func (ptr *PrefixedTrace) LazyErrorf(format string, args ...interface{}) {
 //
 
 type StaticTrace struct {
-	Origin          string        `json:"origin,omitempty"`
+	StaticURI       string        `json:"uri"`
 	StaticID        string        `json:"id"`
 	StaticCategory  string        `json:"category"`
 	StaticStart     time.Time     `json:"start"`
@@ -423,6 +426,7 @@ var _ Trace = (*StaticTrace)(nil)
 
 func NewTraceStatic(tr Trace) *StaticTrace {
 	return &StaticTrace{
+		StaticURI:       tr.URI(),
 		StaticID:        tr.ID(),
 		StaticCategory:  tr.Category(),
 		StaticStart:     tr.Start(),
@@ -435,6 +439,7 @@ func NewTraceStatic(tr Trace) *StaticTrace {
 	}
 }
 
+func (tr *StaticTrace) URI() string                                   { return tr.StaticURI }
 func (tr *StaticTrace) ID() string                                    { return tr.StaticID }
 func (tr *StaticTrace) Category() string                              { return tr.StaticCategory }
 func (tr *StaticTrace) Start() time.Time                              { return tr.StaticStart }

@@ -20,7 +20,7 @@ type TraceQueryer interface {
 	QueryTraces(ctx context.Context, qtreq *trc.QueryTracesRequest) (*trc.QueryTracesResponse, error)
 }
 
-func TracesHandler(c TraceCollector) http.Handler {
+func NewTracesHandler(c TraceCollector) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		tr := trc.FromContext(ctx)
@@ -33,7 +33,6 @@ func TracesHandler(c TraceCollector) http.Handler {
 			minDuration = parseDefault(urlquery.Get("min"), parseDurationPointer, nil)
 			bucketing   = parseBucketing(urlquery["b"])
 			search      = urlquery.Get("q")
-			remotes     = urlquery["r"]
 			problems    = []string{}
 		)
 
@@ -65,15 +64,9 @@ func TracesHandler(c TraceCollector) http.Handler {
 			tr.Errorf(err.Error())
 		}
 
-		var collector TraceCollector = c // default collector
-		if len(remotes) > 0 {
-			tr.Tracef("remotes count %d, using explicit distributed trace collector")
-			collector = NewDistributedCollector(http.DefaultClient, remotes...)
-		}
-
 		tr.Tracef("query starting: %s", qtreq)
 
-		qtres, err := collector.QueryTraces(ctx, qtreq)
+		qtres, err := c.QueryTraces(ctx, qtreq)
 		if err != nil {
 			tr.Errorf("query errored: %v", err)
 			qtres = trc.NewQueryTracesResponse(qtreq, nil)
