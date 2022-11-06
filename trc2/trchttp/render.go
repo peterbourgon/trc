@@ -19,9 +19,9 @@ import (
 
 func Render(ctx context.Context, w http.ResponseWriter, r *http.Request, fs fs.FS, templateName string, data any) {
 	var (
-		jsonParam   = r.URL.Query().Has("json")
+		asksForJSON = r.URL.Query().Has("json")
 		acceptsHTML = RequestExplicitlyAccepts(r, "text/html")
-		renderHTML  = !jsonParam && acceptsHTML
+		renderHTML  = !asksForJSON && acceptsHTML
 	)
 	switch {
 	case renderHTML:
