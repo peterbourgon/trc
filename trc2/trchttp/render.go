@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"runtime/trace"
 	"strings"
 	"time"
 
@@ -21,44 +22,54 @@ func Render(ctx context.Context, w http.ResponseWriter, r *http.Request, fs fs.F
 	var (
 		asksForJSON = r.URL.Query().Has("json")
 		acceptsHTML = RequestExplicitlyAccepts(r, "text/html")
-		renderHTML  = !asksForJSON && acceptsHTML
+		useHTML     = !asksForJSON && acceptsHTML
 	)
 	switch {
-	case renderHTML:
-		renderHTML2(ctx, w, fs, templateName, data)
+	case useHTML:
+		renderHTML(ctx, w, fs, templateName, data)
 	default:
-		renderJSON2(ctx, w, data)
+		renderJSON(ctx, w, data)
 	}
 }
 
-func renderJSON2(ctx context.Context, w http.ResponseWriter, data any) {
+func renderJSON(ctx context.Context, w http.ResponseWriter, data any) {
 	w.Header().Set("content-type", "application/json; charset=utf-8")
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "    ")
 	enc.Encode(data)
 }
 
-func renderHTML2(ctx context.Context, w http.ResponseWriter, fs fs.FS, templateName string, data any) {
+func renderHTML(ctx context.Context, w http.ResponseWriter, fs fs.FS, templateName string, data any) {
 	ctx, tr, finish := trc.Region(ctx, "renderHTML")
 	defer finish()
 
 	code := http.StatusOK
-	body, err := renderTemplate2(ctx, fs, templateName, data)
+	body, err := renderTemplate(ctx, fs, templateName, data)
 	if err != nil {
 		code = http.StatusInternalServerError
 		body = []byte(fmt.Sprintf(`<html><body><h1>Error</h1><p>%v</p>`, err))
 	}
 
-	tr.Tracef("rendered template")
+	tr.Tracef("template OK")
 
-	w.Header().Set("content-type", "text/html; charset=utf-8")
-	w.WriteHeader(code)
-	w.Write(body)
+	{
+		_, _, finish := trc.Region(ctx, "write response")
+		w.Header().Set("content-type", "text/html; charset=utf-8")
+		w.WriteHeader(code)
+		w.Write(body)
+		finish()
+	}
 
-	tr.Tracef("wrote body")
+	tr.Tracef("write OK")
 }
 
-func renderTemplate2(ctx context.Context, fs fs.FS, templateName string, data any) (_ []byte, err error) {
+func renderTemplate(ctx context.Context, fs fs.FS, templateName string, data any) (_ []byte, err error) {
+	ctx, task := trace.NewTask(ctx, "renderTemplate task")
+	defer task.End()
+
+	stdregion := trace.StartRegion(ctx, "renderTemplate region")
+	defer stdregion.End()
+
 	_, tr, finish := trc.Region(ctx, "renderTemplate")
 	defer finish()
 
@@ -73,23 +84,29 @@ func renderTemplate2(ctx context.Context, fs fs.FS, templateName string, data an
 		return nil, fmt.Errorf("parse assets: %w", err)
 	}
 
-	tr.Tracef("parsed FS")
+	tr.Tracef("ParseFS OK")
 
 	templateFile := templateRoot.Lookup(templateName)
 	if templateFile == nil {
 		return nil, fmt.Errorf("template (%s) not found", templateName)
 	}
 
-	tr.Tracef("lookup done")
+	tr.Tracef("Lookup OK")
 
-	var buf bytes.Buffer
-	if err := templateFile.Execute(&buf, data); err != nil {
+	var (
+		templateBuf bytes.Buffer
+		executeErr  error
+	)
+	trace.WithRegion(ctx, "execute template", func() {
+		executeErr = templateFile.Execute(&templateBuf, data)
+	})
+	if err := executeErr; err != nil {
 		return nil, fmt.Errorf("execute template: %w", err)
 	}
 
-	tr.Tracef("execute done")
+	tr.Tracef("Execute OK, %dB, %.1fKB, %.2fMB", templateBuf.Len(), float64(templateBuf.Len())/1024, float64(templateBuf.Len())/1024/1024)
 
-	return buf.Bytes(), nil
+	return templateBuf.Bytes(), nil
 }
 
 //

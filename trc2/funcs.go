@@ -90,6 +90,7 @@ func LazyErrorf(ctx context.Context, format string, args ...interface{}) {
 // deliberately and sparingly. It explicitly should not be applied "by default"
 // to code via e.g. code generation.
 func Region(ctx context.Context, format string, args ...any) (context.Context, Trace, func()) {
+
 	begin := time.Now()
 	inputTrace := FromContext(ctx)
 	outputTrace := WithPrefix(inputTrace, "· ")

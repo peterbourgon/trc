@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
@@ -20,8 +21,9 @@ import (
 )
 
 func main() {
+
 	// Define the API instances.
-	ports := []int{8080, 8081, 8082}
+	ports := []int{8081, 8082, 8083}
 	//peers := []*trchttpdist.RemoteCollector{}
 	//for i, p := range ports {
 	//	peers = append(peers, &trchttpdist.RemoteCollector{
@@ -75,7 +77,7 @@ func main() {
 		taskGroup.Add(1)
 		go func() {
 			defer taskGroup.Done()
-			log.Printf("http://%[1]s/local or http://%[1]s/peers", hostport)
+			log.Printf("http://%[1]s/local http://%[1]s/peers", hostport)
 			server := &http.Server{Addr: hostport, Handler: instance}
 			errc := make(chan error, 1)
 			go func() { errc <- server.ListenAndServe() }()
@@ -90,39 +92,10 @@ func main() {
 		instances[hostport] = instance
 	}
 
-	// taskGroup.Add(1)
-	// go func() {
-	// 	defer taskGroup.Done()
-
-	// 	hostport := fmt.Sprintf("localhost:%d", 8080+len(instances))
-	// 	var uris []string
-	// 	for hostport := range instances {
-	// 		uris = append(uris, fmt.Sprintf("http://%s/traces", hostport))
-	// 	}
-
-	// 	distCollector := trchttp.NewDistributedCollectorBasic(http.DefaultClient, uris...)
-	// 	distHandler := trchttp.NewBasicTracesHandler(distCollector)
-	// 	metaCollector := trc.NewTraceCollector()
-	// 	distHandlerInst := trchttp.Middleware(metaCollector, getMethodPath)(distHandler)
-	// 	metaHandler := trchttp.NewBasicTracesHandler(metaCollector)
-	// 	metaHandlerInst := trchttp.Middleware(metaCollector, getMethodPath)(metaHandler)
-
-	// 	mux := http.NewServeMux()
-	// 	mux.Handle("/dist", distHandlerInst)
-	// 	mux.Handle("/meta", metaHandlerInst)
-	// 	log.Printf("http://%s/dist -- proxy to other instances", hostport)
-	// 	log.Printf("http://%s/meta -- traces for this instance", hostport)
-
-	// 	server := &http.Server{Addr: hostport, Handler: mux}
-	// 	errc := make(chan error, 1)
-	// 	go func() { errc <- server.ListenAndServe() }()
-	// 	<-ctx.Done()
-	// 	log.Printf("%s shutting down", hostport)
-	// 	server.Close()
-	// 	log.Printf("%s waiting for done", hostport)
-	// 	<-errc
-	// 	log.Printf("%s done", hostport)
-	// }()
+	go func() {
+		log.Printf("http://localhost:8080/debug/pprof")
+		log.Fatal(http.ListenAndServe(":8080", nil))
+	}()
 
 	log.Printf("running")
 
@@ -161,6 +134,7 @@ func newAPIInstance(id string) *apiInstance {
 
 	var localTracesHandler http.Handler
 	localTracesHandler = trctrace.NewQueryHandler(localCollector)
+	localTracesHandler = GZipMiddleware(localTracesHandler)
 	localTracesHandler = trchttp.Middleware(localCollector.NewTrace, getMethodPath)(localTracesHandler)
 
 	// var peersTracesHandler http.Handler
