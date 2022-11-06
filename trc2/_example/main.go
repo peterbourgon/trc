@@ -221,8 +221,6 @@ func (a *API) handleSet(w http.ResponseWriter, r *http.Request) {
 	defer finish()
 
 	key := getKey(r.URL.Path)
-	tr.Tracef("set %q", key)
-
 	if key == "" {
 		http.Error(w, "key required", http.StatusBadRequest)
 		return
@@ -247,21 +245,20 @@ func (a *API) handleSet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleGet(w http.ResponseWriter, r *http.Request) {
-	ctx, tr, finish := eztrc.Region(r.Context(), "handleSet")
+	ctx, tr, finish := eztrc.Region(r.Context(), "handleGet")
 	defer finish()
 
 	key := getKey(r.URL.Path)
-	tr.Tracef("get %q", key)
-
 	if key == "" {
+		tr.Errorf("key not provided")
 		http.Error(w, "key required", http.StatusBadRequest)
 		return
 	}
 
 	val, ok := a.s.Get(ctx, key)
 	if !ok {
-		eztrc.Errorf(ctx, "key not found")
-		http.Error(w, "no content", http.StatusNoContent)
+		tr.Errorf("key not found")
+		http.Error(w, "not found", http.StatusNoContent)
 		return
 	}
 
@@ -271,13 +268,12 @@ func (a *API) handleGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleDel(w http.ResponseWriter, r *http.Request) {
-	ctx, tr, finish := eztrc.Region(r.Context(), "handleSet")
+	ctx, tr, finish := eztrc.Region(r.Context(), "handleDel")
 	defer finish()
 
 	key := getKey(r.URL.Path)
-	tr.Tracef("del %q", key)
-
 	if key == "" {
+		tr.Errorf("key not provided")
 		http.Error(w, "key required", http.StatusBadRequest)
 		return
 	}
@@ -285,8 +281,8 @@ func (a *API) handleDel(w http.ResponseWriter, r *http.Request) {
 	ok := a.s.Del(ctx, key)
 
 	if !ok {
-		eztrc.Errorf(ctx, "key not found")
-		http.Error(w, "no content", http.StatusNoContent)
+		tr.Errorf("key not found")
+		http.Error(w, "not found", http.StatusNoContent)
 		return
 	}
 }

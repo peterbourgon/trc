@@ -19,7 +19,7 @@
 	<th class="errored count">
 		<a href="?errored&q={{$q_param}}&n={{$n}}">Error</a>
 	</th>
-	<th class="total numeric count">
+	<th class="total count">
 		Total
 	</th>
 	<th class="separator">
@@ -69,7 +69,7 @@
 		<a href="?category={{$category_name}}&errored&q={{$q_param}}&n={{$n}}">{{$num_errored}}</a>
 	</td>
 
-	<td class="total numeric count {{$category_class_name}}" title="{{$num_total}} total traces">
+	<td class="total count {{$category_class_name}}" title="{{$num_total}} total traces">
 		{{$num_total}}
 	</td>
 
@@ -125,7 +125,7 @@
 		{{$num_errored}}
 	</td>
 
-	<td class="total numeric count" title="{{$num_total}} total traces">
+	<td class="total count" title="{{$num_total}} total traces">
 		{{$num_total}}
 	</td>
 
