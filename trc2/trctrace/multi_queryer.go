@@ -5,28 +5,26 @@ import (
 	"fmt"
 )
 
-type MultiQueryer struct {
-	set []Queryer
-}
+type MultiQueryer []Queryer
 
 var _ Queryer = (*MultiQueryer)(nil)
 
-func (m *MultiQueryer) Query(ctx context.Context, req *QueryRequest) (*QueryResponse, error) {
+func (m MultiQueryer) Query(ctx context.Context, req *QueryRequest) (*QueryResponse, error) {
 	type tuple struct {
 		res *QueryResponse
 		err error
 	}
 
-	tuplec := make(chan tuple, len(m.set))
+	tuplec := make(chan tuple, len(m))
 
-	for _, q := range m.set {
+	for _, q := range m {
 		go func(q Queryer) {
 			res, err := q.Query(ctx, req)
 			tuplec <- tuple{res, err}
 		}(q)
 	}
 
-	var res QueryResponse
+	res := NewQueryResponse(req, nil)
 	for i := 0; i < cap(tuplec); i++ {
 		t := <-tuplec
 		if t.err != nil {
@@ -37,5 +35,5 @@ func (m *MultiQueryer) Query(ctx context.Context, req *QueryRequest) (*QueryResp
 		}
 	}
 
-	return &res, nil
+	return res, nil
 }

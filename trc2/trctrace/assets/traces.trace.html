@@ -24,7 +24,10 @@
 			</div>
 
 			<div class="what">
-				<em>start</em>
+				<em>
+					start
+					{{ if .OriginURI -}} on <strong>{{.OriginURI | urihostpath}}</strong>{{ end -}}
+				</em>
 			</div>
 		</div>
 

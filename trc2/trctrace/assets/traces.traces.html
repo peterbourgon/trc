@@ -1,4 +1,4 @@
 <div id="traces">
-	{{ if not .Selected -}} <p>No matching traces found.</p> {{ end -}}
-	{{ range .Selected -}} {{ template "traces.trace.html" . }} {{ end -}}
+	{{ if not .Response.Selected -}} <p>No matching traces found.</p> {{ end -}}
+	{{ range .Response.Selected -}} {{ template "traces.trace.html" . }} {{ end -}}
 </div>

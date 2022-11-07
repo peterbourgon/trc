@@ -1,7 +1,7 @@
 <div id="topline">
 
 	<div id="topline-form">
-		<form method="GET" target="" >
+		<form method="GET" target="">
 			<input id="query-box" type="text" name="q" placeholder="search regex" {{if .Request.Search}}value="{{.Request.Search}}"{{end}} size="32" autofocus onfocus="this.select();" />
 			{{ if .Request.Category    -}}<input type="hidden" name="category"  value="{{.Request.Category}}"    />{{ end -}}
 			{{ if .Request.IsActive    -}}<input type="hidden" name="active"    value="{{.Request.IsActive}}"    />{{ end -}}
@@ -10,23 +10,32 @@
 			{{ if .Request.IsErrored   -}}<input type="hidden" name="errored"   value="{{.Request.IsErrored}}"   />{{ end -}}
 			{{ if .Request.MinDuration -}}<input type="hidden" name="min"       value="{{.Request.MinDuration}}" />{{ end -}}
 			<select id="query-limit" name="n">
-				<option name="10"   {{if eq .Request.Limit 10  }}selected{{end}}>10  </option>
-				<option name="100"  {{if eq .Request.Limit 100 }}selected{{end}}>100 </option>
-				<option name="1000" {{if eq .Request.Limit 1000}}selected{{end}}>1000</option>
+				<option name="10"   {{ if eq .Request.Limit 10   -}}selected{{ end -}}>10  </option>
+				<option name="100"  {{ if eq .Request.Limit 100  -}}selected{{ end -}}>100 </option>
+				<option name="1000" {{ if eq .Request.Limit 1000 -}}selected{{ end -}}>1000</option>
 				{{ if not ( or ( or (eq .Request.Limit 10) (eq .Request.Limit 100) ) (eq .Request.Limit 1000) ) -}}
 				<option name="{{.Request.Limit}}" selected>{{.Request.Limit}}</option>
 				{{ end -}}
 			</select>
+			{{ if .Targets -}}
+			<select id="query-target" name="target">
+				{{ $target := .Target }}
+				<option {{ if not $target -}}selected{{ end -}}>default</option>
+				{{ range .Targets -}}
+				<option {{ if eq $target . -}}selected{{ end -}}>{{.}}</option>
+				{{ end -}}
+			</select>
+			{{ end -}}
 			<input id="query-button" type="submit" value="query" onclick="let elem = document.getElementById('query-box'); elem.disabled = elem.value == '';" />
 		</form>
 	</div>
 
 	<div id="topline-metadata">
-		{{ if .Origins -}} <div id="topline-origins" title="{{stringsjoinnewline .Origins}}">origins={{len .Origins}}</div> {{ end -}}
-		<div id="topline-query-traces"  class="topline-query">traces={{ .Stats.Overall.NumTotal }}</div>
-		<div id="topline-query-matched" class="topline-query">matched={{ .Matched }}</div>
-		<div id="topline-query-shown"   class="topline-query">shown={{ len .Selected }}</div>
-		<div id="topline-query-took"    class="topline-query">took={{ humanize .Duration }}</div>
+		{{ if .Response.Origins -}} <div id="topline-origins" title="{{stringsjoinnewline .Response.Origins}}">origins={{len .Response.Origins}}</div> {{ end -}}
+		<div id="topline-query-traces"  class="topline-query">traces={{ .Response.Stats.Overall.NumTotal }}</div>
+		<div id="topline-query-matched" class="topline-query">matched={{ .Response.Matched }}</div>
+		<div id="topline-query-shown"   class="topline-query">shown={{ len .Response.Selected }}</div>
+		<div id="topline-query-took"    class="topline-query">took={{ humanize .Response.Duration }}</div>
 		<div id="topline-query-age"     class="topline-query">age=<span class="time-since" title="{{timenow}}"></span></div>
 	</div>
 

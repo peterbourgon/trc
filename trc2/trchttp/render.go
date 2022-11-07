@@ -168,6 +168,7 @@ var templateFuncs = template.FuncMap{
 	"humanizefloat":      humanizefloat,
 	"humanize":           humanize,
 	"ratecalc":           ratecalc,
+	"urihostpath":        urihostpath,
 }
 
 func sha256hex(name string) string {
@@ -271,4 +272,17 @@ func ratecalc(n int, d time.Duration) float64 {
 		return 0.0
 	}
 	return float64(n) / float64(d.Seconds())
+}
+
+func urihostpath(s string) string {
+	u, err := url.Parse(s)
+	if err != nil {
+		return s
+	}
+
+	u.Scheme = ""
+	u.RawQuery = ""
+	u.RawFragment = ""
+
+	return strings.TrimLeft(u.String(), "/")
 }

@@ -21,16 +21,18 @@ import (
 )
 
 func main() {
-
 	// Define the API instances.
 	ports := []int{8081, 8082, 8083}
-	//peers := []*trchttpdist.RemoteCollector{}
-	//for i, p := range ports {
-	//	peers = append(peers, &trchttpdist.RemoteCollector{
-	//		URI:  fmt.Sprintf("http://localhost:%d/local", p),
-	//		Name: fmt.Sprintf("instance %d/%d", i+1, len(ports)),
-	//	})
-	//}
+	peers := trctrace.MultiQueryer{}
+	for _, p := range ports {
+		peers = append(peers,
+			trctrace.NewHTTPQueryClient(
+				http.DefaultClient,
+				fmt.Sprintf("http://localhost:%d/local", p),
+			),
+		)
+	}
+	alternative := map[string]trctrace.Queryer{"peers": peers}
 
 	// Make the API instances.
 	instances := map[string]*apiInstance{}
@@ -38,8 +40,7 @@ func main() {
 	taskGroup := &sync.WaitGroup{}
 	for _, p := range ports {
 		hostport := fmt.Sprintf("localhost:%d", p)
-		//instance := newAPIInstance(hostport, peers)
-		instance := newAPIInstance(hostport)
+		instance := newAPIInstance(hostport, alternative)
 
 		// Spawn a goroutine that produces API requests to this instance.
 		taskGroup.Add(1)
@@ -121,30 +122,29 @@ type apiInstance struct {
 }
 
 // func newAPIInstance(id string, peers []*trchttpdist.RemoteCollector) *apiInstance {
-func newAPIInstance(id string) *apiInstance {
+func newAPIInstance(id string, peers map[string]trctrace.Queryer) *apiInstance {
 	store := NewStore()
 	api := NewAPI(store)
 
 	localCollector := trctrace.NewCollector(1000)
-	//peersCollector := trchttpdist.NewTraceCollector(http.DefaultClient, peers...)
 
 	var apiHandler http.Handler
 	apiHandler = api
 	apiHandler = trchttp.Middleware(localCollector.NewTrace, getAPIMethod)(apiHandler)
 
 	var localTracesHandler http.Handler
-	localTracesHandler = trctrace.NewQueryHandler(localCollector)
+	localTracesHandler = trctrace.NewHTTPQueryHandler(localCollector)
 	localTracesHandler = GZipMiddleware(localTracesHandler)
 	localTracesHandler = trchttp.Middleware(localCollector.NewTrace, getMethodPath)(localTracesHandler)
 
-	// var peersTracesHandler http.Handler
-	// peersTracesHandler = trchttp.NewTracesHandler(peersCollector)
-	// peersTracesHandler = trchttp.Middleware(localCollector, getMethodPath)(peersTracesHandler)
+	var peersTracesHandler http.Handler
+	peersTracesHandler = trctrace.NewHTTPQueryHandlerFor(localCollector, peers)
+	peersTracesHandler = trchttp.Middleware(localCollector.NewTrace, getMethodPath)(peersTracesHandler)
 
 	return &apiInstance{
 		apiHandler:         apiHandler,
 		localTracesHandler: localTracesHandler,
-		//peersTracesHandler: peersTracesHandler,
+		peersTracesHandler: peersTracesHandler,
 	}
 }
 

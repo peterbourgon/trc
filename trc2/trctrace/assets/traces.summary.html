@@ -11,7 +11,7 @@
 	<th class="active count">
 		<a href="?active&q={{$q_param}}&n={{$n}}">Active</a>
 	</th>
-	{{ range .Stats.Bucketing -}}
+	{{ range .Response.Stats.Bucketing -}}
 	<th class="bucket count min-{{.String}}">
 		<a href="?min={{.String}}&q={{$q_param}}&n={{$n}}">&geq;{{.String}}</a>
 	</th>
@@ -36,7 +36,7 @@
 	</th>
 </tr>
 
-{{ range .Stats.Categories -}}
+{{ range .Response.Stats.Categories -}}
 {{ $category_class_name := category2class .Name }}
 <tr class="category">
 	{{ $category_name := .Name                              -}}
@@ -93,7 +93,7 @@
 </tr>
 {{ end -}}
 
-{{ with .Stats.Overall -}}
+{{ with .Response.Stats.Overall -}}
 <tr class="category category-overall">
 	{{ $category_name := .Name                              -}}
 	{{ $num_active    := .NumActive                         -}}
