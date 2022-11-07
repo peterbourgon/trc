@@ -86,6 +86,11 @@ table#summary td.errored div.progress-bar {
 	background-color: rgba(224, 0, 0, 0.10);
 }
 
+table#summary th.newest,
+th.oldest {
+	min-width: 8ch;
+}
+
 /*
  * topline
  */

@@ -25,13 +25,13 @@
 	<th class="separator">
 		&nbsp;
 	</th>
-	<th class="oldest numeric" title="Oldest trace">
+	<th class="oldest" title="Oldest trace">
 		Oldest
 	</th>
-	<th class="newest numeric" title="Newest trace">
-		Last
+	<th class="newest" title="Newest trace">
+		Newest
 	</th>
-	<th class="rate numeric">
+	<th class="rate">
 		Rate
 	</th>
 </tr>
@@ -77,15 +77,15 @@
 		&nbsp;
 	</td>
 
-	<td class="oldest numeric {{$category_class_name}}" title="{{.Oldest}}">
-		{{humanize (timesince .Oldest)}}
+	<td class="oldest {{$category_class_name}}" title="{{.Oldest}}">
+		{{humanizeduration (timesince .Oldest)}}
 	</td>
 
-	<td class="newest numeric {{$category_class_name}}" title="{{.Newest}}">
-		{{humanize (timesince .Newest)}}
+	<td class="newest {{$category_class_name}}" title="{{.Newest}}">
+		{{humanizeduration (timesince .Newest)}}
 	</td>
 
-	<td class="rate numeric {{$category_class_name}}">
+	<td class="rate {{$category_class_name}}">
 		{{ $rate       := ratecalc $num_total (timediff .Newest .Oldest) }}
 		{{ $total_rate  = floatadd $total_rate $rate }}
 		{{ humanizefloat $rate }}/s
@@ -133,15 +133,15 @@
 		&nbsp;
 	</td>
 
-	<td class="oldest numeric" title="{{ if not .Oldest.IsZero -}}{{.Oldest}}{{ end -}}">
-		{{ if not .Oldest.IsZero -}} {{humanize (timesince .Oldest)}} {{ end -}}
+	<td class="oldest" title="{{ if not .Oldest.IsZero -}}{{.Oldest}}{{ end -}}">
+		{{ if not .Oldest.IsZero -}} {{humanizeduration (timesince .Oldest)}} {{ end -}}
 	</td>
 
-	<td class="newest numeric" title="{{ if not .Newest.IsZero -}}{{.Newest}}{{ end -}}">
-		{{ if not .Newest.IsZero -}} {{humanize (timesince .Newest)}} {{ end -}}
+	<td class="newest" title="{{ if not .Newest.IsZero -}}{{.Newest}}{{ end -}}">
+		{{ if not .Newest.IsZero -}} {{humanizeduration (timesince .Newest)}} {{ end -}}
 	</td>
 
-	<td class="rate numeric">
+	<td class="rate">
 		{{ humanizefloat $total_rate }}/s
 	</td>
 </tr>

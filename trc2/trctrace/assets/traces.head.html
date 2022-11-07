@@ -2,16 +2,17 @@
 <style>
 {{ template "style.css" . }}
 
-{{ if highlightclasses . -}}
+{{ $hc := highlightclasses . }}
+{{ if $hc -}}
 table#summary
-	th{{ range highlightclasses . -}}.{{.}}{{ end }},
-	td{{ range highlightclasses . -}}.{{.}}{{ end }},
-	tr{{ range highlightclasses . -}}.{{.}}{{ end }}
+	th{{ range $hc -}}.{{.}}{{ end }},
+	td{{ range $hc -}}.{{.}}{{ end }},
+	tr{{ range $hc -}}.{{.}}{{ end }}
 {
 	font-weight: bold;
 	background-color: rgba(255, 255, 0, 0.2);
 }
-{{ else if not .Request.IDs }}
+{{ else if not .Request.IDs -}}
 table#summary tr:last-child td {
 	font-weight: bold;
 }

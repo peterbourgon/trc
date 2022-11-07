@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"os"
 	"runtime/trace"
 	"strings"
 	"time"
@@ -85,6 +86,31 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, data any
 	}
 
 	tr.Tracef("ParseFS OK")
+
+	{
+		var localFiles []string
+
+		for _, tp := range templateRoot.Templates() {
+			name := tp.Name()
+			if name == "" {
+				continue
+			}
+			if _, err := os.Stat(name); err != nil {
+				continue
+			}
+			localFiles = append(localFiles, name)
+		}
+
+		if len(localFiles) > 0 {
+			tt, err := templateRoot.ParseFiles(localFiles...)
+			if err != nil {
+				return nil, fmt.Errorf("parse local files: %w", err)
+			}
+			templateRoot = tt
+		}
+
+		tr.Tracef("check local template files OK, count %d", len(localFiles))
+	}
 
 	templateFile := templateRoot.Lookup(templateName)
 	if templateFile == nil {
@@ -188,21 +214,21 @@ func highlightclasses(TODO any) []string {
 
 func truncateduration(d time.Duration) time.Duration {
 	switch {
-	case d > 10*24*time.Hour:
+	case d >= 10*24*time.Hour:
 		return d.Truncate(24 * time.Hour)
-	case d > 24*time.Hour:
+	case d >= 24*time.Hour:
 		return d.Truncate(time.Hour)
-	case d > time.Hour:
+	case d >= time.Hour:
 		return d.Truncate(time.Minute)
-	case d > time.Minute:
+	case d >= time.Minute:
 		return d.Truncate(time.Second)
-	case d > time.Second:
+	case d >= time.Second:
 		return d.Truncate(100 * time.Millisecond)
-	case d > 10*time.Millisecond:
-		return d.Truncate(1 * time.Millisecond)
-	case d > 1*time.Millisecond:
+	case d >= 10*time.Millisecond:
+		return d.Truncate(1000 * time.Microsecond)
+	case d >= 1*time.Millisecond:
 		return d.Truncate(100 * time.Microsecond)
-	case d > 1*time.Microsecond:
+	case d >= 1*time.Microsecond:
 		return d.Truncate(1 * time.Microsecond)
 	default:
 		return d
@@ -218,6 +244,22 @@ func humanizeduration(d time.Duration) string {
 	}
 
 	return ds
+}
+
+func humanizedurationwhole(d time.Duration) string {
+	s := humanizeduration(d)
+
+	idxPoint := strings.LastIndex(s, ".")
+	if idxPoint < 0 {
+		return s
+	}
+
+	idxLastNum := strings.LastIndexAny(s[idxPoint:], "0123456789")
+	if idxLastNum < 0 {
+		return s
+	}
+
+	return s[:idxPoint] + s[idxPoint+idxLastNum:]
 }
 
 func humanizefloat(f float64) string {
