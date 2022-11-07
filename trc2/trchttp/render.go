@@ -246,22 +246,6 @@ func humanizeduration(d time.Duration) string {
 	return ds
 }
 
-func humanizedurationwhole(d time.Duration) string {
-	s := humanizeduration(d)
-
-	idxPoint := strings.LastIndex(s, ".")
-	if idxPoint < 0 {
-		return s
-	}
-
-	idxLastNum := strings.LastIndexAny(s[idxPoint:], "0123456789")
-	if idxLastNum < 0 {
-		return s
-	}
-
-	return s[:idxPoint] + s[idxPoint+idxLastNum:]
-}
-
 func humanizefloat(f float64) string {
 	// try to enforce max width of 3-4
 	switch {

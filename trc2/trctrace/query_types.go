@@ -1,14 +1,22 @@
 package trctrace
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	trc "github.com/peterbourgon/trc/trc2"
+	"github.com/peterbourgon/trc/trc2/trchttp"
 )
+
+type Queryer interface {
+	Query(ctx context.Context, req *QueryRequest) (*QueryResponse, error)
+}
 
 var defaultBucketing = []time.Duration{
 	0 * time.Second,
@@ -62,6 +70,96 @@ type QueryRequest struct {
 	Search      string          `json:"search"`
 	Regexp      *regexp.Regexp  `json:"-"`
 	Limit       int             `json:"limit,omitempty"`
+}
+
+func ParseQueryRequest(r *http.Request) (*QueryRequest, error) {
+	var (
+		urlquery    = r.URL.Query()
+		limit       = trchttp.ParseDefault(urlquery.Get("n"), strconv.Atoi, 10)
+		minDuration = trchttp.ParseDefault(urlquery.Get("min"), trchttp.ParseDurationPointer, nil)
+		bucketing   = ParseBucketing(urlquery["b"])
+		search      = urlquery.Get("q")
+	)
+
+	req := &QueryRequest{
+		Bucketing:   bucketing,
+		Limit:       limit,
+		IDs:         urlquery["id"],
+		Category:    urlquery.Get("category"),
+		IsActive:    urlquery.Has("active"),
+		IsFinished:  urlquery.Has("finished"),
+		IsSucceeded: urlquery.Has("succeeded"),
+		IsErrored:   urlquery.Has("errored"),
+		MinDuration: minDuration,
+		Search:      search,
+	}
+
+	if err := req.Sanitize(); err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+func (req *QueryRequest) MakeHTTPRequest(ctx context.Context, url string) (*http.Request, error) {
+	if err := req.Sanitize(); err != nil {
+		return nil, fmt.Errorf("sanitize query request: %w", err)
+	}
+
+	r, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create HTTP request: %w", err)
+	}
+
+	urlquery := r.URL.Query()
+
+	if req.Bucketing != nil {
+		for _, bdur := range req.Bucketing {
+			urlquery.Add("b", bdur.String())
+		}
+	}
+
+	if req.Limit > 0 {
+		urlquery.Set("n", strconv.Itoa(req.Limit))
+	}
+
+	for _, id := range req.IDs {
+		urlquery.Add("id", id)
+	}
+
+	if req.Category != "" {
+		urlquery.Set("category", req.Category)
+	}
+
+	if req.IsActive {
+		urlquery["active"] = []string{}
+	}
+
+	if req.IsFinished {
+		urlquery["finished"] = []string{}
+	}
+
+	if req.IsSucceeded {
+		urlquery["succeeded"] = []string{}
+	}
+
+	if req.IsErrored {
+		urlquery["errored"] = []string{}
+	}
+
+	if req.MinDuration != nil {
+		urlquery.Set("min", req.MinDuration.String())
+	}
+
+	if req.Regexp != nil {
+		urlquery.Set("q", req.Regexp.String())
+	}
+
+	urlquery["json"] = []string{}
+
+	r.URL.RawQuery = urlquery.Encode()
+
+	return r, nil
 }
 
 func (req *QueryRequest) Sanitize() error {

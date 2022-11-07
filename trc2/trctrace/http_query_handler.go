@@ -1,7 +1,6 @@
 package trctrace
 
 import (
-	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -26,11 +25,7 @@ var assets = func() fs.FS {
 	return assets
 }()
 
-type Queryer interface {
-	Query(ctx context.Context, req *QueryRequest) (*QueryResponse, error)
-}
-
-func NewQueryHandler(q Queryer) http.Handler {
+func NewHTTPQueryHandler(q Queryer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, tr, finish := trc.Region(r.Context(), "QueryHandler")
 		defer finish()
