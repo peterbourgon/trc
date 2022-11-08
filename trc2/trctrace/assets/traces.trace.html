@@ -3,8 +3,8 @@
 	<div class="metadata">
 		<strong class="searchable"><a href="?id={{.ID}}">{{ .ID }}</a></strong>
 		&middot; <a href="?id={{.ID}}&json">JSON</a>
+		{{ if .OriginURI -}} &middot; <span class="origin">{{.OriginURI | urihostpath }}</span> {{ end -}}
 		&middot; <span title="{{.Start}}">{{humanize (timesince .Start)}} ago</span>
-
 		<span class="right">
 			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">
 				<a href="#" onclick="showstacks({{.ID}});"><strong>[≡]</strong></a>
@@ -24,10 +24,7 @@
 			</div>
 
 			<div class="what">
-				<em>
-					start
-					{{ if .OriginURI -}} on <strong>{{.OriginURI | urihostpath}}</strong>{{ end -}}
-				</em>
+				<em> start </em>
 			</div>
 		</div>
 

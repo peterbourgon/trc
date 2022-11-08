@@ -1,3 +1,4 @@
+{{ $target := .Target }}
 {{ $n := .Request.Limit }}
 {{ $q_param := .Request.Search }}
 {{ $total_rate := 0.0 }}
@@ -9,15 +10,15 @@
 		&nbsp;
 	</th>
 	<th class="active count">
-		<a href="?active&q={{$q_param}}&n={{$n}}">Active</a>
+		<a href="?target={{$target}}&active&q={{$q_param}}&n={{$n}}">Active</a>
 	</th>
 	{{ range .Response.Stats.Bucketing -}}
 	<th class="bucket count min-{{.String}}">
-		<a href="?min={{.String}}&q={{$q_param}}&n={{$n}}">&geq;{{.String}}</a>
+		<a href="?target={{$target}}&min={{.String}}&q={{$q_param}}&n={{$n}}">&geq;{{.String}}</a>
 	</th>
 	{{ end -}}
 	<th class="errored count">
-		<a href="?errored&q={{$q_param}}&n={{$n}}">Error</a>
+		<a href="?target={{$target}}&errored&q={{$q_param}}&n={{$n}}">Error</a>
 	</th>
 	<th class="total count">
 		Total
@@ -47,12 +48,12 @@
 	{{ $pct_errored   := intpercent $num_errored $num_total -}}
 
 	<td class="category text {{$category_class_name}}">
-		<a href="?category={{$category_name}}&q={{$q_param}}&n={{$n}}">{{$category_name}}</a>
+		<a href="?target={{$target}}&category={{$category_name}}&q={{$q_param}}&n={{$n}}">{{$category_name}}</a>
 	</td>
 
 	<td class="active count progress active {{$category_class_name}}" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
 		<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
-		<a href="?category={{$category_name}}&active&q={{$q_param}}&n={{$n}}">{{$num_active}}</a>
+		<a href="?target={{$target}}&category={{$category_name}}&active&q={{$q_param}}&n={{$n}}">{{$num_active}}</a>
 	</td>
 
 	{{ range .Buckets -}}
@@ -60,13 +61,13 @@
 	{{ $pct_succeeded := intpercent $num_succeeded $num_total -}}
 	<td class="bucket count progress finished succeeded min-{{.MinDuration}} {{$category_class_name}}" title="{{$num_succeeded}} of {{$num_total}}, {{$pct_succeeded}}%">
 		<div class="progress-bar" style="width:{{$pct_succeeded}}%;"></div>
-		<a href="?category={{$category_name}}&min={{.MinDuration}}&q={{$q_param}}&n={{$n}}">{{$num_succeeded}}</a>
+		<a href="?target={{$target}}&category={{$category_name}}&min={{.MinDuration}}&q={{$q_param}}&n={{$n}}">{{$num_succeeded}}</a>
 	</td>
 	{{ end -}}
 
 	<td class="errored count progress finished errored {{$category_class_name}}" title="{{$num_errored}} of {{$num_total}}, {{$pct_errored}}%">
 		<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
-		<a href="?category={{$category_name}}&errored&q={{$q_param}}&n={{$n}}">{{$num_errored}}</a>
+		<a href="?target={{$target}}&category={{$category_name}}&errored&q={{$q_param}}&n={{$n}}">{{$num_errored}}</a>
 	</td>
 
 	<td class="total count {{$category_class_name}}" title="{{$num_total}} total traces">
@@ -103,7 +104,7 @@
 	{{ $pct_errored   := intpercent $num_errored $num_total -}}
 
 	<td class="category text">
-		<a href="?q={{$q_param}}&n={{$n}}">(overall)</a>
+		<a href="?target={{$target}}&q={{$q_param}}&n={{$n}}">(overall)</a>
 	</td>
 
 	<td class="active count progress" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">

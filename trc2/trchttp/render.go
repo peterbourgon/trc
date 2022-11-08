@@ -34,6 +34,8 @@ func Render(ctx context.Context, w http.ResponseWriter, r *http.Request, fs fs.F
 }
 
 func renderJSON(ctx context.Context, w http.ResponseWriter, data any) {
+	_, _, finish := trc.Region(ctx, "write JSON response")
+	defer finish()
 	w.Header().Set("content-type", "application/json; charset=utf-8")
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "    ")
@@ -54,7 +56,7 @@ func renderHTML(ctx context.Context, w http.ResponseWriter, fs fs.FS, templateNa
 	tr.Tracef("template OK")
 
 	{
-		_, _, finish := trc.Region(ctx, "write response")
+		_, _, finish := trc.Region(ctx, "write HTML response")
 		w.Header().Set("content-type", "text/html; charset=utf-8")
 		w.WriteHeader(code)
 		w.Write(body)

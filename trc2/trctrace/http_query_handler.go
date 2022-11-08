@@ -25,13 +25,11 @@ var assets = func() fs.FS {
 	return assets
 }()
 
-const defaultQueryTarget = "default"
-
 func NewHTTPQueryHandler(q Queryer) http.Handler {
 	return NewHTTPQueryHandlerFor(q, nil)
 }
 
-func NewHTTPQueryHandlerFor(primary Queryer, alternative map[string]Queryer) http.Handler {
+func NewHTTPQueryHandlerFor(local Queryer, alternative map[string]Queryer) http.Handler {
 	var targets []string
 	for name := range alternative {
 		targets = append(targets, name)
@@ -48,12 +46,12 @@ func NewHTTPQueryHandlerFor(primary Queryer, alternative map[string]Queryer) htt
 			problems = []string{}
 		)
 
-		q := primary
+		q := local
 		if target != "" {
 			altq, ok := alternative[target]
 			if !ok {
 				target = ""
-				err := fmt.Errorf("invalid query target %q, using default", target)
+				err := fmt.Errorf("invalid query target %q, using local", target)
 				problems = append(problems, err.Error())
 				tr.Errorf(err.Error())
 			} else {

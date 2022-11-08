@@ -110,7 +110,7 @@ div#topline>div {
 	gap: 1ch;
 }
 
-div#topline-origins {
+.origin {
 	font-weight: bold;
 }
 

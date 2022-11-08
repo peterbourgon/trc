@@ -20,7 +20,7 @@
 			{{ if .Targets -}}
 			<select id="query-target" name="target">
 				{{ $target := .Target }}
-				<option {{ if not $target -}}selected{{ end -}}>default</option>
+				<option {{ if not $target -}}selected{{ end -}}>local</option>
 				{{ range .Targets -}}
 				<option {{ if eq $target . -}}selected{{ end -}}>{{.}}</option>
 				{{ end -}}
@@ -31,7 +31,7 @@
 	</div>
 
 	<div id="topline-metadata">
-		{{ if .Response.Origins -}} <div id="topline-origins" title="{{stringsjoinnewline .Response.Origins}}">origins={{len .Response.Origins}}</div> {{ end -}}
+		{{ if .Response.Origins -}} <div id="topline-origins" class="origin" title="{{stringsjoinnewline .Response.Origins}}">origins={{len .Response.Origins}}</div> {{ end -}}
 		<div id="topline-query-traces"  class="topline-query">traces={{ .Response.Stats.Overall.NumTotal }}</div>
 		<div id="topline-query-matched" class="topline-query">matched={{ .Response.Matched }}</div>
 		<div id="topline-query-shown"   class="topline-query">shown={{ len .Response.Selected }}</div>

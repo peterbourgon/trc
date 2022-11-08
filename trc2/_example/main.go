@@ -23,16 +23,22 @@ import (
 func main() {
 	// Define the API instances.
 	ports := []int{8081, 8082, 8083}
+
+	// Collect them into a single queryer.
 	peers := trctrace.MultiQueryer{}
 	for _, p := range ports {
 		peers = append(peers,
 			trctrace.NewHTTPQueryClient(
 				http.DefaultClient,
-				fmt.Sprintf("http://localhost:%d/local", p),
+				fmt.Sprintf("http://localhost:%d/traces", p),
 			),
 		)
 	}
-	alternative := map[string]trctrace.Queryer{"peers": peers}
+
+	// Call that collection a single thing.
+	alternative := map[string]trctrace.Queryer{
+		"all instances": peers,
+	}
 
 	// Make the API instances.
 	instances := map[string]*apiInstance{}
@@ -78,7 +84,7 @@ func main() {
 		taskGroup.Add(1)
 		go func() {
 			defer taskGroup.Done()
-			log.Printf("http://%[1]s/local http://%[1]s/peers", hostport)
+			log.Printf("http://%s/traces", hostport)
 			server := &http.Server{Addr: hostport, Handler: instance}
 			errc := make(chan error, 1)
 			go func() { errc <- server.ListenAndServe() }()
@@ -116,9 +122,8 @@ func main() {
 //
 
 type apiInstance struct {
-	apiHandler         http.Handler
-	localTracesHandler http.Handler
-	peersTracesHandler http.Handler
+	apiHandler    http.Handler
+	tracesHandler http.Handler
 }
 
 // func newAPIInstance(id string, peers []*trchttpdist.RemoteCollector) *apiInstance {
@@ -132,33 +137,21 @@ func newAPIInstance(id string, peers map[string]trctrace.Queryer) *apiInstance {
 	apiHandler = api
 	apiHandler = trchttp.Middleware(localCollector.NewTrace, getAPIMethod)(apiHandler)
 
-	var localTracesHandler http.Handler
-	localTracesHandler = trctrace.NewHTTPQueryHandler(localCollector)
-	localTracesHandler = GZipMiddleware(localTracesHandler)
-	localTracesHandler = trchttp.Middleware(localCollector.NewTrace, getMethodPath)(localTracesHandler)
-
-	var peersTracesHandler http.Handler
-	peersTracesHandler = trctrace.NewHTTPQueryHandlerFor(localCollector, peers)
-	peersTracesHandler = trchttp.Middleware(localCollector.NewTrace, getMethodPath)(peersTracesHandler)
+	var tracesHandler http.Handler
+	tracesHandler = trctrace.NewHTTPQueryHandlerFor(localCollector, peers)
+	tracesHandler = GZipMiddleware(tracesHandler)
+	tracesHandler = trchttp.Middleware(localCollector.NewTrace, getMethodPath)(tracesHandler)
 
 	return &apiInstance{
-		apiHandler:         apiHandler,
-		localTracesHandler: localTracesHandler,
-		peersTracesHandler: peersTracesHandler,
+		apiHandler:    apiHandler,
+		tracesHandler: tracesHandler,
 	}
 }
 
 func (i *apiInstance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var (
-		path    = r.URL.Path
-		isLocal = strings.HasPrefix(path, "/local")
-		isPeers = strings.HasPrefix(path, "/peers")
-	)
 	switch {
-	case isLocal:
-		i.localTracesHandler.ServeHTTP(w, r)
-	case isPeers:
-		i.peersTracesHandler.ServeHTTP(w, r)
+	case strings.HasPrefix(r.URL.Path, "/traces"):
+		i.tracesHandler.ServeHTTP(w, r)
 	default:
 		i.apiHandler.ServeHTTP(w, r)
 	}
