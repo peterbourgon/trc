@@ -6,17 +6,18 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 )
 
 type HTTPQueryClient struct {
 	client   *http.Client
+	origin   string
 	endpoint string
 }
 
-func NewHTTPQueryClient(client *http.Client, endpoint string) *HTTPQueryClient {
+func NewHTTPQueryClient(client *http.Client, origin string, endpoint string) *HTTPQueryClient {
 	return &HTTPQueryClient{
 		client:   client,
+		origin:   origin,
 		endpoint: endpoint,
 	}
 }
@@ -55,11 +56,10 @@ func (c *HTTPQueryClient) Query(ctx context.Context, req *QueryRequest) (*QueryR
 
 	res := httpQueryResp.Response
 	res.Request = req
-	res.Origins = append(res.Origins, c.endpoint)
+	res.Origins = []string{c.origin}
 	for _, tr := range res.Selected {
-		q := url.Values{"id": []string{tr.ID()}}
-		httpReq.URL.RawQuery = q.Encode()
-		tr.OriginURI = httpReq.URL.String()
+		tr.Origin = c.origin
 	}
+
 	return res, nil
 }

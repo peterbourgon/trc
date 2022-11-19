@@ -2,7 +2,7 @@
 <style>
 {{ template "style.css" . }}
 
-{{ $hc := highlightclasses . }}
+{{ $hc := highlightclasses .Request }}
 {{ if $hc -}}
 table#summary
 	th{{ range $hc -}}.{{.}}{{ end }},

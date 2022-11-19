@@ -19,7 +19,7 @@ import (
 	trc "github.com/peterbourgon/trc/trc2"
 )
 
-func Render(ctx context.Context, w http.ResponseWriter, r *http.Request, fs fs.FS, templateName string, data any) {
+func Render(ctx context.Context, w http.ResponseWriter, r *http.Request, fs fs.FS, templateName string, funcs template.FuncMap, data any) {
 	var (
 		asksForJSON = r.URL.Query().Has("json")
 		acceptsHTML = RequestExplicitlyAccepts(r, "text/html")
@@ -27,7 +27,7 @@ func Render(ctx context.Context, w http.ResponseWriter, r *http.Request, fs fs.F
 	)
 	switch {
 	case useHTML:
-		renderHTML(ctx, w, fs, templateName, data)
+		renderHTML(ctx, w, fs, templateName, funcs, data)
 	default:
 		renderJSON(ctx, w, data)
 	}
@@ -42,12 +42,12 @@ func renderJSON(ctx context.Context, w http.ResponseWriter, data any) {
 	enc.Encode(data)
 }
 
-func renderHTML(ctx context.Context, w http.ResponseWriter, fs fs.FS, templateName string, data any) {
+func renderHTML(ctx context.Context, w http.ResponseWriter, fs fs.FS, templateName string, funcs template.FuncMap, data any) {
 	ctx, tr, finish := trc.Region(ctx, "renderHTML")
 	defer finish()
 
 	code := http.StatusOK
-	body, err := renderTemplate(ctx, fs, templateName, data)
+	body, err := renderTemplate(ctx, fs, templateName, funcs, data)
 	if err != nil {
 		code = http.StatusInternalServerError
 		body = []byte(fmt.Sprintf(`<html><body><h1>Error</h1><p>%v</p>`, err))
@@ -66,7 +66,7 @@ func renderHTML(ctx context.Context, w http.ResponseWriter, fs fs.FS, templateNa
 	tr.Tracef("write OK")
 }
 
-func renderTemplate(ctx context.Context, fs fs.FS, templateName string, data any) (_ []byte, err error) {
+func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFuncs template.FuncMap, data any) (_ []byte, err error) {
 	ctx, task := trace.NewTask(ctx, "renderTemplate task")
 	defer task.End()
 
@@ -82,7 +82,7 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, data any
 		}
 	}()
 
-	templateRoot, err := template.New("root").Funcs(templateFuncs).ParseFS(fs, "*")
+	templateRoot, err := template.New("root").Funcs(templateFuncs).Funcs(userFuncs).ParseFS(fs, "*")
 	if err != nil {
 		return nil, fmt.Errorf("parse assets: %w", err)
 	}
@@ -151,7 +151,6 @@ var breaksReplacer = strings.NewReplacer(
 var templateFuncs = template.FuncMap{
 	"intadd":             func(i, j int) int { return i + j },
 	"floatadd":           func(i, j float64) float64 { return i + j },
-	"category2class":     func(name string) string { return "category-" + sha256hex(name) },
 	"timenow":            func() time.Time { return time.Now().UTC() },
 	"timesince":          func(t time.Time) time.Duration { return time.Since(t) },
 	"timediff":           func(a, b time.Time) time.Duration { return a.Sub(b) },
@@ -164,7 +163,6 @@ var templateFuncs = template.FuncMap{
 	"htmlescape":         func(s string) string { return template.HTMLEscapeString(s) },
 	"insertbreaks":       func(s string) template.HTML { return template.HTML(breaksReplacer.Replace(s)) },
 	"stringsjoinnewline": func(a []string) string { return strings.Join(a, string([]byte{0xa})) },
-	"highlightclasses":   highlightclasses,
 	"truncateduration":   truncateduration,
 	"humanizeduration":   humanizeduration,
 	"humanizefloat":      humanizefloat,
@@ -177,42 +175,6 @@ func sha256hex(name string) string {
 	h := sha256.Sum256([]byte(name))
 	s := hex.EncodeToString(h[:])
 	return s
-}
-
-func highlightclasses(TODO any) []string {
-	return []string{}
-
-	// var classes []string
-	//
-	// if len(res.Stats.Request.IDs) > 0 {
-	// return nil
-	// }
-	//
-	// if res.Stats.Request.Category != "" {
-	// classes = append(classes, "category-"+sha256hex(res.Stats.Request.Category))
-	// }
-	//
-	// if res.Stats.Request.IsActive {
-	// classes = append(classes, "active")
-	// }
-	//
-	// if res.Stats.Request.IsErrored {
-	// classes = append(classes, "errored")
-	// }
-	//
-	// if res.Stats.Request.IsFinished {
-	// classes = append(classes, "finished")
-	// }
-	//
-	// if res.Stats.Request.IsSucceeded {
-	// classes = append(classes, "succeeded")
-	// }
-	//
-	// if res.Stats.Request.MinDuration != nil {
-	// classes = append(classes, "min-"+res.Stats.Request.MinDuration.String())
-	// }
-	//
-	// return classes
 }
 
 func truncateduration(d time.Duration) time.Duration {

@@ -337,7 +337,7 @@ func getCoreTraceMaxEvents() int {
 //
 
 type StaticTrace struct {
-	OriginURI string `json:"origin_uri,omitempty"`
+	Origin string `json:"origin,omitempty"`
 
 	StaticID        string    `json:"id"`
 	StaticCategory  string    `json:"category"`

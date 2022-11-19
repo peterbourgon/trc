@@ -1,10 +1,10 @@
 <div id="{{.ID}}" class="trace">
 
 	<div class="metadata">
-		<strong class="searchable"><a href="?id={{.ID}}">{{ .ID }}</a></strong>
-		&middot; <a href="?id={{.ID}}&json">JSON</a>
-		{{ if .OriginURI -}} &middot; <span class="origin">{{.OriginURI | urihostpath }}</span> {{ end -}}
-		&middot; <span title="{{.Start}}">{{humanize (timesince .Start)}} ago</span>
+		<strong class="searchable"><a href="?origin={{.Origin}}&id={{.ID}}">{{ .ID }}</a></strong>
+		&middot; <a href="?origin={{.Origin}}&id={{.ID}}&json">JSON</a>
+		{{ if .Origin -}} &middot; <span class="origin">{{.Origin}}</span> {{ end -}}
+		&middot; <span class="trace-age">age <span class="time-since" title="{{timenow}}"></span></span>
 		<span class="right">
 			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">
 				<a href="#" onclick="showstacks({{.ID}});"><strong>[≡]</strong></a>

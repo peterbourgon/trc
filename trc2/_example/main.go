@@ -24,21 +24,19 @@ func main() {
 	// Define the API instances.
 	ports := []int{8081, 8082, 8083}
 
-	// Collect them into a single queryer.
-	peers := trctrace.MultiQueryer{}
-	for _, p := range ports {
-		peers = append(peers,
-			trctrace.NewHTTPQueryClient(
-				http.DefaultClient,
-				fmt.Sprintf("http://localhost:%d/traces", p),
-			),
-		)
-	}
+	// We'll have a few possible origins to query.
+	alternative := map[string]trctrace.Queryer{}
 
-	// Call that collection a single thing.
-	alternative := map[string]trctrace.Queryer{
-		"all instances": peers,
+	// Walk the API instances.
+	allInstanceQueryer := trctrace.MultiQueryer{}
+	for _, p := range ports {
+		hostport := fmt.Sprintf("localhost:%d", p)
+		endpoint := fmt.Sprintf("http://%s/traces", hostport)
+		oneInstanceQueryer := trctrace.NewHTTPQueryClient(http.DefaultClient, hostport, endpoint)
+		allInstanceQueryer = append(allInstanceQueryer, oneInstanceQueryer)
+		alternative[hostport] = oneInstanceQueryer
 	}
+	alternative["all instances"] = allInstanceQueryer
 
 	// Make the API instances.
 	instances := map[string]*apiInstance{}
@@ -57,7 +55,7 @@ func main() {
 				switch {
 				case f < 0.6:
 					key := getWord()
-					url := fmt.Sprintf("http://localhost/%s", key)
+					url := fmt.Sprintf("http://irrelevant/%s", key)
 					req, _ := http.NewRequest("GET", url, nil)
 					rec := httptest.NewRecorder()
 					instance.apiHandler.ServeHTTP(rec, req)
@@ -65,14 +63,14 @@ func main() {
 				case f < 0.9:
 					key := getWord()
 					val := getWord()
-					url := fmt.Sprintf("http://localhost/%s", key)
+					url := fmt.Sprintf("http://irrelevant/%s", key)
 					req, _ := http.NewRequest("PUT", url, strings.NewReader(val))
 					rec := httptest.NewRecorder()
 					instance.apiHandler.ServeHTTP(rec, req)
 
 				default:
 					key := getWord()
-					url := fmt.Sprintf("http://localhost/%s", key)
+					url := fmt.Sprintf("http://irrelevant/%s", key)
 					req, _ := http.NewRequest("DELETE", url, nil)
 					rec := httptest.NewRecorder()
 					instance.apiHandler.ServeHTTP(rec, req)
@@ -121,12 +119,12 @@ func main() {
 //
 //
 
+// apiInstance serves GET/SET/DELETE /{key} + GET /traces.
 type apiInstance struct {
 	apiHandler    http.Handler
 	tracesHandler http.Handler
 }
 
-// func newAPIInstance(id string, peers []*trchttpdist.RemoteCollector) *apiInstance {
 func newAPIInstance(id string, peers map[string]trctrace.Queryer) *apiInstance {
 	store := NewStore()
 	api := NewAPI(store)

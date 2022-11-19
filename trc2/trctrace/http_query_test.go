@@ -19,7 +19,7 @@ func TestHTTPQuery(t *testing.T) {
 	server := httptest.NewServer(handler)
 	t.Cleanup(func() { server.Close() })
 
-	client := trctrace.NewHTTPQueryClient(http.DefaultClient, server.URL)
+	client := trctrace.NewHTTPQueryClient(http.DefaultClient, server.URL, server.URL)
 
 	category := "my category"
 	message := fmt.Sprintf("hello %d", time.Now().UnixNano())

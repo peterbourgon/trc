@@ -35,9 +35,11 @@ func (c *Collector) Query(ctx context.Context, req *QueryRequest) (*QueryRespons
 	_, tr, finish := trc.Region(ctx, "Collector Query")
 	defer finish()
 
+	tr.Tracef("### pre-sanitize req.Search=%q req.Regexp=%v", req.Search, req.Regexp)
 	if err := req.Sanitize(); err != nil {
 		return nil, fmt.Errorf("sanitize request: %w", err)
 	}
+	tr.Tracef("### post-sanitize req.Search=%q req.Regexp=%v", req.Search, req.Regexp)
 
 	begin := time.Now()
 
@@ -51,11 +53,18 @@ func (c *Collector) Query(ctx context.Context, req *QueryRequest) (*QueryRespons
 		}
 	}
 
+	var considered int
 	var allowed trc.Traces
 	for _, tr := range overall {
-		if req.Allow(tr) {
-			allowed = append(allowed, tr)
+		if !req.Consider(tr) {
+			continue
 		}
+		considered++
+
+		if !req.Allow(tr) {
+			continue
+		}
+		allowed = append(allowed, tr)
 	}
 
 	var (
@@ -64,7 +73,7 @@ func (c *Collector) Query(ctx context.Context, req *QueryRequest) (*QueryRespons
 		perTrace = time.Duration(float64(took) / float64(len(overall)))
 	)
 
-	tr.Tracef("evaluated %d, matched %d, took %s, %s/trace", len(overall), matched, took, perTrace)
+	tr.Tracef("evaluated %d, considered %d, matched %d, took %s, %s/trace", len(overall), considered, matched, took, perTrace)
 
 	stats := newQueryStats(req, overall)
 
@@ -83,10 +92,12 @@ func (c *Collector) Query(ctx context.Context, req *QueryRequest) (*QueryRespons
 	tr.Tracef("selected %d", len(selected))
 
 	return &QueryResponse{
-		Request:  req,
-		Stats:    stats,
-		Matched:  matched,
-		Selected: selected,
-		Problems: nil,
+		Request:    req,
+		Stats:      stats,
+		Total:      len(overall),
+		Considered: considered,
+		Matched:    matched,
+		Selected:   selected,
+		Problems:   nil,
 	}, nil
 }
