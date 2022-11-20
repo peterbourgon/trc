@@ -4,7 +4,6 @@
 		<strong class="searchable"><a href="?origin={{.Origin}}&id={{.ID}}">{{ .ID }}</a></strong>
 		&middot; <a href="?origin={{.Origin}}&id={{.ID}}&json">JSON</a>
 		{{ if .Origin -}} &middot; <span class="origin">{{.Origin}}</span> {{ end -}}
-		&middot; <span class="trace-age">age <span class="time-since" title="{{timenow}}"></span></span>
 		<span class="right">
 			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">
 				<a href="#" onclick="showstacks({{.ID}});"><strong>[≡]</strong></a>
@@ -23,8 +22,8 @@
 				+0
 			</div>
 
-			<div class="what">
-				<em> start </em>
+			<div class="what meta">
+				start (<span class="time-since" title="{{.Start}}"></span> ago)
 			</div>
 		</div>
 
@@ -46,7 +45,7 @@
 
 			<div class="delta" title="+{{$delta}} = {{$overall}}">
 				<div class="progress-bar" style="width:{{$percent}}%;"></div>
-				+{{ humanize $delta }}
+				+{{ humanizeduration $delta }}
 				{{ $prev_ts = .When -}}
 			</div>
 
@@ -85,15 +84,17 @@
 
 			<div class="delta" title="+{{ $delta }} = {{.Duration}}">
 				{{ if .Finished }}<div class="progress-bar" style="width:{{$percent}}%;"></div>{{ end -}}
-				+{{ humanize $delta }}
+				+{{ humanizeduration $delta }}
 			</div>
 
-			<div class="what"><em>{{ if .Finished }} end {{ else }} active... {{ end -}}</em></div>
+			<div class="what meta">
+				{{ if .Finished }} end {{ else }} active... {{ end -}}
+			</div>
 		</div>
 
 		<div class="event summary">
 			<div class="timestamp"></div>
-			<div class="duration" title="{{ .Duration }}">&nbsp;{{ if .Finished }}<strong>{{ humanize .Duration }}</strong>{{ else }}<em>{{ humanize .Duration }}</em>{{ end -}}</div>
+			<div class="duration" title="{{ .Duration }}">&nbsp;{{ if .Finished }}<strong>{{ humanizeduration .Duration }}</strong>{{ else }}<em>{{ humanizeduration .Duration }}</em>{{ end -}}</div>
 			<div class="what"></div>
 		</div>
 	</div>

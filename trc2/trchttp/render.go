@@ -166,9 +166,7 @@ var templateFuncs = template.FuncMap{
 	"truncateduration":   truncateduration,
 	"humanizeduration":   humanizeduration,
 	"humanizefloat":      humanizefloat,
-	"humanize":           humanize,
 	"ratecalc":           ratecalc,
-	"urihostpath":        urihostpath,
 }
 
 func sha256hex(name string) string {
@@ -227,26 +225,9 @@ func humanizefloat(f float64) string {
 	}
 }
 
-func humanize(d time.Duration) string {
-	return humanizeduration(d)
-}
-
 func ratecalc(n int, d time.Duration) float64 {
 	if d == 0 {
 		return 0.0
 	}
 	return float64(n) / float64(d.Seconds())
-}
-
-func urihostpath(s string) string {
-	u, err := url.Parse(s)
-	if err != nil {
-		return s
-	}
-
-	u.Scheme = ""
-	u.RawQuery = ""
-	u.RawFragment = ""
-
-	return strings.TrimLeft(u.String(), "/")
 }

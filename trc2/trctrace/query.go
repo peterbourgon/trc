@@ -132,19 +132,19 @@ func (req *QueryRequest) MakeHTTPRequest(ctx context.Context, url string) (*http
 	}
 
 	if req.IsActive {
-		urlquery["active"] = []string{}
+		urlquery.Set("active", "true")
 	}
 
 	if req.IsFinished {
-		urlquery["finished"] = []string{}
+		urlquery.Set("finished", "true")
 	}
 
 	if req.IsSucceeded {
-		urlquery["succeeded"] = []string{}
+		urlquery.Set("succeeded", "true")
 	}
 
 	if req.IsErrored {
-		urlquery["errored"] = []string{}
+		urlquery.Set("errored", "true")
 	}
 
 	if req.MinDuration != nil {
@@ -242,52 +242,6 @@ func (req *QueryRequest) String() string {
 	return strings.Join(parts, " ")
 }
 
-func (req *QueryRequest) Consider(tr trc.Trace) bool {
-	if len(req.IDs) > 0 {
-		var found bool
-		for _, id := range req.IDs {
-			if id == tr.ID() {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
-	}
-
-	if req.Category != "" && tr.Category() != req.Category {
-		return false
-	}
-
-	if req.IsActive && !tr.Active() {
-		return false
-	}
-
-	if req.IsFinished && !tr.Finished() {
-		return false
-	}
-
-	if req.IsSucceeded && !tr.Succeeded() {
-		return false
-	}
-
-	if req.IsErrored && !tr.Errored() {
-		return false
-	}
-
-	if req.MinDuration != nil {
-		if tr.Active() { // we assert that a min duration query param excludes active traces
-			return false
-		}
-		if tr.Duration() < *req.MinDuration {
-			return false
-		}
-	}
-
-	return true
-}
-
 func (req *QueryRequest) Allow(tr trc.Trace) bool {
 	if len(req.IDs) > 0 {
 		var found bool
@@ -323,9 +277,9 @@ func (req *QueryRequest) Allow(tr trc.Trace) bool {
 	}
 
 	if req.MinDuration != nil {
-		if tr.Active() { // we assert that a min duration query param excludes active traces
-			return false
-		}
+		// if tr.Active() { // we assert that a min duration query param excludes active traces
+		// return false
+		// }
 		if tr.Duration() < *req.MinDuration {
 			return false
 		}
@@ -358,15 +312,14 @@ func (req *QueryRequest) Allow(tr trc.Trace) bool {
 //
 
 type QueryResponse struct {
-	Request    *QueryRequest      `json:"request"`
-	Origins    []string           `json:"origins,omitempty"`
-	Stats      *QueryStats        `json:"stats"`
-	Total      int                `json:"total"`
-	Considered int                `json:"considered"`
-	Matched    int                `json:"matched"`
-	Selected   []*trc.StaticTrace `json:"selected"`
-	Problems   []string           `json:"problems,omitempty"`
-	Duration   time.Duration      `json:"duration"`
+	Request  *QueryRequest      `json:"request"`
+	Origins  []string           `json:"origins,omitempty"`
+	Stats    *QueryStats        `json:"stats"`
+	Total    int                `json:"total"`
+	Matched  int                `json:"matched"`
+	Selected []*trc.StaticTrace `json:"selected"`
+	Problems []string           `json:"problems,omitempty"`
+	Duration time.Duration      `json:"duration"`
 }
 
 func NewQueryResponse(req *QueryRequest, selected trc.Traces) *QueryResponse {
@@ -388,8 +341,6 @@ func (res *QueryResponse) Merge(other *QueryResponse) error {
 	}
 
 	res.Total += other.Total
-
-	res.Considered += other.Considered
 
 	res.Matched += other.Matched
 
@@ -486,10 +437,7 @@ func newQueryStats(req *QueryRequest, trs trc.Traces) *QueryStats {
 
 // Overall returns stats for a synthetic category representing all traces.
 func (s *QueryStats) Overall() (*CategoryStats, error) {
-	overall := &CategoryStats{
-		Name:    "overall",
-		Buckets: newBucketStats(s.Request),
-	}
+	overall := newCategoryStats(s.Request, "overall")
 	for _, cat := range s.Categories {
 		if err := mergeCategoryStats(overall, cat); err != nil {
 			return nil, fmt.Errorf("merge %q: %w", cat.Name, err)
@@ -704,38 +652,3 @@ func mergeStringSlices(a, b []string) []string {
 //
 //
 //
-
-type MultiQueryer []Queryer
-
-var _ Queryer = (*MultiQueryer)(nil)
-
-func (m MultiQueryer) Query(ctx context.Context, req *QueryRequest) (*QueryResponse, error) {
-	type tuple struct {
-		res *QueryResponse
-		err error
-	}
-
-	tuplec := make(chan tuple, len(m))
-
-	for _, q := range m {
-		go func(q Queryer) {
-			res, err := q.Query(ctx, req)
-			tuplec <- tuple{res, err}
-		}(q)
-	}
-
-	res := NewQueryResponse(req, nil)
-	for i := 0; i < cap(tuplec); i++ {
-		t := <-tuplec
-		if t.err != nil {
-			return nil, fmt.Errorf("query error: %w", t.err) // TODO: fail fast OK?
-		}
-		if err := res.Merge(t.res); err != nil {
-			return nil, fmt.Errorf("merge response: %w", err)
-		}
-	}
-
-	res.Finalize()
-
-	return res, nil
-}

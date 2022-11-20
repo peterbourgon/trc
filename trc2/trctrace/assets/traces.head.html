@@ -1,4 +1,5 @@
 <head>
+<title>{{ .PageTitle }}</title>
 <style>
 {{ template "style.css" . }}
 
@@ -10,7 +11,7 @@ table#summary
 	tr{{ range $hc -}}.{{.}}{{ end }}
 {
 	font-weight: bold;
-	background-color: rgba(255, 255, 0, 0.2);
+	background-color: {{ if .Request.Search -}} rgba(255, 255, 0, 0.5); {{ else -}} rgba(173, 216, 230, 0.4); {{ end -}}
 }
 {{ else if not .Request.IDs -}}
 table#summary tr:last-child td {

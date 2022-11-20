@@ -23,20 +23,21 @@ import (
 func main() {
 	// Define the API instances.
 	ports := []int{8081, 8082, 8083}
+	names := []string{"Larry", "Curly", "Moe"}
 
 	// We'll have a few possible origins to query.
-	alternative := map[string]trctrace.Queryer{}
+	origins := map[string]trctrace.Queryer{}
 
 	// Walk the API instances.
 	allInstanceQueryer := trctrace.MultiQueryer{}
-	for _, p := range ports {
-		hostport := fmt.Sprintf("localhost:%d", p)
-		endpoint := fmt.Sprintf("http://%s/traces", hostport)
-		oneInstanceQueryer := trctrace.NewHTTPQueryClient(http.DefaultClient, hostport, endpoint)
+	for i, p := range ports {
+		origin := names[i]
+		endpoint := fmt.Sprintf("http://localhost:%d/traces", p)
+		oneInstanceQueryer := trctrace.NewHTTPQueryClient(http.DefaultClient, origin, endpoint)
 		allInstanceQueryer = append(allInstanceQueryer, oneInstanceQueryer)
-		alternative[hostport] = oneInstanceQueryer
+		origins[origin] = oneInstanceQueryer
 	}
-	alternative["all instances"] = allInstanceQueryer
+	origins["all instances"] = allInstanceQueryer
 
 	// Make the API instances.
 	instances := map[string]*apiInstance{}
@@ -44,7 +45,7 @@ func main() {
 	taskGroup := &sync.WaitGroup{}
 	for _, p := range ports {
 		hostport := fmt.Sprintf("localhost:%d", p)
-		instance := newAPIInstance(hostport, alternative)
+		instance := newAPIInstance(origins)
 
 		// Spawn a goroutine that produces API requests to this instance.
 		taskGroup.Add(1)
@@ -125,7 +126,7 @@ type apiInstance struct {
 	tracesHandler http.Handler
 }
 
-func newAPIInstance(id string, peers map[string]trctrace.Queryer) *apiInstance {
+func newAPIInstance(origins map[string]trctrace.Queryer) *apiInstance {
 	store := NewStore()
 	api := NewAPI(store)
 
@@ -136,7 +137,7 @@ func newAPIInstance(id string, peers map[string]trctrace.Queryer) *apiInstance {
 	apiHandler = trchttp.Middleware(localCollector.NewTrace, getAPIMethod)(apiHandler)
 
 	var tracesHandler http.Handler
-	tracesHandler = trctrace.NewHTTPQueryHandlerFor(localCollector, peers)
+	tracesHandler = trctrace.NewHTTPQueryHandlerFor(localCollector, origins)
 	tracesHandler = GZipMiddleware(tracesHandler)
 	tracesHandler = trchttp.Middleware(localCollector.NewTrace, getMethodPath)(tracesHandler)
 

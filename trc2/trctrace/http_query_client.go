@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	trc "github.com/peterbourgon/trc/trc2"
 )
 
 type HTTPQueryClient struct {
@@ -23,10 +25,14 @@ func NewHTTPQueryClient(client *http.Client, origin string, endpoint string) *HT
 }
 
 func (c *HTTPQueryClient) Query(ctx context.Context, req *QueryRequest) (*QueryResponse, error) {
+	tr := trc.FromContext(trc.WithPrefixContext(ctx, "<%s>", c.endpoint))
+
 	httpReq, err := req.MakeHTTPRequest(ctx, c.endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("make HTTP request: %w", err)
 	}
+
+	tr.Tracef("URL %s", httpReq.URL.String())
 
 	httpResp, err := c.client.Do(httpReq)
 	if err != nil {
@@ -49,10 +55,12 @@ func (c *HTTPQueryClient) Query(ctx context.Context, req *QueryRequest) (*QueryR
 	//	httpResp.Body = io.NopCloser(strings.NewReader(bodyStr))
 	//}
 
-	var httpQueryResp HTTPQueryResponse
+	var httpQueryResp HTTPQueryData
 	if err := json.NewDecoder(httpResp.Body).Decode(&httpQueryResp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
+
+	tr.Tracef("total=%d matched=%d selected=%d", httpQueryResp.Response.Total, httpQueryResp.Response.Matched, len(httpQueryResp.Response.Selected))
 
 	res := httpQueryResp.Response
 	res.Request = req

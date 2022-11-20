@@ -197,6 +197,10 @@ div#traces .trace .events div.event div.what {
 	overflow: scroll;
 }
 
+div#traces .trace .events div.event div.what.meta {
+	font-style: italic;
+}
+
 /*
  * stack
  */

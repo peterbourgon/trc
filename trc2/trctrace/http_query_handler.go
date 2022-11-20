@@ -1,12 +1,9 @@
 package trctrace
 
 import (
-	"crypto/sha256"
 	"embed"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io/fs"
 	"net/http"
 	"sort"
@@ -44,9 +41,10 @@ func NewHTTPQueryHandlerFor(defaultOrigin Queryer, availableOrigins map[string]Q
 		defer finish()
 
 		var (
-			begin    = time.Now()
-			origin   = r.URL.Query().Get("origin")
-			problems = []string{}
+			begin     = time.Now()
+			origin    = r.URL.Query().Get("origin")
+			pageTitle = "trc"
+			problems  = []string{}
 		)
 
 		var q Queryer
@@ -59,6 +57,7 @@ func NewHTTPQueryHandlerFor(defaultOrigin Queryer, availableOrigins map[string]Q
 			case origin != "" && validOrigin:
 				tr.Tracef("valid origin %q, querying that one", origin)
 				q = queryerForOrigin
+				pageTitle = fmt.Sprintf("trc - %s", origin)
 			case origin != "" && !validOrigin:
 				err := fmt.Errorf("invalid origin %q, using default queryer", origin)
 				problems = append(problems, err.Error())
@@ -103,61 +102,14 @@ func NewHTTPQueryHandlerFor(defaultOrigin Queryer, availableOrigins map[string]Q
 		res.Duration = time.Since(begin)
 		res.Problems = append(problems, res.Problems...)
 
-		tr.Tracef("query complete, considered %d, matched %d, selected %d, duration %s", res.Considered, res.Matched, len(res.Selected), res.Duration)
+		tr.Tracef("query complete, matched %d, selected %d, duration %s", res.Matched, len(res.Selected), res.Duration)
 
-		trchttp.Render(ctx, w, r, assets, "traces.html", templateFuncs, HTTPQueryResponse{
+		trchttp.Render(ctx, w, r, assets, "traces.html", templateFuncs, &HTTPQueryData{
+			PageTitle:        pageTitle,
 			AvailableOrigins: origins,
 			ResponseOrigin:   origin,
 			Request:          req,
 			Response:         res,
 		})
 	})
-}
-
-type HTTPQueryResponse struct {
-	AvailableOrigins []string       `json:"available_origins"`
-	ResponseOrigin   string         `json:"response_origin,omitempty"`
-	Request          *QueryRequest  `json:"request"`
-	Response         *QueryResponse `json:"response"`
-}
-
-var templateFuncs = template.FuncMap{
-	"category2class":   category2class,
-	"highlightclasses": highlightclasses,
-}
-
-func category2class(name string) string {
-	return "category-" + sha256hex(name)
-}
-
-func highlightclasses(req *QueryRequest) []string {
-	var classes []string
-	if len(req.IDs) > 0 {
-		return nil
-	}
-	if req.Category != "" {
-		classes = append(classes, "category-"+sha256hex(req.Category))
-	}
-	if req.IsActive {
-		classes = append(classes, "active")
-	}
-	if req.IsErrored {
-		classes = append(classes, "errored")
-	}
-	if req.IsFinished {
-		classes = append(classes, "finished")
-	}
-	if req.IsSucceeded {
-		classes = append(classes, "succeeded")
-	}
-	if req.MinDuration != nil {
-		classes = append(classes, "min-"+req.MinDuration.String())
-	}
-	return classes
-}
-
-func sha256hex(input string) string {
-	h := sha256.Sum256([]byte(input))
-	s := hex.EncodeToString(h[:])
-	return s
 }
