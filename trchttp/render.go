@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	trc "github.com/peterbourgon/trc/trc2"
+	"github.com/peterbourgon/trc"
 )
 
 func Render(ctx context.Context, w http.ResponseWriter, r *http.Request, fs fs.FS, templateName string, funcs template.FuncMap, data any) {

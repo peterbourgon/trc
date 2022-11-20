@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	trc "github.com/peterbourgon/trc/trc2"
-	"github.com/peterbourgon/trc/trc2/trchttp"
+	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/trchttp"
 )
 
 type Queryer interface {

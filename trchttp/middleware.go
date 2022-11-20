@@ -8,39 +8,38 @@ import (
 	"github.com/peterbourgon/trc"
 )
 
-type NewTracer interface {
-	NewTrace(context.Context, string) (context.Context, trc.Trace)
-}
+type NewTraceFunc func(context.Context, string) (context.Context, trc.Trace)
 
-// Middleware decorates an HTTP handler and creates a trace for each incoming
-// request via the provided NewTracer. The category is determined by passing the
-// HTTP request to the getCategory function. Basic request metadata, like
-// method, path, duration, and response code, is recorded in the trace.
+type GetCategoryFunc func(*http.Request) string
+
+// Middleware creates a trace for each request served by the handler. The trace
+// category is determined by passing the request to the getCategory function.
+// Basic metadata, such as method, path, duration, and response code, is
+// recorded in the trace.
 //
-// This is meant as a convenience function for basic use cases. Users who want
-// different or more sophisticated behavior should implement their own
-// middlewares.
+// This is meant as a convenience for simple use cases. Users who want different
+// or more sophisticated behavior should implement their own middlewares.
 //
 // TODO: use a config, default getCategory
-func Middleware(nt NewTracer, getCategory func(*http.Request) string) func(http.Handler) http.Handler {
+func Middleware(create NewTraceFunc, category GetCategoryFunc) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx, tr := nt.NewTrace(r.Context(), getCategory(r))
+			ctx, tr := create(r.Context(), category(r))
 			defer tr.Finish()
 
 			tr.Tracef("%s %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 
-			for k, vs := range r.Header {
-				for _, v := range vs {
-					tr.Tracef("> %s: %v", k, v)
-				}
-			}
+			// for k, vs := range r.Header {
+			// for _, v := range vs {
+			// tr.Tracef("> %s: %v", k, v)
+			// }
+			// }
 
 			iw := newInterceptor(w)
 			defer func(b time.Time) {
 				code := iw.Code()
 				sent := iw.Written()
-				took := humanize(time.Since(b))
+				took := humanizeduration(time.Since(b))
 				tr.Tracef("HTTP %d, %dB, %s", code, sent, took)
 			}(time.Now())
 
@@ -50,10 +49,6 @@ func Middleware(nt NewTracer, getCategory func(*http.Request) string) func(http.
 		})
 	}
 }
-
-//
-//
-//
 
 type interceptor struct {
 	http.ResponseWriter

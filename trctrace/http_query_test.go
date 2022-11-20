@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/peterbourgon/trc/trc2/trctrace"
+	"github.com/peterbourgon/trc/trctrace"
 )
 
 func TestHTTPQuery(t *testing.T) {

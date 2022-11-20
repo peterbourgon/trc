@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	trc "github.com/peterbourgon/trc/trc2"
+	"github.com/peterbourgon/trc"
 )
 
 type HTTPQueryClient struct {

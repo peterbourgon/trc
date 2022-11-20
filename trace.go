@@ -22,8 +22,6 @@ import (
 //
 // Implementations of Trace are expected to be safe for concurrent access.
 type Trace interface {
-	URI() string
-
 	// ID should return a unique identifier for the trace.
 	ID() string
 
@@ -107,8 +105,8 @@ func (trs Traces) Len() int { return len(trs) }
 //
 //
 
-// TraceCore is the default, mutable implementation of the Trace interface.
-type TraceCore struct {
+// CoreTrace is the default, mutable implementation of the Trace interface.
+type CoreTrace struct {
 	mtx       sync.Mutex
 	uri       string
 	id        string
@@ -121,13 +119,13 @@ type TraceCore struct {
 	truncated int
 }
 
-var _ Trace = (*TraceCore)(nil)
+var _ Trace = (*CoreTrace)(nil)
 
-// NewTraceCore creates a new TraceCore with the given category.
-func NewTraceCore(category string) *TraceCore {
+// NewCoreTrace creates a new CoreTrace with the given category.
+func NewCoreTrace(category string) *CoreTrace {
 	now := time.Now().UTC()
 	id := ulid.MustNew(ulid.Timestamp(now), traceIDEntropy).String()
-	return &TraceCore{
+	return &CoreTrace{
 		id:       id,
 		category: category,
 		start:    now,
@@ -135,7 +133,7 @@ func NewTraceCore(category string) *TraceCore {
 }
 
 // Tracef implements Trace.
-func (tr *TraceCore) Tracef(format string, args ...interface{}) {
+func (tr *CoreTrace) Tracef(format string, args ...interface{}) {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -144,7 +142,7 @@ func (tr *TraceCore) Tracef(format string, args ...interface{}) {
 	}
 
 	switch {
-	case len(tr.events) >= getTraceCoreMaxEvents():
+	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
 		tr.events = append(tr.events, MakeEvent(format, args...))
@@ -152,7 +150,7 @@ func (tr *TraceCore) Tracef(format string, args ...interface{}) {
 }
 
 // LazyTracef implements Trace.
-func (tr *TraceCore) LazyTracef(format string, args ...interface{}) {
+func (tr *CoreTrace) LazyTracef(format string, args ...interface{}) {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -161,7 +159,7 @@ func (tr *TraceCore) LazyTracef(format string, args ...interface{}) {
 	}
 
 	switch {
-	case len(tr.events) >= getTraceCoreMaxEvents():
+	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
 		tr.events = append(tr.events, MakeLazyEvent(format, args...))
@@ -169,7 +167,7 @@ func (tr *TraceCore) LazyTracef(format string, args ...interface{}) {
 }
 
 // Errorf implements Trace.
-func (tr *TraceCore) Errorf(format string, args ...interface{}) {
+func (tr *CoreTrace) Errorf(format string, args ...interface{}) {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -180,7 +178,7 @@ func (tr *TraceCore) Errorf(format string, args ...interface{}) {
 	tr.errored = true
 
 	switch {
-	case len(tr.events) >= getTraceCoreMaxEvents():
+	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
 		tr.events = append(tr.events, MakeEvent(format, args...))
@@ -188,7 +186,7 @@ func (tr *TraceCore) Errorf(format string, args ...interface{}) {
 }
 
 // LazyErrorf implements Trace.
-func (tr *TraceCore) LazyErrorf(format string, args ...interface{}) {
+func (tr *CoreTrace) LazyErrorf(format string, args ...interface{}) {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -199,7 +197,7 @@ func (tr *TraceCore) LazyErrorf(format string, args ...interface{}) {
 	tr.errored = true
 
 	switch {
-	case len(tr.events) >= getTraceCoreMaxEvents():
+	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
 		tr.events = append(tr.events, MakeLazyEvent(format, args...))
@@ -207,7 +205,7 @@ func (tr *TraceCore) LazyErrorf(format string, args ...interface{}) {
 }
 
 // Finish implements Trace.
-func (tr *TraceCore) Finish() {
+func (tr *CoreTrace) Finish() {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -219,32 +217,32 @@ func (tr *TraceCore) Finish() {
 	tr.duration = time.Since(tr.start)
 }
 
-func (tr *TraceCore) URI() string {
+func (tr *CoreTrace) URI() string {
 	return tr.uri
 }
 
 // ID implements Trace.
-func (tr *TraceCore) ID() string {
+func (tr *CoreTrace) ID() string {
 	return tr.id // immutable
 }
 
 // Start implements Trace.
-func (tr *TraceCore) Start() time.Time {
+func (tr *CoreTrace) Start() time.Time {
 	return tr.start // immutable
 }
 
 // Category implements Trace.
-func (tr *TraceCore) Category() string {
+func (tr *CoreTrace) Category() string {
 	return tr.category // immutable
 }
 
 // Active implements Trace.
-func (tr *TraceCore) Active() bool {
+func (tr *CoreTrace) Active() bool {
 	return !tr.Finished()
 }
 
 // Finished implements Trace.
-func (tr *TraceCore) Finished() bool {
+func (tr *CoreTrace) Finished() bool {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -252,7 +250,7 @@ func (tr *TraceCore) Finished() bool {
 }
 
 // Succeeded implements Trace.
-func (tr *TraceCore) Succeeded() bool {
+func (tr *CoreTrace) Succeeded() bool {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -260,7 +258,7 @@ func (tr *TraceCore) Succeeded() bool {
 }
 
 // Errored implements Trace.
-func (tr *TraceCore) Errored() bool {
+func (tr *CoreTrace) Errored() bool {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -268,7 +266,7 @@ func (tr *TraceCore) Errored() bool {
 }
 
 // Duration implements Trace.
-func (tr *TraceCore) Duration() time.Duration {
+func (tr *CoreTrace) Duration() time.Duration {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -280,7 +278,7 @@ func (tr *TraceCore) Duration() time.Duration {
 }
 
 // Events implements Trace.
-func (tr *TraceCore) Events() []Event {
+func (tr *CoreTrace) Events() []Event {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -295,50 +293,110 @@ func (tr *TraceCore) Events() []Event {
 }
 
 // MarshalJSON implements json.Marshaler for the trace.
-func (tr *TraceCore) MarshalJSON() ([]byte, error) {
-	return json.Marshal(NewTraceStatic(tr))
+func (tr *CoreTrace) MarshalJSON() ([]byte, error) {
+	return json.Marshal(NewStaticTrace(tr))
 }
 
 //
 //
 //
 
-// SetTraceCoreMaxEvents sets the maximum number of events that will be stored
-// in a core trace produced by this package. Past this limit, new events will
-// increment a "truncated" counter in the trace. The value of that counter is
-// represented by a single, final trace event.
+// SetCoreTraceMaxEvents sets the maximum number of events that will be stored
+// in a CoreTrace. Once this limit is reached, additional events increment a
+// "truncated" counter in the trace, the value of which is reported in a single,
+// final event.
 //
 // The default value is 1000, the minimum is 1, and the maximum is 10000.
-func SetTraceCoreMaxEvents(n int) {
+func SetCoreTraceMaxEvents(n int) {
 	switch {
-	case n < traceCoreMaxEventsMin:
-		n = traceCoreMaxEventsMin
-	case n > traceCoreMaxEventsMax:
-		n = traceCoreMaxEventsMax
+	case n < coreTraceMaxEventsMin:
+		n = coreTraceMaxEventsMin
+	case n > coreTraceMaxEventsMax:
+		n = coreTraceMaxEventsMax
 	}
-	atomic.StoreUint64(&traceCoreMaxEvents, uint64(n))
+	atomic.StoreUint64(&coreTraceMaxEvents, uint64(n))
 }
 
 const (
-	traceCoreMaxEventsMin = 1
-	traceCoreMaxEventsDef = 1000
-	traceCoreMaxEventsMax = 10000
+	coreTraceMaxEventsMin = 1
+	coreTraceMaxEventsDef = 1000
+	coreTraceMaxEventsMax = 10000
 )
 
 var (
-	traceCoreMaxEvents = uint64(traceCoreMaxEventsDef)
+	coreTraceMaxEvents = uint64(coreTraceMaxEventsDef)
 	traceIDEntropy     = ulid.DefaultEntropy()
 )
 
-func getTraceCoreMaxEvents() int {
-	return int(atomic.LoadUint64(&traceCoreMaxEvents))
+func getCoreTraceMaxEvents() int {
+	return int(atomic.LoadUint64(&coreTraceMaxEvents))
 }
 
 //
 //
 //
 
-// PrefixedTrace decorates a Trace such that all messages are prefixed with a
+type StaticTrace struct {
+	Origin string `json:"origin,omitempty"`
+
+	StaticID        string    `json:"id"`
+	StaticCategory  string    `json:"category"`
+	StaticStart     time.Time `json:"start"`
+	StaticActive    bool      `json:"active"`
+	StaticFinished  bool      `json:"finished"`
+	StaticSucceeded bool      `json:"succeeded"`
+	StaticErrored   bool      `json:"errored"`
+	StaticDuration  duration  `json:"duration"`
+	StaticEvents    []Event   `json:"events"`
+}
+
+var _ Trace = (*StaticTrace)(nil)
+
+func NewStaticTrace(tr Trace) *StaticTrace {
+	return &StaticTrace{
+		StaticID:        tr.ID(),
+		StaticCategory:  tr.Category(),
+		StaticStart:     tr.Start(),
+		StaticActive:    tr.Active(),
+		StaticFinished:  tr.Finished(),
+		StaticSucceeded: tr.Succeeded(),
+		StaticErrored:   tr.Errored(),
+		StaticDuration:  duration(tr.Duration()),
+		StaticEvents:    tr.Events(),
+	}
+}
+
+func (tr *StaticTrace) ID() string                                    { return tr.StaticID }
+func (tr *StaticTrace) Category() string                              { return tr.StaticCategory }
+func (tr *StaticTrace) Start() time.Time                              { return tr.StaticStart }
+func (tr *StaticTrace) Active() bool                                  { return tr.StaticActive }
+func (tr *StaticTrace) Finished() bool                                { return tr.StaticFinished }
+func (tr *StaticTrace) Succeeded() bool                               { return tr.StaticSucceeded }
+func (tr *StaticTrace) Errored() bool                                 { return tr.StaticErrored }
+func (tr *StaticTrace) Duration() time.Duration                       { return time.Duration(tr.StaticDuration) }
+func (tr *StaticTrace) Finish()                                       { /* no-op */ }
+func (tr *StaticTrace) Tracef(format string, args ...interface{})     { /* no-op */ }
+func (tr *StaticTrace) LazyTracef(format string, args ...interface{}) { /* no-op */ }
+func (tr *StaticTrace) Errorf(format string, args ...interface{})     { /* no-op */ }
+func (tr *StaticTrace) LazyErrorf(format string, args ...interface{}) { /* no-op */ }
+func (tr *StaticTrace) Events() []Event                               { return tr.StaticEvents }
+
+type duration time.Duration
+
+func (d *duration) UnmarshalJSON(data []byte) error {
+	if dur, err := time.ParseDuration(strings.Trim(string(data), `"`)); err == nil {
+		*d = duration(dur)
+		return nil
+	}
+
+	return json.Unmarshal(data, (*time.Duration)(d))
+}
+
+//
+//
+//
+
+// Prefixed decorates a Trace such that all messages are prefixed with a
 // given string. This can be useful to show important stages or sub-sections of
 // a call stack in traces without needing to inspect call stacks.
 //
@@ -350,27 +408,27 @@ func getTraceCoreMaxEvents() int {
 //	        ctx = Prefixf(ctx, "<%s>", v)
 //	        eztrc.Tracef(ctx, "inner loop")      // [process 01] <abc> inner loop
 //	        ...
-type PrefixedTrace struct {
+type Prefixed struct {
 	Trace
-
 	prefix string
 }
 
-// PrefixTracef wraps the trace and prefixes all events with the format string.
-func PrefixTracef(tr Trace, format string, args ...interface{}) Trace {
+// WithPrefix wraps the trace and prefixes all events with the format string.
+func WithPrefix(tr Trace, format string, args ...interface{}) Trace {
 	prefix := strings.TrimSpace(fmt.Sprintf(format, args...))
 	if prefix == "" {
 		return tr
 	}
 
-	return &PrefixedTrace{
+	return &Prefixed{
 		Trace:  tr,
 		prefix: prefix + " ",
 	}
 }
 
-// PrefixContextf decorates the trace in the context, if it exists, with PrefixTracef.
-func PrefixContextf(ctx context.Context, format string, args ...interface{}) context.Context {
+// WithPrefixContext prefixes the trace in the context (if it exists) and
+// returns a new context containing that prefixed trace.
+func WithPrefixContext(ctx context.Context, format string, args ...interface{}) context.Context {
 	tr, ok := MaybeFromContext(ctx)
 	if !ok {
 		return ctx
@@ -381,27 +439,27 @@ func PrefixContextf(ctx context.Context, format string, args ...interface{}) con
 		return ctx
 	}
 
-	ptr := &PrefixedTrace{Trace: tr, prefix: prefix + " "}
+	ptr := &Prefixed{Trace: tr, prefix: prefix + " "}
 	return context.WithValue(ctx, traceContextVal, ptr)
 }
 
 // Tracef implements Trace.
-func (ptr *PrefixedTrace) Tracef(format string, args ...interface{}) {
+func (ptr *Prefixed) Tracef(format string, args ...interface{}) {
 	ptr.Trace.Tracef(ptr.prefix+format, args...)
 }
 
 // LazyTracef implements Trace.
-func (ptr *PrefixedTrace) LazyTracef(format string, args ...interface{}) {
+func (ptr *Prefixed) LazyTracef(format string, args ...interface{}) {
 	ptr.Trace.LazyTracef(ptr.prefix+format, args...)
 }
 
 // Errorf implements Trace.
-func (ptr *PrefixedTrace) Errorf(format string, args ...interface{}) {
+func (ptr *Prefixed) Errorf(format string, args ...interface{}) {
 	ptr.Trace.Errorf(ptr.prefix+format, args...)
 }
 
 // LazyErrorf implements Trace.
-func (ptr *PrefixedTrace) LazyErrorf(format string, args ...interface{}) {
+func (ptr *Prefixed) LazyErrorf(format string, args ...interface{}) {
 	ptr.Trace.LazyErrorf(ptr.prefix+format, args...)
 }
 
@@ -409,48 +467,21 @@ func (ptr *PrefixedTrace) LazyErrorf(format string, args ...interface{}) {
 //
 //
 
-type StaticTrace struct {
-	StaticURI       string        `json:"uri"`
-	StaticID        string        `json:"id"`
-	StaticCategory  string        `json:"category"`
-	StaticStart     time.Time     `json:"start"`
-	StaticActive    bool          `json:"active"`
-	StaticFinished  bool          `json:"finished"`
-	StaticSucceeded bool          `json:"succeeded"`
-	StaticErrored   bool          `json:"errored"`
-	StaticDuration  time.Duration `json:"duration"`
-	StaticEvents    []Event       `json:"events"`
+type Finalized struct {
+	Trace
+	finalize func()
 }
 
-var _ Trace = (*StaticTrace)(nil)
+var _ Trace = (*Finalized)(nil)
 
-func NewTraceStatic(tr Trace) *StaticTrace {
-	return &StaticTrace{
-		StaticURI:       tr.URI(),
-		StaticID:        tr.ID(),
-		StaticCategory:  tr.Category(),
-		StaticStart:     tr.Start(),
-		StaticActive:    tr.Active(),
-		StaticFinished:  tr.Finished(),
-		StaticSucceeded: tr.Succeeded(),
-		StaticErrored:   tr.Errored(),
-		StaticDuration:  tr.Duration(),
-		StaticEvents:    tr.Events(),
+func WithFinalize(tr Trace, finalize func()) Trace {
+	return &Finalized{
+		Trace:    tr,
+		finalize: finalize,
 	}
 }
 
-func (tr *StaticTrace) URI() string                                   { return tr.StaticURI }
-func (tr *StaticTrace) ID() string                                    { return tr.StaticID }
-func (tr *StaticTrace) Category() string                              { return tr.StaticCategory }
-func (tr *StaticTrace) Start() time.Time                              { return tr.StaticStart }
-func (tr *StaticTrace) Active() bool                                  { return tr.StaticActive }
-func (tr *StaticTrace) Finished() bool                                { return tr.StaticFinished }
-func (tr *StaticTrace) Succeeded() bool                               { return tr.StaticSucceeded }
-func (tr *StaticTrace) Errored() bool                                 { return tr.StaticErrored }
-func (tr *StaticTrace) Duration() time.Duration                       { return tr.StaticDuration }
-func (tr *StaticTrace) Finish()                                       { /* no-op */ }
-func (tr *StaticTrace) Tracef(format string, args ...interface{})     { /* no-op */ }
-func (tr *StaticTrace) LazyTracef(format string, args ...interface{}) { /* no-op */ }
-func (tr *StaticTrace) Errorf(format string, args ...interface{})     { /* no-op */ }
-func (tr *StaticTrace) LazyErrorf(format string, args ...interface{}) { /* no-op */ }
-func (tr *StaticTrace) Events() []Event                               { return tr.StaticEvents }
+func (tr *Finalized) Finish() {
+	tr.finalize()
+	tr.Trace.Finish()
+}

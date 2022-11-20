@@ -6,8 +6,8 @@ import (
 	"sort"
 	"time"
 
-	trc "github.com/peterbourgon/trc/trc2"
-	trcds "github.com/peterbourgon/trc/trc2/internal/trcds"
+	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/internal/trcds"
 )
 
 type Collector struct {
