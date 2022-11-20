@@ -37,7 +37,7 @@
 		<div class="event">
 			{{ $delta   := timediff .When $prev_ts      -}}
 			{{ $overall := timediff .When $start        -}}
-			{{ $percent := timepercent $delta $duration -}}
+			{{ $percent := durationpercent $delta $duration -}}
 
 			<div class="timestamp">
 				{{timetrunc .When}}
@@ -76,7 +76,7 @@
 
 		<div class="event end">
 			{{ $delta   := timediff (timeadd .Start .Duration) $prev_ts -}}
-			{{ $percent := timepercent $delta $duration                 -}}
+			{{ $percent := durationpercent $delta $duration                 -}}
 
 			<div class="timestamp" title="{{timeadd .Start .Duration}}">
 				{{timetrunc (timeadd .Start .Duration)}}

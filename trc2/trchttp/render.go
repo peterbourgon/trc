@@ -3,8 +3,6 @@ package trchttp
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -156,7 +154,7 @@ var templateFuncs = template.FuncMap{
 	"timediff":           func(a, b time.Time) time.Duration { return a.Sub(b) },
 	"timeadd":            func(t time.Time, d time.Duration) time.Time { return t.Add(d) },
 	"timetrunc":          func(t time.Time) string { return t.Format(timeFormat) },
-	"timepercent":        func(n, d time.Duration) int { return int(100 * float64(n) / float64(d)) },
+	"durationpercent":    func(n, d time.Duration) int { return int(100 * float64(n) / float64(d)) },
 	"intpercent":         func(n, d int) int { return int(100 * float64(n) / float64(d)) },
 	"queryescape":        func(s string) string { return url.QueryEscape(s) },
 	"pathescape":         func(s string) string { return url.PathEscape(s) },
@@ -167,12 +165,6 @@ var templateFuncs = template.FuncMap{
 	"humanizeduration":   humanizeduration,
 	"humanizefloat":      humanizefloat,
 	"ratecalc":           ratecalc,
-}
-
-func sha256hex(name string) string {
-	h := sha256.Sum256([]byte(name))
-	s := hex.EncodeToString(h[:])
-	return s
 }
 
 func truncateduration(d time.Duration) time.Duration {
