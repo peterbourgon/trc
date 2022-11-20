@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/peterbourgon/trc/trc2/eztrc"
-	"github.com/peterbourgon/trc/trc2/trchttp"
-	"github.com/peterbourgon/trc/trc2/trctrace"
+	"github.com/peterbourgon/trc/eztrc"
+	"github.com/peterbourgon/trc/trchttp"
+	"github.com/peterbourgon/trc/trctrace"
 )
 
 func main() {

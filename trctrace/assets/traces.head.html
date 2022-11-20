@@ -11,7 +11,7 @@ table#summary
 	tr{{ range $hc -}}.{{.}}{{ end }}
 {
 	font-weight: bold;
-	background-color: {{ if .Request.Search -}} rgba(255, 255, 0, 0.5); {{ else -}} rgba(173, 216, 230, 0.4); {{ end -}}
+	background-color: {{ if .Request.Search -}} rgba(255, 255, 0, 0.5); {{ else -}} rgba(0, 255, 255, 0.4); {{ end -}}
 }
 {{ else if not .Request.IDs -}}
 table#summary tr:last-child td {
