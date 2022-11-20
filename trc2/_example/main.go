@@ -24,28 +24,32 @@ func main() {
 	// Define the API instances.
 	ports := []int{8081, 8082, 8083}
 	names := []string{"Larry", "Curly", "Moe"}
-
-	// We'll have a few possible origins to query.
-	origins := map[string]trctrace.Queryer{}
+	originSlice := []trctrace.Origin{}
+	originIndex := map[string]trctrace.Origin{}
+	multiQueryer := trctrace.MultiQueryer{}
 
 	// Walk the API instances.
-	allInstanceQueryer := trctrace.MultiQueryer{}
-	for i, p := range ports {
-		origin := names[i]
-		endpoint := fmt.Sprintf("http://localhost:%d/traces", p)
-		oneInstanceQueryer := trctrace.NewHTTPQueryClient(http.DefaultClient, origin, endpoint)
-		allInstanceQueryer = append(allInstanceQueryer, oneInstanceQueryer)
-		origins[origin] = oneInstanceQueryer
+	for i := range ports {
+		port := ports[i]
+		name := names[i]
+		endpoint := fmt.Sprintf("http://localhost:%d/traces", port)
+		queryer := trctrace.NewHTTPQueryClient(http.DefaultClient, name, endpoint)
+		origin := trctrace.Origin{Name: name, Queryer: queryer}
+		originSlice = append(originSlice, origin)
+		originIndex[name] = origin
+		multiQueryer = append(multiQueryer, queryer)
 	}
-	origins["all instances"] = allInstanceQueryer
+	originSlice = append(originSlice, trctrace.Origin{Name: "all instances", Queryer: multiQueryer})
 
 	// Make the API instances.
 	instances := map[string]*apiInstance{}
 	ctx, cancel := context.WithCancel(context.Background())
 	taskGroup := &sync.WaitGroup{}
-	for _, p := range ports {
-		hostport := fmt.Sprintf("localhost:%d", p)
-		instance := newAPIInstance(origins)
+	for i := range ports {
+		port := ports[i]
+		name := names[i]
+		hostport := fmt.Sprintf("localhost:%d", port)
+		instance := newAPIInstance(originSlice...)
 
 		// Spawn a goroutine that produces API requests to this instance.
 		taskGroup.Add(1)
@@ -83,7 +87,7 @@ func main() {
 		taskGroup.Add(1)
 		go func() {
 			defer taskGroup.Done()
-			log.Printf("http://%s/traces", hostport)
+			log.Printf("%s: http://%s/traces", name, hostport)
 			server := &http.Server{Addr: hostport, Handler: instance}
 			errc := make(chan error, 1)
 			go func() { errc <- server.ListenAndServe() }()
@@ -126,7 +130,7 @@ type apiInstance struct {
 	tracesHandler http.Handler
 }
 
-func newAPIInstance(origins map[string]trctrace.Queryer) *apiInstance {
+func newAPIInstance(origins ...trctrace.Origin) *apiInstance {
 	store := NewStore()
 	api := NewAPI(store)
 
@@ -137,7 +141,7 @@ func newAPIInstance(origins map[string]trctrace.Queryer) *apiInstance {
 	apiHandler = trchttp.Middleware(localCollector.NewTrace, getAPIMethod)(apiHandler)
 
 	var tracesHandler http.Handler
-	tracesHandler = trctrace.NewHTTPQueryHandlerFor(localCollector, origins)
+	tracesHandler = trctrace.NewHTTPQueryHandlerDefault(localCollector, origins...)
 	tracesHandler = GZipMiddleware(tracesHandler)
 	tracesHandler = trchttp.Middleware(localCollector.NewTrace, getMethodPath)(tracesHandler)
 
