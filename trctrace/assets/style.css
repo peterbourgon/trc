@@ -86,6 +86,11 @@ table#summary td.errored div.progress-bar {
 	background-color: rgba(224, 0, 0, 0.10);
 }
 
+table#summary th.newest,
+th.oldest {
+	min-width: 8ch;
+}
+
 /*
  * topline
  */
@@ -105,7 +110,7 @@ div#topline>div {
 	gap: 1ch;
 }
 
-div#topline-origins {
+.origin {
 	font-weight: bold;
 }
 
@@ -190,6 +195,10 @@ div#traces .trace .events div.event div.what {
 	padding-left: 2em;
 	text-indent: -2em;
 	overflow: scroll;
+}
+
+div#traces .trace .events div.event div.what.meta {
+	font-style: italic;
 }
 
 /*

@@ -1,12 +1,15 @@
 package trc
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // NewTrace creates a new trace with the given category, and injects it to the
 // given context. If the context already contained a trace, it becomes
 // "shadowed" by the new one.
 func NewTrace(ctx context.Context, category string) (context.Context, Trace) {
-	tr := NewTraceCore(category)
+	tr := NewCoreTrace(category)
 	return ToContext(ctx, tr), tr
 }
 
@@ -20,7 +23,7 @@ func FromContext(ctx context.Context) Trace {
 		return tr
 	}
 
-	return NewTraceCore("(orphan)")
+	return NewCoreTrace("(orphan)")
 }
 
 // MaybeFromContext returns the trace in the context, if it exists.
@@ -61,6 +64,44 @@ func Errorf(ctx context.Context, format string, args ...interface{}) {
 // safe for concurrent access.
 func LazyErrorf(ctx context.Context, format string, args ...interface{}) {
 	FromContext(ctx).LazyErrorf(format, args...)
+}
+
+// Region is a convenience function for more detailed tracing of regions of
+// code, typically functions. Typical usage is as follows.
+//
+//	func foo(ctx context.Context, id int) {
+//	    ctx, tr, finish := trc.Region(ctx, "foo %d", id)
+//	    defer finish()
+//	    ...
+//	}
+//
+// Region produces hierarchical trace events as follows.
+//
+//	→ foo 42
+//	· trace event in foo
+//	· another event in foo
+//	· → bar
+//	· · something in bar
+//	· ← bar [1.23ms]
+//	· final event in foo
+//	← foo 42 [2.34ms]
+//
+// Region may incur non-negligable costs to performance, and is meant to be used
+// deliberately and sparingly. It explicitly should not be applied "by default"
+// to code via e.g. code generation.
+func Region(ctx context.Context, format string, args ...any) (context.Context, Trace, func()) {
+	begin := time.Now()
+	inputTrace := FromContext(ctx)
+	outputTrace := WithPrefix(inputTrace, "· ")
+	outputContext := ToContext(ctx, outputTrace)
+
+	inputTrace.LazyTracef("→ "+format, args...)
+	finish := func() {
+		took := time.Since(begin)
+		inputTrace.LazyTracef("← "+format+" [%s]", append(args, took.String())...)
+	}
+
+	return outputContext, outputTrace, finish
 }
 
 type traceContextKey struct{}

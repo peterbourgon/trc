@@ -1,23 +1,23 @@
-package trc
+package trcds
 
 import (
 	"sync"
 )
 
-type ringBuffer[T any] struct {
+type RingBuffer[T any] struct {
 	mtx sync.Mutex
 	buf []T // fully allocated at construction
 	cur int // index for next write, walk backwards to read
 	len int // count of actual values
 }
 
-func newRingBuffer[T any](cap int) *ringBuffer[T] {
-	return &ringBuffer[T]{
+func NewRingBuffer[T any](cap int) *RingBuffer[T] {
+	return &RingBuffer[T]{
 		buf: make([]T, cap),
 	}
 }
 
-func (rb *ringBuffer[T]) add(v T) {
+func (rb *RingBuffer[T]) Add(val T) {
 	rb.mtx.Lock()
 	defer rb.mtx.Unlock()
 
@@ -27,7 +27,7 @@ func (rb *ringBuffer[T]) add(v T) {
 	}
 
 	// Write the value at the write cursor.
-	rb.buf[rb.cur] = v
+	rb.buf[rb.cur] = val
 
 	// Update the ring buffer size.
 	if rb.len < len(rb.buf) {
@@ -41,7 +41,7 @@ func (rb *ringBuffer[T]) add(v T) {
 	}
 }
 
-func (rb *ringBuffer[T]) walk(f func(T) error) error {
+func (rb *RingBuffer[T]) Walk(fn func(T) error) error {
 	rb.mtx.Lock()
 	defer rb.mtx.Unlock()
 
@@ -56,7 +56,7 @@ func (rb *ringBuffer[T]) walk(f func(T) error) error {
 		}
 
 		// If the function returns an error, we're done.
-		if err := f(rb.buf[cur]); err != nil {
+		if err := fn(rb.buf[cur]); err != nil {
 			return err
 		}
 	}
@@ -64,7 +64,7 @@ func (rb *ringBuffer[T]) walk(f func(T) error) error {
 	return nil
 }
 
-func (rb *ringBuffer[T]) stats() (newest, oldest T, count int) {
+func (rb *RingBuffer[T]) Stats() (newest, oldest T, count int) {
 	rb.mtx.Lock()
 	defer rb.mtx.Unlock()
 
@@ -94,38 +94,38 @@ func (rb *ringBuffer[T]) stats() (newest, oldest T, count int) {
 //
 //
 
-type ringBuffers[T any] struct {
-	mtx sync.Mutex
-	max int
-	set map[string]*ringBuffer[T]
+type RingBuffers[T any] struct {
+	mtx  sync.Mutex
+	max  int
+	bufs map[string]*RingBuffer[T]
 }
 
-func newRingBuffers[T any](max int) *ringBuffers[T] {
-	return &ringBuffers[T]{
-		max: max,
-		set: map[string]*ringBuffer[T]{},
+func NewRingBuffers[T any](maxPerBuf int) *RingBuffers[T] {
+	return &RingBuffers[T]{
+		max:  maxPerBuf,
+		bufs: map[string]*RingBuffer[T]{},
 	}
 }
 
-func (rbs *ringBuffers[T]) getOrCreate(name string) *ringBuffer[T] {
+func (rbs *RingBuffers[T]) GetOrCreate(category string) *RingBuffer[T] {
 	rbs.mtx.Lock()
 	defer rbs.mtx.Unlock()
 
-	rb, ok := rbs.set[name]
+	rb, ok := rbs.bufs[category]
 	if !ok {
-		rb = newRingBuffer[T](rbs.max)
-		rbs.set[name] = rb
+		rb = NewRingBuffer[T](rbs.max)
+		rbs.bufs[category] = rb
 	}
 
 	return rb
 }
 
-func (rbs *ringBuffers[T]) getAll() map[string]*ringBuffer[T] {
+func (rbs *RingBuffers[T]) GetAll() map[string]*RingBuffer[T] {
 	rbs.mtx.Lock()
 	defer rbs.mtx.Unlock()
 
-	all := make(map[string]*ringBuffer[T], len(rbs.set))
-	for name, rb := range rbs.set {
+	all := make(map[string]*RingBuffer[T], len(rbs.bufs))
+	for name, rb := range rbs.bufs {
 		all[name] = rb
 	}
 

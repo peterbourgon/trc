@@ -8,36 +8,48 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/eztrc"
 	"github.com/peterbourgon/trc/trchttp"
-	"github.com/peterbourgon/trc/trchttp/trchttpdist"
+	"github.com/peterbourgon/trc/trctrace"
 )
 
 func main() {
 	// Define the API instances.
-	ports := []int{8080, 8081, 8082}
-	peers := []*trchttpdist.RemoteCollector{}
-	for i, p := range ports {
-		peers = append(peers, &trchttpdist.RemoteCollector{
-			URI:  fmt.Sprintf("http://localhost:%d/local", p),
-			Name: fmt.Sprintf("instance %d/%d", i+1, len(ports)),
-		})
+	ports := []int{8081, 8082, 8083}
+	names := []string{"Larry", "Curly", "Moe"}
+	originSlice := []trctrace.Origin{}
+	originIndex := map[string]trctrace.Origin{}
+	multiQueryer := trctrace.MultiQueryer{}
+
+	// Walk the API instances.
+	for i := range ports {
+		port := ports[i]
+		name := names[i]
+		endpoint := fmt.Sprintf("http://localhost:%d/traces", port)
+		queryer := trctrace.NewHTTPQueryClient(http.DefaultClient, name, endpoint)
+		origin := trctrace.Origin{Name: name, Queryer: queryer}
+		originSlice = append(originSlice, origin)
+		originIndex[name] = origin
+		multiQueryer = append(multiQueryer, queryer)
 	}
+	originSlice = append(originSlice, trctrace.Origin{Name: "all instances", Queryer: multiQueryer})
 
 	// Make the API instances.
 	instances := map[string]*apiInstance{}
 	ctx, cancel := context.WithCancel(context.Background())
 	taskGroup := &sync.WaitGroup{}
-	for _, p := range ports {
-		hostport := fmt.Sprintf("localhost:%d", p)
-		instance := newAPIInstance(hostport, peers)
+	for i := range ports {
+		port := ports[i]
+		name := names[i]
+		hostport := fmt.Sprintf("localhost:%d", port)
+		instance := newAPIInstance(originSlice...)
 
 		// Spawn a goroutine that produces API requests to this instance.
 		taskGroup.Add(1)
@@ -48,7 +60,7 @@ func main() {
 				switch {
 				case f < 0.6:
 					key := getWord()
-					url := fmt.Sprintf("http://localhost/%s", key)
+					url := fmt.Sprintf("http://irrelevant/%s", key)
 					req, _ := http.NewRequest("GET", url, nil)
 					rec := httptest.NewRecorder()
 					instance.apiHandler.ServeHTTP(rec, req)
@@ -56,14 +68,14 @@ func main() {
 				case f < 0.9:
 					key := getWord()
 					val := getWord()
-					url := fmt.Sprintf("http://localhost/%s", key)
+					url := fmt.Sprintf("http://irrelevant/%s", key)
 					req, _ := http.NewRequest("PUT", url, strings.NewReader(val))
 					rec := httptest.NewRecorder()
 					instance.apiHandler.ServeHTTP(rec, req)
 
 				default:
 					key := getWord()
-					url := fmt.Sprintf("http://localhost/%s", key)
+					url := fmt.Sprintf("http://irrelevant/%s", key)
 					req, _ := http.NewRequest("DELETE", url, nil)
 					rec := httptest.NewRecorder()
 					instance.apiHandler.ServeHTTP(rec, req)
@@ -75,7 +87,7 @@ func main() {
 		taskGroup.Add(1)
 		go func() {
 			defer taskGroup.Done()
-			log.Printf("http://%[1]s/local or http://%[1]s/peers", hostport)
+			log.Printf("%s: http://%s/traces", name, hostport)
 			server := &http.Server{Addr: hostport, Handler: instance}
 			errc := make(chan error, 1)
 			go func() { errc <- server.ListenAndServe() }()
@@ -90,39 +102,10 @@ func main() {
 		instances[hostport] = instance
 	}
 
-	// taskGroup.Add(1)
-	// go func() {
-	// 	defer taskGroup.Done()
-
-	// 	hostport := fmt.Sprintf("localhost:%d", 8080+len(instances))
-	// 	var uris []string
-	// 	for hostport := range instances {
-	// 		uris = append(uris, fmt.Sprintf("http://%s/traces", hostport))
-	// 	}
-
-	// 	distCollector := trchttp.NewDistributedCollectorBasic(http.DefaultClient, uris...)
-	// 	distHandler := trchttp.NewBasicTracesHandler(distCollector)
-	// 	metaCollector := trc.NewTraceCollector()
-	// 	distHandlerInst := trchttp.Middleware(metaCollector, getMethodPath)(distHandler)
-	// 	metaHandler := trchttp.NewBasicTracesHandler(metaCollector)
-	// 	metaHandlerInst := trchttp.Middleware(metaCollector, getMethodPath)(metaHandler)
-
-	// 	mux := http.NewServeMux()
-	// 	mux.Handle("/dist", distHandlerInst)
-	// 	mux.Handle("/meta", metaHandlerInst)
-	// 	log.Printf("http://%s/dist -- proxy to other instances", hostport)
-	// 	log.Printf("http://%s/meta -- traces for this instance", hostport)
-
-	// 	server := &http.Server{Addr: hostport, Handler: mux}
-	// 	errc := make(chan error, 1)
-	// 	go func() { errc <- server.ListenAndServe() }()
-	// 	<-ctx.Done()
-	// 	log.Printf("%s shutting down", hostport)
-	// 	server.Close()
-	// 	log.Printf("%s waiting for done", hostport)
-	// 	<-errc
-	// 	log.Printf("%s done", hostport)
-	// }()
+	go func() {
+		log.Printf("http://localhost:8080/debug/pprof")
+		log.Fatal(http.ListenAndServe(":8080", nil))
+	}()
 
 	log.Printf("running")
 
@@ -141,49 +124,37 @@ func main() {
 //
 //
 
+// apiInstance serves GET/SET/DELETE /{key} + GET /traces.
 type apiInstance struct {
-	apiHandler         http.Handler
-	localTracesHandler http.Handler
-	peersTracesHandler http.Handler
+	apiHandler    http.Handler
+	tracesHandler http.Handler
 }
 
-func newAPIInstance(id string, peers []*trchttpdist.RemoteCollector) *apiInstance {
+func newAPIInstance(origins ...trctrace.Origin) *apiInstance {
 	store := NewStore()
 	api := NewAPI(store)
 
-	localCollector := trc.NewTraceCollector()
-	peersCollector := trchttpdist.NewTraceCollector(http.DefaultClient, peers...)
+	localCollector := trctrace.NewCollector(1000)
 
 	var apiHandler http.Handler
 	apiHandler = api
-	apiHandler = trchttp.Middleware(localCollector, getAPIMethod)(apiHandler)
+	apiHandler = trchttp.Middleware(localCollector.NewTrace, getAPIMethod)(apiHandler)
 
-	var localTracesHandler http.Handler
-	localTracesHandler = trchttp.NewTracesHandler(localCollector)
-	localTracesHandler = trchttp.Middleware(localCollector, getMethodPath)(localTracesHandler)
-
-	var peersTracesHandler http.Handler
-	peersTracesHandler = trchttp.NewTracesHandler(peersCollector)
-	peersTracesHandler = trchttp.Middleware(localCollector, getMethodPath)(peersTracesHandler)
+	var tracesHandler http.Handler
+	tracesHandler = trctrace.NewHTTPQueryHandlerDefault(localCollector, origins...)
+	tracesHandler = GZipMiddleware(tracesHandler)
+	tracesHandler = trchttp.Middleware(localCollector.NewTrace, getMethodPath)(tracesHandler)
 
 	return &apiInstance{
-		apiHandler:         apiHandler,
-		localTracesHandler: localTracesHandler,
-		peersTracesHandler: peersTracesHandler,
+		apiHandler:    apiHandler,
+		tracesHandler: tracesHandler,
 	}
 }
 
 func (i *apiInstance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var (
-		path    = r.URL.Path
-		isLocal = strings.HasPrefix(path, "/local")
-		isPeers = strings.HasPrefix(path, "/peers")
-	)
 	switch {
-	case isLocal:
-		i.localTracesHandler.ServeHTTP(w, r)
-	case isPeers:
-		i.peersTracesHandler.ServeHTTP(w, r)
+	case strings.HasPrefix(r.URL.Path, "/traces"):
+		i.tracesHandler.ServeHTTP(w, r)
 	default:
 		i.apiHandler.ServeHTTP(w, r)
 	}
@@ -216,13 +187,10 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleSet(w http.ResponseWriter, r *http.Request) {
-	var (
-		ctx = r.Context()
-		key = getKey(r.URL.Path)
-	)
+	ctx, tr, finish := eztrc.Region(r.Context(), "handleSet")
+	defer finish()
 
-	eztrc.Tracef(ctx, "set %q", key)
-
+	key := getKey(r.URL.Path)
 	if key == "" {
 		http.Error(w, "key required", http.StatusBadRequest)
 		return
@@ -241,45 +209,41 @@ func (a *API) handleSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	eztrc.Tracef(ctx, "val %q", val)
+	tr.Tracef("val %q", val)
 
 	a.s.Set(ctx, key, val)
 }
 
 func (a *API) handleGet(w http.ResponseWriter, r *http.Request) {
-	var (
-		ctx = r.Context()
-		key = getKey(r.URL.Path)
-	)
+	ctx, tr, finish := eztrc.Region(r.Context(), "handleGet")
+	defer finish()
 
-	eztrc.Tracef(ctx, "get %q", key)
-
+	key := getKey(r.URL.Path)
 	if key == "" {
+		tr.Errorf("key not provided")
 		http.Error(w, "key required", http.StatusBadRequest)
 		return
 	}
 
 	val, ok := a.s.Get(ctx, key)
 	if !ok {
-		eztrc.Errorf(ctx, "key not found")
-		http.Error(w, "no content", http.StatusNoContent)
+		tr.Errorf("key not found")
+		http.Error(w, "not found", http.StatusNoContent)
 		return
 	}
 
-	eztrc.Tracef(ctx, "val %q", val)
+	tr.Tracef("val %q", val)
 
 	fmt.Fprintln(w, val)
 }
 
 func (a *API) handleDel(w http.ResponseWriter, r *http.Request) {
-	var (
-		ctx = r.Context()
-		key = getKey(r.URL.Path)
-	)
+	ctx, tr, finish := eztrc.Region(r.Context(), "handleDel")
+	defer finish()
 
-	eztrc.Tracef(ctx, "del %q", key)
-
+	key := getKey(r.URL.Path)
 	if key == "" {
+		tr.Errorf("key not provided")
 		http.Error(w, "key required", http.StatusBadRequest)
 		return
 	}
@@ -287,8 +251,8 @@ func (a *API) handleDel(w http.ResponseWriter, r *http.Request) {
 	ok := a.s.Del(ctx, key)
 
 	if !ok {
-		eztrc.Errorf(ctx, "key not found")
-		http.Error(w, "no content", http.StatusNoContent)
+		tr.Errorf("key not found")
+		http.Error(w, "not found", http.StatusNoContent)
 		return
 	}
 }
@@ -309,13 +273,17 @@ func NewStore() *Store {
 }
 
 func (s *Store) Set(ctx context.Context, key, val string) {
+	_, _, finish := eztrc.Region(ctx, "Set %s", key)
+	defer finish()
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	time.Sleep(getDelay(key, 1000*time.Microsecond))
+	time.Sleep(getDelay(key, 250*time.Microsecond))
 	s.set[key] = val
 }
 
 func (s *Store) Get(ctx context.Context, key string) (string, bool) {
+	_, _, finish := eztrc.Region(ctx, "Get %s", key)
+	defer finish()
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	val, ok := s.set[key]
@@ -324,6 +292,8 @@ func (s *Store) Get(ctx context.Context, key string) (string, bool) {
 }
 
 func (s *Store) Del(ctx context.Context, key string) bool {
+	_, _, finish := eztrc.Region(ctx, "Del %s", key)
+	defer finish()
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	_, ok := s.set[key]

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -162,18 +164,53 @@ func (z *lazyStringer) String() string {
 //
 //
 
-var myPackagePath = fmt.Sprintf("%+k", stack.Caller(0)) // also captures subpackages e.g. eztrc
-
 func getStack() CallStack {
 	var cs CallStack
-	for _, c := range stack.Trace().TrimRuntime() {
-		if strings.Contains(fmt.Sprintf("%+v", c), myPackagePath) {
-			continue
-		}
+	for _, c := range stack.Trace().TrimRuntime() { // TODO: trim package trc
+		fr := c.Frame()
 		cs = append(cs, Call{
-			Function: fmt.Sprintf("%n", c),
-			FileLine: fmt.Sprintf("%+v", c),
+			Function: funcNameOnly(fr.Function),
+			FileLine: pkgFilePath(&fr) + ":" + strconv.Itoa(fr.Line),
 		})
 	}
 	return cs
+}
+
+func pkgFilePath(frame *runtime.Frame) string {
+	pre := pkgPrefix(frame.Function)
+	post := pathSuffix(frame.File)
+	if pre == "" {
+		return post
+	}
+	return pre + "/" + post
+}
+
+func pkgPrefix(funcName string) string {
+	const pathSep = "/"
+	end := strings.LastIndex(funcName, pathSep)
+	if end == -1 {
+		return ""
+	}
+	return funcName[:end]
+}
+
+func pathSuffix(path string) string {
+	const pathSep = "/"
+	lastSep := strings.LastIndex(path, pathSep)
+	if lastSep == -1 {
+		return path
+	}
+	return path[strings.LastIndex(path[:lastSep], pathSep)+1:]
+}
+
+func funcNameOnly(name string) string {
+	const pathSep = "/"
+	if i := strings.LastIndex(name, pathSep); i != -1 {
+		name = name[i+len(pathSep):]
+	}
+	const pkgSep = "."
+	if i := strings.Index(name, pkgSep); i != -1 {
+		name = name[i+len(pkgSep):]
+	}
+	return name
 }
