@@ -24,8 +24,6 @@ func main() {
 	// Define the API instances.
 	ports := []int{8081, 8082, 8083}
 	names := []string{"Larry", "Curly", "Moe"}
-	originSlice := []trctrace.Origin{}
-	originIndex := map[string]trctrace.Origin{}
 	multiQueryer := trctrace.MultiQueryer{}
 
 	// Walk the API instances.
@@ -34,12 +32,13 @@ func main() {
 		name := names[i]
 		endpoint := fmt.Sprintf("http://localhost:%d/traces", port)
 		queryer := trctrace.NewHTTPQueryClient(http.DefaultClient, name, endpoint)
-		origin := trctrace.Origin{Name: name, Queryer: queryer}
-		originSlice = append(originSlice, origin)
-		originIndex[name] = origin
-		multiQueryer = append(multiQueryer, queryer)
+		originQueryer := trctrace.NewOriginQueryer(name, queryer)
+		multiQueryer = append(multiQueryer, originQueryer)
 	}
-	originSlice = append(originSlice, trctrace.Origin{Name: "all instances", Queryer: multiQueryer})
+	{
+		allQueryer := trctrace.NewOriginQueryer("all origins", multiQueryer)
+		multiQueryer = append(multiQueryer, allQueryer)
+	}
 
 	// Make the API instances.
 	instances := map[string]*apiInstance{}
@@ -126,35 +125,35 @@ func main() {
 
 // apiInstance serves GET/SET/DELETE /{key} + GET /traces.
 type apiInstance struct {
-	apiHandler    http.Handler
-	tracesHandler http.Handler
+	apiHandler http.Handler
+	trcHandler http.Handler
 }
 
 func newAPIInstance(origins ...trctrace.Origin) *apiInstance {
 	store := NewStore()
 	api := NewAPI(store)
 
-	localCollector := trctrace.NewCollector(1000)
+	collector := trctrace.NewCollector(1000)
 
 	var apiHandler http.Handler
 	apiHandler = api
-	apiHandler = trchttp.Middleware(localCollector.NewTrace, getAPIMethod)(apiHandler)
+	apiHandler = trchttp.Middleware(collector.NewTrace, getAPIMethod)(apiHandler)
 
-	var tracesHandler http.Handler
-	tracesHandler = trctrace.NewHTTPQueryHandlerDefault(localCollector, origins...)
-	tracesHandler = GZipMiddleware(tracesHandler)
-	tracesHandler = trchttp.Middleware(localCollector.NewTrace, getMethodPath)(tracesHandler)
+	var trcHandler http.Handler
+	trcHandler = trctrace.NewHTTPQueryHandlerDefault(collector, origins...)
+	trcHandler = GZipMiddleware(trcHandler)
+	trcHandler = trchttp.Middleware(collector.NewTrace, getMethodPath)(trcHandler)
 
 	return &apiInstance{
-		apiHandler:    apiHandler,
-		tracesHandler: tracesHandler,
+		apiHandler: apiHandler,
+		trcHandler: trcHandler,
 	}
 }
 
 func (i *apiInstance) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case strings.HasPrefix(r.URL.Path, "/traces"):
-		i.tracesHandler.ServeHTTP(w, r)
+		i.trcHandler.ServeHTTP(w, r)
 	default:
 		i.apiHandler.ServeHTTP(w, r)
 	}

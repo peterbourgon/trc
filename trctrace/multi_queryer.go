@@ -5,9 +5,7 @@ import (
 	"fmt"
 )
 
-type MultiQueryer []Queryer
-
-var _ Queryer = (*MultiQueryer)(nil)
+type MultiQueryer []OriginQueryer
 
 func (m MultiQueryer) Query(ctx context.Context, req *QueryRequest) (*QueryResponse, error) {
 	type tuple struct {
@@ -17,11 +15,12 @@ func (m MultiQueryer) Query(ctx context.Context, req *QueryRequest) (*QueryRespo
 
 	tuplec := make(chan tuple, len(m))
 
-	for _, q := range m {
-		go func(q Queryer) {
-			res, err := q.Query(ctx, req)
+	for _, oq := range m {
+		go func(oq OriginQueryer) {
+			res, err := oq.Query(ctx, req)
+			res.Origins = []string{oq.Origin()}
 			tuplec <- tuple{res, err}
-		}(q)
+		}(oq)
 	}
 
 	res := NewQueryResponse(req, nil)

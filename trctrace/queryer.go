@@ -18,45 +18,25 @@ type Queryer interface {
 	Query(ctx context.Context, req *QueryRequest) (*QueryResponse, error)
 }
 
-var defaultBucketing = []time.Duration{
-	0 * time.Second,
-	1 * time.Millisecond,
-	5 * time.Millisecond,
-	10 * time.Millisecond,
-	25 * time.Millisecond,
-	50 * time.Millisecond,
-	100 * time.Millisecond,
-	1000 * time.Millisecond,
+type OriginQueryer interface {
+	Origin() string
+	Queryer
 }
 
-func ParseBucketing(strs []string) []time.Duration {
-	if len(strs) <= 0 {
-		return defaultBucketing
-	}
-
-	var ds []time.Duration
-	for _, s := range strs {
-		if d, err := time.ParseDuration(s); err == nil {
-			ds = append(ds, d)
-		}
-	}
-
-	sort.Slice(ds, func(i, j int) bool {
-		return ds[i] < ds[j]
-	})
-
-	if ds[0] != 0 {
-		ds = append([]time.Duration{0}, ds...)
-	}
-
-	return ds
+type BaseOriginQueryer struct {
+	origin string
+	Queryer
 }
 
-const (
-	queryLimitMin = 1
-	queryLimitDef = 10
-	queryLimitMax = 1000
-)
+func NewOriginQueryer(origin string, q Queryer) *BaseOriginQueryer {
+	return &BaseOriginQueryer{origin: origin, Queryer: q}
+}
+
+func (q *BaseOriginQueryer) Origin() string { return q.origin }
+
+//
+//
+//
 
 type QueryRequest struct {
 	IDs         []string        `json:"ids,omitempty"`
@@ -70,6 +50,34 @@ type QueryRequest struct {
 	Search      string          `json:"search"`
 	Regexp      *regexp.Regexp  `json:"-"`
 	Limit       int             `json:"limit,omitempty"`
+}
+
+func (req *QueryRequest) Sanitize() error {
+	if req.Bucketing == nil {
+		req.Bucketing = defaultBucketing
+	}
+
+	switch {
+	case req.Regexp != nil && req.Search == "":
+		req.Search = req.Regexp.String()
+	case req.Regexp == nil && req.Search != "":
+		re, err := regexp.Compile(req.Search)
+		if err != nil {
+			return fmt.Errorf("%q: %w", req.Search, err)
+		}
+		req.Regexp = re
+	}
+
+	switch {
+	case req.Limit <= 0:
+		req.Limit = queryLimitDef
+	case req.Limit < queryLimitMin:
+		req.Limit = queryLimitMin
+	case req.Limit > queryLimitMax:
+		req.Limit = queryLimitMax
+	}
+
+	return nil
 }
 
 func ParseQueryRequest(r *http.Request) (*QueryRequest, error) {
@@ -101,12 +109,12 @@ func ParseQueryRequest(r *http.Request) (*QueryRequest, error) {
 	return req, nil
 }
 
-func (req *QueryRequest) MakeHTTPRequest(ctx context.Context, url string) (*http.Request, error) {
+func (req *QueryRequest) MakeHTTPRequest(ctx context.Context, baseurl string) (*http.Request, error) {
 	if err := req.Sanitize(); err != nil {
 		return nil, fmt.Errorf("sanitize query request: %w", err)
 	}
 
-	r, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	r, err := http.NewRequestWithContext(ctx, "GET", baseurl, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create HTTP request: %w", err)
 	}
@@ -155,39 +163,11 @@ func (req *QueryRequest) MakeHTTPRequest(ctx context.Context, url string) (*http
 		urlquery.Set("q", req.Regexp.String())
 	}
 
-	urlquery["json"] = []string{}
+	urlquery.Set("json", "true")
 
 	r.URL.RawQuery = urlquery.Encode()
 
 	return r, nil
-}
-
-func (req *QueryRequest) Sanitize() error {
-	if req.Bucketing == nil {
-		req.Bucketing = defaultBucketing
-	}
-
-	switch {
-	case req.Regexp != nil && req.Search == "":
-		req.Search = req.Regexp.String()
-	case req.Regexp == nil && req.Search != "":
-		re, err := regexp.Compile(req.Search)
-		if err != nil {
-			return fmt.Errorf("%q: %w", req.Search, err)
-		}
-		req.Regexp = re
-	}
-
-	switch {
-	case req.Limit <= 0:
-		req.Limit = queryLimitDef
-	case req.Limit < queryLimitMin:
-		req.Limit = queryLimitMin
-	case req.Limit > queryLimitMax:
-		req.Limit = queryLimitMax
-	}
-
-	return nil
 }
 
 func (req *QueryRequest) String() string {
@@ -367,9 +347,52 @@ func (res *QueryResponse) Finalize() {
 //
 //
 
-// QueryStats is a summary view of a set of traces. It's returned as
-// part of a trace collector's query response, and in that case represents all
-// traces in the collector, with bucketing as specified in the query.
+var defaultBucketing = []time.Duration{
+	0 * time.Second,
+	1 * time.Millisecond,
+	5 * time.Millisecond,
+	10 * time.Millisecond,
+	25 * time.Millisecond,
+	50 * time.Millisecond,
+	100 * time.Millisecond,
+	1000 * time.Millisecond,
+}
+
+func ParseBucketing(bucketingStrings []string) []time.Duration {
+	if len(bucketingStrings) <= 0 {
+		return defaultBucketing
+	}
+
+	var ds []time.Duration
+	for _, s := range bucketingStrings {
+		if d, err := time.ParseDuration(s); err == nil {
+			ds = append(ds, d)
+		}
+	}
+
+	sort.Slice(ds, func(i, j int) bool {
+		return ds[i] < ds[j]
+	})
+
+	if ds[0] != 0 {
+		ds = append([]time.Duration{0}, ds...)
+	}
+
+	return ds
+}
+
+const (
+	queryLimitMin = 1
+	queryLimitDef = 10
+	queryLimitMax = 1000
+)
+
+//
+//
+//
+
+// QueryStats represents a summary view of all traces in the origin providing a
+// given query response.
 type QueryStats struct {
 	Request    *QueryRequest    `json:"request"` // TODO: find a way to remove
 	Categories []*CategoryStats `json:"categories"`
