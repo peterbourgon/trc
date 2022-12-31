@@ -2,7 +2,6 @@ package trctrace
 
 import (
 	"fmt"
-	"sort"
 	"time"
 )
 
@@ -17,29 +16,6 @@ const (
 	queryLimitDef = 10
 	queryLimitMax = 1000
 )
-
-func parseBucketing(bs []string) []time.Duration {
-	var ds []time.Duration
-	for _, s := range bs {
-		if d, err := time.ParseDuration(s); err == nil {
-			ds = append(ds, d)
-		}
-	}
-
-	sort.Slice(ds, func(i, j int) bool {
-		return ds[i] < ds[j]
-	})
-
-	if len(ds) <= 0 {
-		return DefaultBucketing
-	}
-
-	if ds[0] != 0 {
-		ds = append([]time.Duration{0}, ds...)
-	}
-
-	return ds
-}
 
 func olderOf(a, b time.Time) time.Time {
 	switch {

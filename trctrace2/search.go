@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trchttp"
 )
 
 type Searcher interface {
@@ -26,44 +25,6 @@ type SearchRequest struct {
 	Query       string          `json:"query"`
 	Regexp      *regexp.Regexp  `json:"-"`
 	Limit       int             `json:"limit,omitempty"`
-}
-
-type SearchResponse struct {
-	Request  *SearchRequest     `json:"request"`
-	Origins  []string           `json:"origins,omitempty"`
-	Stats    Stats              `json:"stats"`
-	Total    int                `json:"total"`
-	Matched  int                `json:"matched"`
-	Selected []*trc.StaticTrace `json:"selected"`
-	Problems []string           `json:"problems,omitempty"`
-	Duration time.Duration      `json:"duration"`
-}
-
-func ParseSearchRequest(r *http.Request) (*SearchRequest, error) {
-	var (
-		urlquery    = r.URL.Query()
-		limit       = trchttp.ParseDefault(urlquery.Get("n"), strconv.Atoi, 10)
-		minDuration = trchttp.ParseDefault(urlquery.Get("min"), trchttp.ParseDurationPointer, nil)
-		bucketing   = parseBucketing(urlquery["b"])
-		query       = urlquery.Get("q")
-	)
-
-	req := &SearchRequest{
-		IDs:         urlquery["id"],
-		Category:    urlquery.Get("category"),
-		IsActive:    urlquery.Has("active"),
-		Bucketing:   bucketing,
-		MinDuration: minDuration,
-		IsFailed:    urlquery.Has("failed"),
-		Query:       query,
-		Limit:       limit,
-	}
-
-	if err := req.Normalize(); err != nil {
-		return nil, err
-	}
-
-	return req, nil
 }
 
 func (req *SearchRequest) Normalize() error {
@@ -96,7 +57,7 @@ func (req *SearchRequest) Normalize() error {
 
 func (req *SearchRequest) MakeHTTPRequest(ctx context.Context, baseurl string) (*http.Request, error) {
 	if err := req.Normalize(); err != nil {
-		return nil, fmt.Errorf("sanitize query request: %w", err)
+		return nil, fmt.Errorf("normalize query request: %w", err)
 	}
 
 	r, err := http.NewRequestWithContext(ctx, "GET", baseurl, nil)
@@ -202,4 +163,15 @@ func (req *SearchRequest) Allow(tr trc.Trace) bool {
 	}
 
 	return true
+}
+
+type SearchResponse struct {
+	Request  *SearchRequest     `json:"request"`
+	Origins  []string           `json:"origins,omitempty"`
+	Stats    *Stats             `json:"stats"`
+	Total    int                `json:"total"`
+	Matched  int                `json:"matched"`
+	Selected []*trc.StaticTrace `json:"selected"`
+	Problems []string           `json:"problems,omitempty"`
+	Duration time.Duration      `json:"duration"`
 }

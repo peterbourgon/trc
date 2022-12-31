@@ -11,11 +11,38 @@ import (
 
 // Stats collects summary statistics for a group of traces. It's meant to model
 // the summary table at the top of the HTML user interface. Stats are typically
-// produced from a single collector via the stats builder, and can be merged
-// together in order to support distributed searching.
+// produced from a single collector, and can be merged together to support
+// distributed searching.
 type Stats struct {
 	Bucketing  []time.Duration `json:"bucketing"`
 	Categories []CategoryStats `json:"categories"`
+}
+
+func NewStatsFrom(bucketing []time.Duration, traces []trc.Trace) *Stats {
+	byCategory := map[string]*CategoryStats{}
+	for _, tr := range traces {
+		category := tr.Category()
+		cs, ok := byCategory[category]
+		if !ok {
+			cs = NewCategory(category, bucketing)
+			byCategory[category] = cs
+		}
+		cs.Observe(tr, bucketing)
+	}
+
+	categories := make([]CategoryStats, 0, len(byCategory))
+	for _, cs := range byCategory {
+		categories = append(categories, *cs)
+	}
+
+	sort.Slice(categories, func(i, j int) bool {
+		return strings.Compare(categories[i].Name, categories[j].Name) < 0
+	})
+
+	return &Stats{
+		Bucketing:  bucketing,
+		Categories: categories,
+	}
 }
 
 func (s *Stats) IsZero() bool {
