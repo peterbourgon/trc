@@ -28,75 +28,25 @@ func NewServer(origin string, local, global trctrace.Searcher) *Server {
 	}
 }
 
-func parseBucketing(bs []string) []time.Duration {
-	var ds []time.Duration
-	for _, s := range bs {
-		if d, err := time.ParseDuration(s); err == nil {
-			ds = append(ds, d)
-		}
-	}
-
-	sort.Slice(ds, func(i, j int) bool {
-		return ds[i] < ds[j]
-	})
-
-	if len(ds) <= 0 {
-		return trctrace.DefaultBucketing
-	}
-
-	if ds[0] != 0 {
-		ds = append([]time.Duration{0}, ds...)
-	}
-
-	return ds
-}
-
-func ParseSearchRequest(r *http.Request) (*trctrace.SearchRequest, error) {
-	var (
-		urlquery    = r.URL.Query()
-		limit       = trchttp.ParseDefault(urlquery.Get("n"), strconv.Atoi, 10)
-		minDuration = trchttp.ParseDefault(urlquery.Get("min"), trchttp.ParseDurationPointer, nil)
-		bucketing   = parseBucketing(urlquery["b"])
-		query       = urlquery.Get("q")
-	)
-
-	req := &trctrace.SearchRequest{
-		IDs:         urlquery["id"],
-		Category:    urlquery.Get("category"),
-		IsActive:    urlquery.Has("active"),
-		Bucketing:   bucketing,
-		MinDuration: minDuration,
-		IsFailed:    urlquery.Has("failed"),
-		Query:       query,
-		Limit:       limit,
-	}
-
-	if err := req.Normalize(); err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, tr, finish := trc.Region(r.Context(), "ServeHTTP")
 	defer finish()
 
 	var (
 		begin    = time.Now()
-		query    = r.URL.Query()
+		urlquery = r.URL.Query()
 		problems = []string{}
 	)
 
 	var target trctrace.Searcher
 	switch {
-	case query.Has("local"):
+	case urlquery.Has("local"):
 		target = s.local
 	default:
 		target = s.global
 	}
 
-	req, err := ParseSearchRequest(r)
+	req, err := parseSearchRequest(r)
 	if err != nil {
 		problems = append(problems, err.Error())
 		tr.Errorf("parse search request: %v", err)
@@ -144,4 +94,57 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("content-type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(res)
+}
+
+func parseSearchRequest(r *http.Request) (*trctrace.SearchRequest, error) {
+	var (
+		urlquery    = r.URL.Query()
+		limit       = trchttp.ParseDefault(urlquery.Get("n"), strconv.Atoi, 10)
+		minDuration = trchttp.ParseDefault(urlquery.Get("min"), trchttp.ParseDurationPointer, nil)
+		bucketing   = parseBucketing(urlquery["b"]) // can be nil, no problem
+		query       = urlquery.Get("q")
+	)
+
+	req := &trctrace.SearchRequest{
+		IDs:         urlquery["id"],
+		Category:    urlquery.Get("category"),
+		IsActive:    urlquery.Has("active"),
+		Bucketing:   bucketing,
+		MinDuration: minDuration,
+		IsFailed:    urlquery.Has("failed"),
+		Query:       query,
+		Limit:       limit,
+	}
+	if err := req.Normalize(); err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+func parseBucketing(bs []string) []time.Duration {
+	if len(bs) <= 0 {
+		return nil
+	}
+
+	var ds []time.Duration
+	for _, s := range bs {
+		if d, err := time.ParseDuration(s); err == nil {
+			ds = append(ds, d)
+		}
+	}
+
+	sort.Slice(ds, func(i, j int) bool {
+		return ds[i] < ds[j]
+	})
+
+	if len(ds) <= 0 {
+		return nil
+	}
+
+	if ds[0] != 0 {
+		ds = append([]time.Duration{0}, ds...)
+	}
+
+	return ds
 }

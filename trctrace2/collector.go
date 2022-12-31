@@ -37,7 +37,6 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 	_, tr, finish := trc.Region(ctx, "Collector Search")
 	defer finish()
 
-	begin := time.Now()
 	stopwatch := trc.NewStopwatch()
 	defer func() { tr.Tracef("%s", stopwatch) }()
 
@@ -98,7 +97,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 		}
 	}
 
-	duration := time.Since(begin)
+	duration := stopwatch.Overall()
 
 	return &SearchResponse{
 		Request:  req,

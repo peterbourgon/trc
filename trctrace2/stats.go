@@ -18,13 +18,13 @@ type Stats struct {
 	Categories []CategoryStats `json:"categories"`
 }
 
-func NewStatsFrom(bucketing []time.Duration, traces []trc.Trace) *Stats {
+func NewStatsFrom(bucketing []time.Duration, traces []trc.Trace) Stats {
 	byCategory := map[string]*CategoryStats{}
 	for _, tr := range traces {
 		category := tr.Category()
 		cs, ok := byCategory[category]
 		if !ok {
-			cs = NewCategory(category, bucketing)
+			cs = NewCategoryStats(category, bucketing)
 			byCategory[category] = cs
 		}
 		cs.Observe(tr, bucketing)
@@ -39,7 +39,7 @@ func NewStatsFrom(bucketing []time.Duration, traces []trc.Trace) *Stats {
 		return strings.Compare(categories[i].Name, categories[j].Name) < 0
 	})
 
-	return &Stats{
+	return Stats{
 		Bucketing:  bucketing,
 		Categories: categories,
 	}
@@ -49,58 +49,13 @@ func (s *Stats) IsZero() bool {
 	return len(s.Bucketing) == 0 && len(s.Categories) == 0
 }
 
-func CombineStats(a, b Stats) Stats {
-	switch {
-	case a.IsZero() && b.IsZero():
-		return a
-
-	case a.IsZero() && !b.IsZero():
-		return b
-
-	case !a.IsZero() && b.IsZero():
-		return a
-	}
-
-	// Merging two non-zero summary stats requires identical bucketing.
-	if dst, src := len(a.Bucketing), len(b.Bucketing); dst != src {
-		panic(badMerge("bucketing", dst, src)) // TODO: MergeSafe
-	}
-	for i := range a.Bucketing {
-		if dst, src := a.Bucketing[i], b.Bucketing[i]; dst != src {
-			panic(badMerge(fmt.Sprintf("bucketing %d/%d", i+1, len(a.Bucketing)), dst, src)) // TODO: error?
-		}
-	}
-
-	slice := append(a.Categories, b.Categories...) // duplicates are possible
-	index := map[string]CategoryStats{}            // duplicates not possible
-	for _, c := range slice {
-		target := index[c.Name] // can be zero
-		target.Merge(c)         // TODO: if/when it changes, error checking
-		index[c.Name] = target  // TODO: pointers?
-	}
-
-	categories := make([]CategoryStats, 0, len(index))
-	for _, c := range index {
-		a.Categories = append(a.Categories, c) // TODO: allocs
-	}
-
-	return Stats{
-		Bucketing:  a.Bucketing,
-		Categories: categories,
-	}
-}
-
 func (s *Stats) Overall() *CategoryStats {
-	overall := NewCategory("overall", s.Bucketing)
+	overall := NewCategoryStats("overall", s.Bucketing)
 	for _, c := range s.Categories {
 		overall.Merge(c)
 	}
 	return overall
 }
-
-//
-//
-//
 
 // CategoryStats are summary statistics for a group of traces in a single
 // category. It's meant to model a single row in the summary table at the top of
@@ -115,7 +70,7 @@ type CategoryStats struct {
 	Newest    time.Time `json:"newest"`
 }
 
-func NewCategory(name string, bucketing []time.Duration) *CategoryStats {
+func NewCategoryStats(name string, bucketing []time.Duration) *CategoryStats {
 	return &CategoryStats{
 		Name:      name,
 		NumBucket: make([]uint64, len(bucketing)),
@@ -150,12 +105,10 @@ func (cs *CategoryStats) Observe(tr trc.Trace, bucketing []time.Duration) {
 	case bucket:
 		duration := tr.Duration()
 		for i, bucket := range bucketing {
-			switch {
-			case bucket <= duration:
-				cs.NumBucket[i]++
-			case bucket > duration:
+			if bucket > duration {
 				break
 			}
+			cs.NumBucket[i]++
 		}
 
 	case failed:
@@ -163,7 +116,6 @@ func (cs *CategoryStats) Observe(tr trc.Trace, bucketing []time.Duration) {
 	}
 
 	cs.Oldest = olderOf(cs.Oldest, start)
-
 	cs.Newest = newerOf(cs.Newest, start)
 }
 
@@ -218,71 +170,43 @@ func (cs *CategoryStats) Rate() float64 {
 //
 //
 
-// StatsBuilder produces summary statistics for a group of traces incrementally.
-// It's meant to be used by a collector when executing a search request.
-type StatsBuilder struct {
-	bucketing  []time.Duration
-	byCategory map[string]*CategoryStats
-}
+func CombineStats(a, b Stats) Stats {
+	switch {
+	case a.IsZero() && b.IsZero():
+		return a
 
-func NewStatsBuilder(bucketing []time.Duration) *StatsBuilder {
-	return &StatsBuilder{
-		bucketing:  bucketing,
-		byCategory: map[string]*CategoryStats{},
-	}
-}
+	case a.IsZero() && !b.IsZero():
+		return b
 
-func (sb *StatsBuilder) Observe(tr trc.Trace) {
-	category := tr.Category()
-	cs, ok := sb.byCategory[category]
-	if !ok {
-		cs = NewCategory(category, sb.bucketing)
-		sb.byCategory[category] = cs
+	case !a.IsZero() && b.IsZero():
+		return a
 	}
-	cs.Observe(tr, sb.bucketing)
-}
 
-func (sb *StatsBuilder) Stats() *Stats {
-	categories := make([]CategoryStats, 0, len(sb.byCategory))
-	for _, cs := range sb.byCategory {
-		categories = append(categories, *cs)
+	// Merging two non-zero summary stats requires identical bucketing.
+	if dst, src := len(a.Bucketing), len(b.Bucketing); dst != src {
+		panic(badMerge("bucketing", dst, src)) // TODO: MergeSafe
 	}
-	sort.Slice(categories, func(i, j int) bool {
-		return strings.Compare(categories[i].Name, categories[j].Name) < 0
-	})
-	return &Stats{
-		Bucketing:  sb.bucketing,
+	for i := range a.Bucketing {
+		if dst, src := a.Bucketing[i], b.Bucketing[i]; dst != src {
+			panic(badMerge(fmt.Sprintf("bucketing %d/%d", i+1, len(a.Bucketing)), dst, src)) // TODO: error?
+		}
+	}
+
+	slice := append(a.Categories, b.Categories...) // duplicates are possible
+	index := map[string]CategoryStats{}            // duplicates not possible
+	for _, c := range slice {
+		target := index[c.Name] // can be zero
+		target.Merge(c)         // TODO: if/when it changes, error checking
+		index[c.Name] = target  // TODO: pointers?
+	}
+
+	categories := make([]CategoryStats, 0, len(index))
+	for _, c := range index {
+		a.Categories = append(a.Categories, c) // TODO: allocs
+	}
+
+	return Stats{
+		Bucketing:  a.Bucketing,
 		Categories: categories,
 	}
-}
-
-//
-//
-//
-
-var DefaultBucketing = []time.Duration{
-	0 * time.Millisecond,
-	1 * time.Millisecond,
-	5 * time.Millisecond,
-	10 * time.Millisecond,
-	25 * time.Millisecond,
-	50 * time.Millisecond,
-	100 * time.Millisecond,
-	1000 * time.Millisecond,
-}
-
-func normalizeBucketing(bucketing []time.Duration) []time.Duration {
-	sort.Slice(bucketing, func(i, j int) bool {
-		return bucketing[i] < bucketing[j]
-	})
-
-	for len(bucketing) > 0 && bucketing[0] < 0 {
-		bucketing = bucketing[1:]
-	}
-
-	if len(bucketing) <= 0 || bucketing[0] != 0 {
-		bucketing = append([]time.Duration{0}, bucketing...)
-	}
-
-	return bucketing
 }

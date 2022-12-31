@@ -33,7 +33,7 @@ func (c *Client) Search(ctx context.Context, req *trctrace.SearchRequest) (*trct
 	ctx, tr, finish := trc.Region(ctx, "<%s>", c.baseurl)
 	defer finish()
 
-	httpReq, err := req.MakeHTTPRequest(ctx, c.baseurl)
+	httpReq, err := req.HTTPRequest(ctx, c.baseurl)
 	if err != nil {
 		return nil, fmt.Errorf("make HTTP request: %w", err)
 	}
