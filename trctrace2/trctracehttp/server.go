@@ -15,17 +15,9 @@ import (
 )
 
 type Server struct {
-	origin string
-	local  trctrace.Searcher
-	global trctrace.Searcher
-}
-
-func NewServer(origin string, local, global trctrace.Searcher) *Server {
-	return &Server{
-		origin: origin,
-		local:  local,
-		global: global,
-	}
+	Origin string
+	Local  trctrace.Searcher
+	Global trctrace.Searcher
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -40,10 +32,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var target trctrace.Searcher
 	switch {
-	case urlquery.Has("local"):
-		target = s.local
+	case s.Global != nil && !urlquery.Has("local"):
+		target = s.Global
 	default:
-		target = s.global
+		target = s.Local
 	}
 
 	req, err := parseSearchRequest(r)
@@ -79,21 +71,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res.Duration = time.Since(begin)
-	res.Origins = append(res.Origins, s.origin)
+	res.Origins = append(res.Origins, s.Origin)
 	res.Problems = append(problems, res.Problems...)
 
 	tr.Tracef("search: total %d, matched %d, selected %d, duration %s", res.Total, res.Matched, len(res.Selected), res.Duration)
 
-	// trchttp.Render(ctx, w, r, assets, "traces.html", templateFuncs, &HTTPQueryData{
-	// PageTitle:        pageTitle,
-	// AvailableOrigins: origins,
-	// ResponseOrigin:   origin,
-	// Request:          req,
-	// Response:         res,
-	// })
-
-	w.Header().Set("content-type", "application/json; charset=utf-8")
-	json.NewEncoder(w).Encode(res)
+	Render(ctx, w, r, assets, "traces2.html", templateFuncs, res)
 }
 
 func parseSearchRequest(r *http.Request) (*trctrace.SearchRequest, error) {

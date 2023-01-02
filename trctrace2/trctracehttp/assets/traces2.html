@@ -1,0 +1,309 @@
+<html>
+
+<head>
+<title>TODO</title>
+<style>
+{{ template "style.css" . }}
+
+{{ $hc := highlightclasses .Request }}
+{{ if $hc -}}
+table#summary
+	th{{ range $hc -}}.{{.}}{{ end }},
+	td{{ range $hc -}}.{{.}}{{ end }},
+	tr{{ range $hc -}}.{{.}}{{ end }}
+{
+	font-weight: bold;
+	background-color: {{ if .Request.Query -}} rgba(255, 255, 0, 0.5); {{ else -}} rgba(0, 255, 255, 0.4); {{ end -}}
+}
+{{ else if not .Request.IDs -}}
+table#summary tr:last-child td {
+	font-weight: bold;
+}
+{{ end -}}
+</style>
+</head>
+
+<body>
+
+<!-- --------------------------------- -->
+
+{{ $n := .Request.Limit }}
+{{ $q := .Request.Query }}
+{{ $r := .Request }}
+
+<table id="summary">
+
+<tr class="header">
+	<th class="category text">
+		&nbsp;
+	</th>
+
+	<th class="active count">
+		{{ $href := $r.QueryParams "active" "true" }}
+		<a href="?{{$href}}">Active</a>
+	</th>
+
+	{{ range .Stats.Bucketing -}}
+	<th class="bucket count min-{{.String}}">
+		{{ $href := $r.QueryParams "min" .String }}
+		<a href="?{{$href}}">&geq;{{.String}}</a>
+	</th>
+	{{ end -}}
+
+	<th class="errored count">
+		{{ $href := $r.QueryParams "errored" "true" }}
+		<a href="?{{$href}}">Error</a>
+	</th>
+
+	<th class="total count">
+		Total
+	</th>
+
+	<th class="separator">
+		&nbsp;
+	</th>
+
+	<th class="oldest" title="Oldest trace">
+		Oldest
+	</th>
+
+	<th class="newest" title="Newest trace">
+		Newest
+	</th>
+
+	<th class="rate numeric">
+		Rate
+	</th>
+</tr>
+
+{{ range .Stats.Categories -}}
+<tr class="category">
+	{{ $category_name       := .Name                              -}}
+	{{ $category_class_name := category2class .Name               -}}
+	{{ $num_active          := .NumActive                         -}}
+	{{ $num_failed          := .NumFailed                         -}}
+	{{ $num_total           := .NumTotal                          -}}
+	{{ $pct_active          := 0                                  -}}
+	{{ $pct_errored         := 0                                  -}}
+
+	<td class="category text {{$category_class_name}}">
+		{{ $href := $r.QueryParams "category" $category_name }}
+		<a href="?{{$href}}">{{$category_name}}</a>
+	</td>
+
+	<td class="active count progress active {{$category_class_name}}" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
+		<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
+		{{ $href := $r.QueryParams "category" $category_name "active" "true" }}
+		<a href="?{{$href}}">{{$num_active}}</a>
+	</td>
+
+	{{ range .NumBucket -}}
+	<td class="bucket count progress finished succeeded min-{{.}} {{$category_class_name}}" title="{{.}} of {{$num_total}}, {{0}}%">
+		<div class="progress-bar" style="width:{{0}}%;"></div>
+		{{ $href := $r.QueryParams "category" $category_name "min" (print .) }}
+		<a href="?{{$href}}">{{.}}</a>
+	</td>
+	{{ end -}}
+
+	<td class="errored count progress finished errored {{$category_class_name}}" title="{{$num_failed}} of {{$num_total}}, {{$pct_errored}}%">
+		<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
+		{{ $href := $r.QueryParams "category" $category_name "errored" "true" }}
+		<a href="?{{$href}}">{{$num_failed}}</a>
+	</td>
+
+	<td class="total count {{$category_class_name}}" title="{{$num_total}} total traces">
+		{{$num_total}}
+	</td>
+
+	<td class="separator {{$category_class_name}}">
+		&nbsp;
+	</td>
+
+	<td class="oldest {{$category_class_name}}" title="{{.Oldest}}">
+		{{humanizeduration (timesince .Oldest)}}
+	</td>
+
+	<td class="newest {{$category_class_name}}" title="{{.Newest}}">
+		{{humanizeduration (timesince .Newest)}}
+	</td>
+
+	<td class="rate numeric {{$category_class_name}}">
+		{{ humanizefloat .Rate }}/s
+	</td>
+</tr>
+{{ end -}}
+
+{{ with .Stats.Overall -}}
+<tr class="category category-overall">
+	{{ $category_name := .Name                              -}}
+	{{ $num_active    := .NumActive                         -}}
+	{{ $num_failed   := .NumFailed                        -}}
+	{{ $num_total     := .NumTotal                          -}}
+	{{ $pct_active    := 0 -}}
+	{{ $pct_errored   := 0 -}} <!-- intpercent $num_failed $num_total -}} -->
+
+	<td class="category text">
+		{{ $href := $r.QueryParams "" "" }}
+		<a href="?{{$href}}">(overall)</a>
+	</td>
+
+	<td class="active count progress" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
+		<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
+		{{$num_active}}
+	</td>
+
+	{{ range .NumBucket -}}
+	{{ $num_succeeded := .                        -}}
+	{{ $pct_succeeded := 0 -}} <!-- intpercent $num_succeeded $num_total -}} -->
+	<td class="bucket count progress min-{{.}}" title="{{$num_succeeded}} of {{$num_total}}, {{$pct_succeeded}}%">
+		<div class="progress-bar" style="width:{{$pct_succeeded}}%;"></div>
+		{{$num_succeeded}}
+	</td>
+	{{ end -}}
+
+	<td class="errored count progress" title="{{$num_failed}} of {{$num_total}}, {{$pct_errored}}%">
+		<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
+		{{$num_failed}}
+	</td>
+
+	<td class="total count" title="{{$num_total}} total traces">
+		{{$num_total}}
+	</td>
+
+	<td class="separator">
+		&nbsp;
+	</td>
+
+	<td class="oldest" title="{{ if not .Oldest.IsZero -}}{{.Oldest}}{{ end -}}">
+		{{ if not .Oldest.IsZero -}} {{humanizeduration (timesince .Oldest)}} {{ end -}}
+	</td>
+
+	<td class="newest" title="{{ if not .Newest.IsZero -}}{{.Newest}}{{ end -}}">
+		{{ if not .Newest.IsZero -}} {{humanizeduration (timesince .Newest)}} {{ end -}}
+	</td>
+
+	<td class="rate numeric">
+		{{ humanizefloat .Rate }}/s
+	</td>
+</tr>
+{{ end -}}
+
+</table>
+<!-- --------------------------------- -->
+
+
+<div id="traces">
+{{ if not .Selected -}}
+<p>No matching traces found.</p>
+{{ end -}}
+
+{{ range .Selected -}}
+<div id="{{.ID}}" class="trace">
+
+	<div class="metadata">
+		<strong class="searchable"><a href="?origin={{.Origin}}&id={{.ID}}">{{ .ID }}</a></strong>
+		&middot; <a href="?origin={{.Origin}}&id={{.ID}}&json">JSON</a>
+		{{ if .Origin -}} &middot; <span class="origin">{{.Origin}}</span> {{ end -}}
+		<span class="right">
+			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">
+				<a href="#" onclick="showstacks({{.ID}});"><strong>[≡]</strong></a>
+			</span>
+		</span>
+	</div>
+
+	<div class="events">
+		<div class="event start">
+			<div class="timestamp">
+				{{timetrunc .Start}}
+			</div>
+
+			<div class="delta">
+				<div class="progress-bar" style="width:1%;"></div>
+				+0
+			</div>
+
+			<div class="what meta">
+				start (<span class="time-since" title="{{.Start}}"></span> ago)
+			</div>
+		</div>
+
+		{{ $start      := .Start    -}}
+		{{ $duration   := .Duration -}}
+		{{ $prev_ts    := .Start    -}}
+		{{ $zero_depth := 0         -}}
+		{{ if .Events }} {{ $zero_depth = len (index .Events 0).Stack }} {{ end -}}
+
+		{{ range .Events -}}
+		<div class="event">
+			{{ $delta   := timediff .When $prev_ts      -}}
+			{{ $overall := timediff .When $start        -}}
+			{{ $percent := durationpercent $delta $duration -}}
+
+			<div class="timestamp">
+				{{timetrunc .When}}
+			</div>
+
+			<div class="delta" title="+{{$delta}} = {{$overall}}">
+				<div class="progress-bar" style="width:{{$percent}}%;"></div>
+				+{{ humanizeduration $delta }}
+				{{ $prev_ts = .When -}}
+			</div>
+
+			<div class="what searchable">
+				{{ .What.String | htmlescape | insertbreaks }}
+				<!-- {{ .What.String }} -->
+			</div>
+
+			<div class="stack">
+				<details class="stack-details">
+					<summary>[≡]</summary>
+					<table>
+						{{ range $i, $c := .Stack -}}
+						<tr>
+							<td class="searchable" style="text-align: right;">{{$c.FileLine}}</td>
+							<td class="searchable">{{$c.Function}}</td>
+						</tr>
+						{{ else -}}
+						<tr>
+							<td colspan=2>(stack elided)</td>
+						</tr>
+						{{ end -}}
+					</table>
+				</details>
+			</div>
+		</div>
+		{{ end -}}
+
+		<div class="event end">
+			{{ $delta   := timediff (timeadd .Start .Duration) $prev_ts -}}
+			{{ $percent := durationpercent $delta $duration                 -}}
+
+			<div class="timestamp" title="{{timeadd .Start .Duration}}">
+				{{timetrunc (timeadd .Start .Duration)}}
+			</div>
+
+			<div class="delta" title="+{{ $delta }} = {{.Duration}}">
+				{{ if .Finished }}<div class="progress-bar" style="width:{{$percent}}%;"></div>{{ end -}}
+				+{{ humanizeduration $delta }}
+			</div>
+
+			<div class="what meta">
+				{{ if .Finished }} end {{ else }} active... {{ end -}}
+			</div>
+		</div>
+
+		<div class="event summary">
+			<div class="timestamp"></div>
+			<div class="duration" title="{{ .Duration }}">&nbsp;{{ if .Finished }}<strong>{{ humanizeduration .Duration }}</strong>{{ else }}<em>{{ humanizeduration .Duration }}</em>{{ end -}}</div>
+			<div class="what"></div>
+		</div>
+	</div>
+
+</div>
+{{ end -}}
+</div>
+
+
+
+</body>
+</html>

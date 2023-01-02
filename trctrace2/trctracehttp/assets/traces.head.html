@@ -1,0 +1,22 @@
+<head>
+<title>xxx</title><!-- .PageTitle -->
+<style>
+{{ template "style.css" . }}
+
+{{ $hc := highlightclasses .Request }}
+{{ if $hc -}}
+table#summary
+	th{{ range $hc -}}.{{.}}{{ end }},
+	td{{ range $hc -}}.{{.}}{{ end }},
+	tr{{ range $hc -}}.{{.}}{{ end }}
+{
+	font-weight: bold;
+	background-color: {{ if .Request.Search -}} rgba(255, 255, 0, 0.5); {{ else -}} rgba(0, 255, 255, 0.4); {{ end -}}
+}
+{{ else if not .Request.IDs -}}
+table#summary tr:last-child td {
+	font-weight: bold;
+}
+{{ end -}}
+</style>
+</head>

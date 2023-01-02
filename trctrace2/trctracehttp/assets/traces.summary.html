@@ -1,0 +1,150 @@
+{{ $n := .Request.Limit }}
+{{ $q_param := .Request.Query }}
+{{ $total_rate := 0.0 }}
+{{ $queryparams := "" }} <!-- TODO -->
+<table id="summary">
+
+<tr class="header">
+	<th class="category text">
+		&nbsp;
+	</th>
+	<th class="active count">
+		<a href="?active&{{$queryparams}}">Active</a>
+	</th>
+	{{ range .Stats.Bucketing -}}
+	<th class="bucket count min-{{.String}}">
+		<a href="?min={{.String}}&{{$queryparams}}">&geq;{{.String}}</a>
+	</th>
+	{{ end -}}
+	<th class="errored count">
+		<a href="?errored&{{$queryparams}}">Error</a>
+	</th>
+	<th class="total count">
+		Total
+	</th>
+	<th class="separator">
+		&nbsp;
+	</th>
+	<th class="oldest" title="Oldest trace">
+		Oldest
+	</th>
+	<th class="newest" title="Newest trace">
+		Newest
+	</th>
+	<th class="rate numeric">
+		Rate
+	</th>
+</tr>
+
+{{ range .Stats.Categories -}}
+<tr class="category">
+	{{ $category_name       := .Name                              -}}
+	{{ $category_class_name := category2class .Name               -}}
+	{{ $num_active          := .NumActive                         -}}
+	{{ $num_failed          := .NumFailed                         -}}
+	{{ $num_total           := .NumTotal                          -}}
+	{{ $pct_active          := 0                                  -}} <!-- intpercent $num_active $num_total -->
+	{{ $pct_errored         := 0                                  -}} <!-- intpercent $num_failed $num_total -->
+
+	<td class="category text {{$category_class_name}}">
+		<a href="?category={{$category_name}}&{{$queryparams}}">{{$category_name}}</a>
+	</td>
+
+	<td class="active count progress active {{$category_class_name}}" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
+		<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
+		<a href="?category={{$category_name}}&active&{{$queryparams}}">{{$num_active}}</a>
+	</td>
+
+	{{ range .NumBucket -}}
+	{{ $num_succeeded := 0 -}} <!-- .NumSucceeded                        -->
+	{{ $pct_succeeded := 0 -}} <!-- intpercent $num_succeeded $num_total -->
+	<td class="bucket count progress finished succeeded min-{{.}} {{$category_class_name}}" title="{{$num_succeeded}} of {{$num_total}}, {{$pct_succeeded}}%">
+		<div class="progress-bar" style="width:{{$pct_succeeded}}%;"></div>
+		<a href="?category={{$category_name}}&min={{.}}&{{$queryparams}}">{{$num_succeeded}}</a>
+	</td>
+	{{ end -}}
+
+	<td class="errored count progress finished errored {{$category_class_name}}" title="{{$num_failed}} of {{$num_total}}, {{$pct_errored}}%">
+		<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
+		<a href="?category={{$category_name}}&errored&{{$queryparams}}">{{$num_failed}}</a>
+	</td>
+
+	<td class="total count {{$category_class_name}}" title="{{$num_total}} total traces">
+		{{$num_total}}
+	</td>
+
+	<td class="separator {{$category_class_name}}">
+		&nbsp;
+	</td>
+
+	<td class="oldest {{$category_class_name}}" title="{{.Oldest}}">
+		{{humanizeduration (timesince .Oldest)}}
+	</td>
+
+	<td class="newest {{$category_class_name}}" title="{{.Newest}}">
+		{{humanizeduration (timesince .Newest)}}
+	</td>
+
+	<td class="rate numeric {{$category_class_name}}">
+		{{ $rate       := 0.0 }} <!-- ratecalc $num_total (timediff .Newest .Oldest) }} -->
+		{{ $total_rate  = 0 }} <!-- floatadd $total_rate $rate }} -->
+		{{ humanizefloat $rate }}/s
+	</td>
+</tr>
+{{ end -}}
+
+{{ with .Stats.Overall -}}
+<tr class="category category-overall">
+	{{ $category_name := .Name                              -}}
+	{{ $num_active    := .NumActive                         -}}
+	{{ $num_failed   := .NumFailed                        -}}
+	{{ $num_total     := .NumTotal                          -}}
+	{{ $pct_active    := 0 -}} <!-- intpercent $num_active $num_total  -}} -->
+	{{ $pct_errored   := 0 -}} <!-- intpercent $num_failed $num_total -}} -->
+
+	<td class="category text">
+		<a href="?{{$queryparams}}">(overall)</a>
+	</td>
+
+	<td class="active count progress" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
+		<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
+		{{$num_active}}
+	</td>
+
+	{{ range .NumBucket -}}
+	{{ $num_succeeded := 0 -}} <!-- .NumSucceeded                        -}} -->
+	{{ $pct_succeeded := 0 -}} <!-- intpercent $num_succeeded $num_total -}} -->
+	<td class="bucket count progress min-{{.}}" title="{{$num_succeeded}} of {{$num_total}}, {{$pct_succeeded}}%">
+		<div class="progress-bar" style="width:{{$pct_succeeded}}%;"></div>
+		{{$num_succeeded}}
+	</td>
+	{{ end -}}
+
+	<td class="errored count progress" title="{{$num_failed}} of {{$num_total}}, {{$pct_errored}}%">
+		<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
+		{{$num_failed}}
+	</td>
+
+	<td class="total count" title="{{$num_total}} total traces">
+		{{$num_total}}
+	</td>
+
+	<td class="separator">
+		&nbsp;
+	</td>
+
+	<td class="oldest" title="{{ if not .Oldest.IsZero -}}{{.Oldest}}{{ end -}}">
+		{{ if not .Oldest.IsZero -}} {{humanizeduration (timesince .Oldest)}} {{ end -}}
+	</td>
+
+	<td class="newest" title="{{ if not .Newest.IsZero -}}{{.Newest}}{{ end -}}">
+		{{ if not .Newest.IsZero -}} {{humanizeduration (timesince .Newest)}} {{ end -}}
+	</td>
+
+	<td class="rate numeric">
+		{{ humanizefloat 0 }}/s <!-- $total_rate }}/s -->
+	</td>
+</tr>
+{{ end -}}
+
+</table>

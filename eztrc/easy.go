@@ -4,14 +4,14 @@ import (
 	"context"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trctrace"
+	trctrace "github.com/peterbourgon/trc/trctrace2"
 )
 
 var collector = trctrace.NewCollector(1000) // TODO
 
 func Collector() *trctrace.Collector { return collector }
 
-var QueryHandler = trctrace.NewHTTPQueryHandler(collector)
+//var QueryHandler = trctrace.NewHTTPQueryHandler(collector)
 
 func New(ctx context.Context, category string) (context.Context, trc.Trace) {
 	return collector.NewTrace(ctx, category)

@@ -3,7 +3,10 @@ package trctrace
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"net/http"
+	"net/url"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -170,6 +173,54 @@ func (req *SearchRequest) Allow(tr trc.Trace) bool {
 	return true
 }
 
+func (req *SearchRequest) QueryParams(keyvals ...string) template.URL {
+	values := url.Values{}
+
+	if len(req.IDs) > 0 {
+		values["id"] = req.IDs
+	}
+
+	if req.Category != "" {
+		values.Set("category", req.Category)
+	}
+
+	if req.IsActive {
+		values.Set("active", "true")
+	}
+
+	if len(req.Bucketing) > 0 {
+		if !reflect.DeepEqual(req.Bucketing, DefaultBucketing) {
+			for _, b := range req.Bucketing {
+				values.Add("b", b.String())
+			}
+		}
+	}
+
+	if req.MinDuration != nil {
+		values.Set("min", req.MinDuration.String())
+	}
+
+	if req.IsFailed {
+		values.Set("failed", "true")
+	}
+
+	if req.Regexp != nil {
+		values.Set("q", req.Regexp.String())
+	}
+
+	if req.Limit > 0 {
+		values.Set("n", strconv.Itoa(req.Limit))
+	}
+
+	for i := 0; i < len(keyvals); i += 2 {
+		key := keyvals[i]
+		val := keyvals[i+1]
+		values.Set(key, val)
+	}
+
+	return template.URL(values.Encode())
+}
+
 //
 //
 //
@@ -192,10 +243,11 @@ type SearchResponse struct {
 type MultiSearcher []Searcher
 
 func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
-	// Mark the start time.
+	ctx, tr, finish := trc.Region(ctx, "MultiSearcher (%d)", len(ms))
+	defer finish()
+
 	begin := time.Now()
 
-	// We'll scatter/gather over our searchers.
 	type tuple struct {
 		res *SearchResponse
 		err error
@@ -210,34 +262,45 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 		}(s)
 	}
 
+	tr.Tracef("scattered requests")
+
 	// Gather.
 	aggregate := &SearchResponse{Request: req}
 	for i := 0; i < cap(tuplec); i++ {
 		t := <-tuplec
 		switch {
-		case t.res != nil: // success
+		case t.res == nil && t.err == nil: // weird
+			tr.Tracef("weird: no result, no error")
+			aggregate.Problems = append(aggregate.Problems, "got nil search response with nil error -- weird")
+		case t.res == nil && t.err != nil: // error case
+			tr.Tracef("error: %v", t.err)
+			aggregate.Problems = append(aggregate.Problems, t.err.Error())
+		case t.res != nil && t.err == nil: // success case
+			tr.Tracef("success: origins=%v total=%v matched=%v selected=%v", t.res.Origins, t.res.Total, t.res.Matched, len(t.res.Selected))
 			aggregate.Origins = append(aggregate.Origins, t.res.Origins...)
 			aggregate.Stats = CombineStats(aggregate.Stats, t.res.Stats)
 			aggregate.Total += t.res.Total
 			aggregate.Matched += t.res.Matched
 			aggregate.Selected = append(aggregate.Selected, t.res.Selected...) // needs sort+limit
 			aggregate.Problems = append(aggregate.Problems, t.res.Problems...)
-			if t.err != nil { // weird!!
-				aggregate.Problems = append(aggregate.Problems, fmt.Sprintf("got valid search response (origin %v) with error (%v) -- weird", t.res.Origins, t.err))
-			}
-
-		case t.res == nil: // error
-			if t.err == nil { // weird!!
-				t.err = fmt.Errorf("got invalid search response (zero value) with no error -- weird")
-			}
-			aggregate.Problems = append(aggregate.Problems, t.err.Error())
+		case t.res != nil && t.err != nil: // weird
+			tr.Tracef("weird: origins=%v total=%v matched=%v selected=%v error=%v", t.res.Origins, t.res.Total, t.res.Matched, len(t.res.Selected), t.err)
+			aggregate.Origins = append(aggregate.Origins, t.res.Origins...)
+			aggregate.Stats = CombineStats(aggregate.Stats, t.res.Stats)
+			aggregate.Total += t.res.Total
+			aggregate.Matched += t.res.Matched
+			aggregate.Selected = append(aggregate.Selected, t.res.Selected...) // needs sort+limit
+			aggregate.Problems = append(aggregate.Problems, t.res.Problems...)
+			aggregate.Problems = append(aggregate.Problems, fmt.Sprintf("got valid search response (origins %v) with error (%v) -- weird", t.res.Origins, t.err))
 		}
 	}
 
-	// At this point, the aggregate search response has collected as much data
-	// as it's gonna get. That data is correct *except* for the selected traces.
-	// They need to be sorted and limited, same as the search method on the
-	// collector does.
+	tr.Tracef("gathered responses")
+
+	// At this point, the aggregate response has all of the raw data it's ever
+	// gonna get. We need to do a little bit of post-processing. First, we need
+	// to sort all of the selected traces by start time, and then limit them by
+	// the requested limit.
 	sort.Slice(aggregate.Selected, func(i, j int) bool {
 		return aggregate.Selected[i].Start().Before(aggregate.Selected[j].Start())
 	})
@@ -245,9 +308,9 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 		aggregate.Selected = aggregate.Selected[:req.Limit]
 	}
 
-	// Mark the overall duration.
+	// Duration is also defined across all individual requests.
 	aggregate.Duration = time.Since(begin)
 
-	// Done.
+	// That should be it.
 	return aggregate, nil
 }
