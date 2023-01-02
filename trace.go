@@ -181,7 +181,7 @@ func (tr *CoreTrace) Errorf(format string, args ...interface{}) {
 	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, MakeEvent(format, args...))
+		tr.events = append(tr.events, MakeErrorEvent(format, args...))
 	}
 }
 
@@ -200,7 +200,7 @@ func (tr *CoreTrace) LazyErrorf(format string, args ...interface{}) {
 	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, MakeLazyEvent(format, args...))
+		tr.events = append(tr.events, MakeLazyErrorEvent(format, args...))
 	}
 }
 

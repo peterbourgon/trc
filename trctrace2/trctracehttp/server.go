@@ -3,6 +3,7 @@ package trctracehttp
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -101,6 +102,8 @@ func parseSearchRequest(r *http.Request) (*trctrace.SearchRequest, error) {
 	if err := req.Normalize(); err != nil {
 		return nil, err
 	}
+
+	log.Printf("### urlquery['id']=%q, req.IDs=%v", urlquery["id"], req.IDs)
 
 	return req, nil
 }

@@ -27,12 +27,15 @@ var templateFuncs = template.FuncMap{
 	"timediff":           func(a, b time.Time) time.Duration { return a.Sub(b) },
 	"timeadd":            func(t time.Time, d time.Duration) time.Time { return t.Add(d) },
 	"timetrunc":          func(t time.Time) string { return t.Format(timeFormat) },
+	"timerfc3339":        func(t time.Time) string { return t.Format(time.RFC3339) },
 	"durationpercent":    func(n, d time.Duration) int { return int(100 * float64(n) / float64(d)) },
+	"uint64percent":      func(n, d uint64) int { return int(100 * float64(n) / float64(d)) },
 	"intpercent":         func(n, d int) int { return int(100 * float64(n) / float64(d)) },
 	"queryescape":        func(s string) string { return url.QueryEscape(s) },
 	"pathescape":         func(s string) string { return url.PathEscape(s) },
 	"htmlescape":         func(s string) string { return template.HTMLEscapeString(s) },
 	"insertbreaks":       func(s string) template.HTML { return template.HTML(breaksReplacer.Replace(s)) },
+	"safeurl":            func(s string) template.URL { return template.URL(s) },
 	"stringsjoinnewline": func(a []string) string { return strings.Join(a, string([]byte{0xa})) },
 	"truncateduration":   truncateduration,
 	"humanizeduration":   humanizeduration,
@@ -67,7 +70,7 @@ func highlightclasses(req *trctrace.SearchRequest) []string {
 		classes = append(classes, "min-"+req.MinDuration.String())
 	}
 	if req.IsFailed {
-		classes = append(classes, "errored")
+		classes = append(classes, "failed")
 	}
 	return classes
 }

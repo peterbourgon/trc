@@ -11,10 +11,14 @@ table#summary
 	th{{ range $hc -}}.{{.}}{{ end }},
 	td{{ range $hc -}}.{{.}}{{ end }},
 	tr{{ range $hc -}}.{{.}}{{ end }}
-{
-	font-weight: bold;
-	background-color: {{ if .Request.Query -}} rgba(255, 255, 0, 0.5); {{ else -}} rgba(0, 255, 255, 0.4); {{ end -}}
-}
+	{
+		font-weight: bold;
+		{{ if .Request.Regexp -}}
+		background-color: rgba(255, 255, 0, 0.4);
+		{{ else -}}
+		background-color: rgba(0, 255, 255, 0.4);
+		{{ end -}}
+	}
 {{ else if not .Request.IDs -}}
 table#summary tr:last-child td {
 	font-weight: bold;
@@ -22,6 +26,67 @@ table#summary tr:last-child td {
 {{ end -}}
 </style>
 </head>
+
+<!-- --------------------------------- -->
+
+<script>
+function showstacks(id) {
+	let targetElem = document.getElementById(id);
+	let stacksLinkElem = document.getElementById(id+"-stacks");
+	let doExpand = stacksLinkElem.title == "Show stacks";
+	let stackDetails = targetElem.getElementsByClassName("stack-details");
+	for (let i = 0; i < stackDetails.length; i++) {
+		stackDetails[i].open = doExpand;
+	}
+	stacksLinkElem.title = doExpand ? "Hide stacks" : "Show stacks";
+}
+
+function timesince(s) {
+	var ts  = Date.parse(s);
+	var now = new Date();
+	var ms  = now - ts;
+
+	var days    = Math.floor(ms / (86400 * 1000)); if (days    > 0) { ms -= (days    * (86400 * 1000)) };
+	var hours   = Math.floor(ms / (3600  * 1000)); if (hours   > 0) { ms -= (hours   * (3600  * 1000)) };
+	var minutes = Math.floor(ms / (60    * 1000)); if (minutes > 0) { ms -= (minutes * (60    * 1000)) };
+	var seconds = Math.floor(ms / (1     * 1000)); if (seconds > 0) { ms -= (seconds * (1     * 1000)) };
+
+	switch (true) {
+		case    days > 0: return days+"d"    + hours+"h"   ;
+		case   hours > 0: return hours+"h"   + minutes+"m" ;
+		case minutes > 0: return minutes+"m" + seconds+"s" ;
+		case seconds > 0: return seconds+"s"               ;
+		case      ms > 0: return ms+"ms"                   ;
+		default:          return "fresh";
+	}
+}
+
+function calcdates() {
+	let timeSinces = document.getElementsByClassName("time-since");
+	for (let i = 0; i < timeSinces.length; i++) {
+		timeSinces[i].textContent = timesince(timeSinces[i].title);
+	}
+}
+
+setInterval(calcdates, 1000);
+
+function highlightquery() {
+	{{ if .Request.Regexp -}}
+	let re = new RegExp('('+{{.Request.Regexp.String}}+')');
+	document.getElementById("traces").querySelectorAll(".searchable").forEach(elem => {
+		if (re.test(elem.textContent)) {
+			elem.classList.add("highlight");
+			let details = elem.closest("details");
+			if (details != null) {
+				details.open = true;
+			}
+		}
+	});
+	{{ end -}}
+}
+</script>
+
+<!-- --------------------------------- -->
 
 <body>
 
@@ -31,6 +96,9 @@ table#summary tr:last-child td {
 {{ $q := .Request.Query }}
 {{ $r := .Request }}
 
+{{ $query_params := printf "&n=%d" $r.Limit | safeurl -}}
+{{ if $r.Regexp -}}{{ $query_params = printf "&q=%s%s" $r.Regexp.String $query_params | safeurl -}}{{ end -}}
+
 <table id="summary">
 
 <tr class="header">
@@ -39,20 +107,17 @@ table#summary tr:last-child td {
 	</th>
 
 	<th class="active count">
-		{{ $href := $r.QueryParams "active" "true" }}
-		<a href="?{{$href}}">Active</a>
+		<a href="?active{{$query_params}}">Active</a>
 	</th>
 
 	{{ range .Stats.Bucketing -}}
 	<th class="bucket count min-{{.String}}">
-		{{ $href := $r.QueryParams "min" .String }}
-		<a href="?{{$href}}">&geq;{{.String}}</a>
+		<a href="?min={{.String}}{{$query_params}}">&geq;{{.String}}</a>
 	</th>
 	{{ end -}}
 
-	<th class="errored count">
-		{{ $href := $r.QueryParams "errored" "true" }}
-		<a href="?{{$href}}">Error</a>
+	<th class="failed count">
+		<a href="?failed{{$query_params}}">Failed</a>
 	</th>
 
 	<th class="total count">
@@ -76,7 +141,7 @@ table#summary tr:last-child td {
 	</th>
 </tr>
 
-{{ range .Stats.Categories -}}
+{{ range .Stats.Everything -}}
 <tr class="category">
 	{{ $category_name       := .Name                              -}}
 	{{ $category_class_name := category2class .Name               -}}
@@ -87,28 +152,30 @@ table#summary tr:last-child td {
 	{{ $pct_errored         := 0                                  -}}
 
 	<td class="category text {{$category_class_name}}">
-		{{ $href := $r.QueryParams "category" $category_name }}
-		<a href="?{{$href}}">{{$category_name}}</a>
+		{{ if eq $category_name "overall" -}}
+		<a href="?{{$query_params}}">{{$category_name}}</a>
+		{{ else -}}
+		<a href="?category={{$category_name}}{{$query_params}}">{{$category_name}}</a>
+		{{ end -}}
 	</td>
 
 	<td class="active count progress active {{$category_class_name}}" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
 		<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
-		{{ $href := $r.QueryParams "category" $category_name "active" "true" }}
-		<a href="?{{$href}}">{{$num_active}}</a>
+		<a href="?category={{$category_name}}&active{{$query_params}}">{{$num_active}}</a>
 	</td>
 
-	{{ range .NumBucket -}}
-	<td class="bucket count progress finished succeeded min-{{.}} {{$category_class_name}}" title="{{.}} of {{$num_total}}, {{0}}%">
-		<div class="progress-bar" style="width:{{0}}%;"></div>
-		{{ $href := $r.QueryParams "category" $category_name "min" (print .) }}
-		<a href="?{{$href}}">{{.}}</a>
+	{{ range $i, $n := .NumBucket -}}
+	{{ $min := index $r.Bucketing $i -}}
+	{{ $pct := uint64percent $n $num_total -}}
+	<td class="bucket count progress min-{{$min}} {{$category_class_name}}" title="{{$n}} of {{$num_total}}, {{$pct}}%">
+		<div class="progress-bar" style="width:{{$pct}}%;"></div>
+		<a href="?category={{$category_name}}&min={{$min.String}}{{$query_params}}">{{$n}}</a>
 	</td>
 	{{ end -}}
 
-	<td class="errored count progress finished errored {{$category_class_name}}" title="{{$num_failed}} of {{$num_total}}, {{$pct_errored}}%">
+	<td class="failed count progress {{$category_class_name}}" title="{{$num_failed}} of {{$num_total}}, {{$pct_errored}}%">
 		<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
-		{{ $href := $r.QueryParams "category" $category_name "errored" "true" }}
-		<a href="?{{$href}}">{{$num_failed}}</a>
+		<a href="?category={{$category_name}}&failed{{$query_params}}">{{$num_failed}}</a>
 	</td>
 
 	<td class="total count {{$category_class_name}}" title="{{$num_total}} total traces">
@@ -132,65 +199,57 @@ table#summary tr:last-child td {
 	</td>
 </tr>
 {{ end -}}
-
-{{ with .Stats.Overall -}}
-<tr class="category category-overall">
-	{{ $category_name := .Name                              -}}
-	{{ $num_active    := .NumActive                         -}}
-	{{ $num_failed   := .NumFailed                        -}}
-	{{ $num_total     := .NumTotal                          -}}
-	{{ $pct_active    := 0 -}}
-	{{ $pct_errored   := 0 -}} <!-- intpercent $num_failed $num_total -}} -->
-
-	<td class="category text">
-		{{ $href := $r.QueryParams "" "" }}
-		<a href="?{{$href}}">(overall)</a>
-	</td>
-
-	<td class="active count progress" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
-		<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
-		{{$num_active}}
-	</td>
-
-	{{ range .NumBucket -}}
-	{{ $num_succeeded := .                        -}}
-	{{ $pct_succeeded := 0 -}} <!-- intpercent $num_succeeded $num_total -}} -->
-	<td class="bucket count progress min-{{.}}" title="{{$num_succeeded}} of {{$num_total}}, {{$pct_succeeded}}%">
-		<div class="progress-bar" style="width:{{$pct_succeeded}}%;"></div>
-		{{$num_succeeded}}
-	</td>
-	{{ end -}}
-
-	<td class="errored count progress" title="{{$num_failed}} of {{$num_total}}, {{$pct_errored}}%">
-		<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
-		{{$num_failed}}
-	</td>
-
-	<td class="total count" title="{{$num_total}} total traces">
-		{{$num_total}}
-	</td>
-
-	<td class="separator">
-		&nbsp;
-	</td>
-
-	<td class="oldest" title="{{ if not .Oldest.IsZero -}}{{.Oldest}}{{ end -}}">
-		{{ if not .Oldest.IsZero -}} {{humanizeduration (timesince .Oldest)}} {{ end -}}
-	</td>
-
-	<td class="newest" title="{{ if not .Newest.IsZero -}}{{.Newest}}{{ end -}}">
-		{{ if not .Newest.IsZero -}} {{humanizeduration (timesince .Newest)}} {{ end -}}
-	</td>
-
-	<td class="rate numeric">
-		{{ humanizefloat .Rate }}/s
-	</td>
-</tr>
-{{ end -}}
-
 </table>
+
 <!-- --------------------------------- -->
 
+<div id="topline">
+
+	<div id="topline-form">
+		<form id="search-form" method="GET" target="">
+			<input id="search-box" type="text" name="q" placeholder="regex" {{if .Request.Query}}value="{{.Request.Query}}"{{end}} size="32" autofocus />
+			{{ if .Request.Category    -}}<input type="hidden" name="category"  value="{{.Request.Category}}"    />{{ end -}}
+			{{ if .Request.IsActive    -}}<input type="hidden" name="active"    value="{{.Request.IsActive}}"    />{{ end -}}
+			{{ if .Request.MinDuration -}}<input type="hidden" name="min"       value="{{.Request.MinDuration}}" />{{ end -}}
+			{{ if .Request.IsFailed    -}}<input type="hidden" name="failed"    value="{{.Request.IsFailed}}"    />{{ end -}}
+			<select id="search-limit" name="n">
+				<option name="10"   {{ if eq .Request.Limit 10   -}}selected{{ end -}}>10  </option>
+				<option name="100"  {{ if eq .Request.Limit 100  -}}selected{{ end -}}>100 </option>
+				<option name="1000" {{ if eq .Request.Limit 1000 -}}selected{{ end -}}>1000</option>
+				{{ if not ( or ( or (eq .Request.Limit 10) (eq .Request.Limit 100) ) (eq .Request.Limit 1000) ) -}}
+				<option name="{{.Request.Limit}}" selected>{{.Request.Limit}}</option>
+				{{ end -}}
+			</select>
+			<input id="search-button" type="submit" value="search"/>
+		</form>
+	</div>
+
+	<script>
+		let formElem = document.getElementById("search-form");
+		let inputElems = formElem.querySelectorAll("input,select");
+
+		formElem.onsubmit = function() {
+			for (let i = 0; i < inputElems.length; i++) {
+				inputElems[i].disabled = (inputElems[i].value == "");
+			}
+			return true; // ensure form submits
+		};
+
+		for (let i = 0; i < inputElems.length; i++) {
+			inputElems[i].disabled = false; // un-disable for e.g. "back"
+		}
+	</script>
+
+	<div id="topline-metadata">
+		<div id="topline-search-total"  class="topline-search">total={{ .Stats.Overall.NumTotal }}</div>
+		<div id="topline-search-matched" class="topline-search">matched={{ .Matched }}</div>
+		<div id="topline-search-shown"   class="topline-search">shown={{ len .Selected }}</div>
+		<div id="topline-search-took"    class="topline-search">took={{ humanizeduration .Duration }}</div>
+	</div>
+
+</div>
+
+<!-- --------------------------------- -->
 
 <div id="traces">
 {{ if not .Selected -}}
@@ -201,9 +260,8 @@ table#summary tr:last-child td {
 <div id="{{.ID}}" class="trace">
 
 	<div class="metadata">
-		<strong class="searchable"><a href="?origin={{.Origin}}&id={{.ID}}">{{ .ID }}</a></strong>
-		&middot; <a href="?origin={{.Origin}}&id={{.ID}}&json">JSON</a>
-		{{ if .Origin -}} &middot; <span class="origin">{{.Origin}}</span> {{ end -}}
+		<strong class="searchable"><a href="?id={{.ID}}">{{ .ID }}</a></strong>
+		&middot; <a href="?id={{.ID}}&json">JSON</a>
 		<span class="right">
 			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">
 				<a href="#" onclick="showstacks({{.ID}});"><strong>[≡]</strong></a>
@@ -223,7 +281,7 @@ table#summary tr:last-child td {
 			</div>
 
 			<div class="what meta">
-				start (<span class="time-since" title="{{.Start}}"></span> ago)
+				start (<span class="time-since" title="{{.Start | timerfc3339 }}"></span> ago)
 			</div>
 		</div>
 
@@ -249,9 +307,8 @@ table#summary tr:last-child td {
 				{{ $prev_ts = .When -}}
 			</div>
 
-			<div class="what searchable">
-				{{ .What.String | htmlescape | insertbreaks }}
-				<!-- {{ .What.String }} -->
+			<div class="what {{if .IsError}}error{{end}}">
+				<span class="searchable">{{ .What.String | htmlescape | insertbreaks }}</span>
 			</div>
 
 			<div class="stack">
@@ -260,8 +317,8 @@ table#summary tr:last-child td {
 					<table>
 						{{ range $i, $c := .Stack -}}
 						<tr>
-							<td class="searchable" style="text-align: right;">{{$c.FileLine}}</td>
-							<td class="searchable">{{$c.Function}}</td>
+							<td style="text-align: right;"><span class="searchable">{{$c.FileLine}}</span></td>
+							<td><span class="searchable">{{$c.Function}}</span></td>
 						</tr>
 						{{ else -}}
 						<tr>
@@ -303,7 +360,15 @@ table#summary tr:last-child td {
 {{ end -}}
 </div>
 
-
+<!-- -------------------- -->
+<script>
+	calcdates();
+	highlightquery();
+	let input = document.getElementById("search-box");
+	input.focus();
+	input.select();
+</script>
+<!-- -------------------- -->
 
 </body>
 </html>

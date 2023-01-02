@@ -22,10 +22,11 @@ import (
 // field must be safe for concurrent use, including any values it may capture by
 // reference.
 type Event struct {
-	Seq   uint64       // should be unique for each event
-	When  time.Time    // ideally UTC
-	What  fmt.Stringer // must be safe for concurrent use
-	Stack CallStack    // optional but recommented
+	Seq     uint64       // should be unique for each event
+	When    time.Time    // ideally UTC
+	What    fmt.Stringer // must be safe for concurrent use
+	Stack   CallStack    // optional but recommented
+	IsError bool         //
 }
 
 type CallStack []Call
@@ -41,10 +42,11 @@ var eventSeq uint64
 // Arguments are evaluated immediately.
 func MakeEvent(format string, args ...interface{}) Event {
 	return Event{
-		Seq:   atomic.AddUint64(&eventSeq, 1),
-		When:  time.Now().UTC(),
-		What:  stringer(fmt.Sprintf(format, args...)),
-		Stack: getStack(),
+		Seq:     atomic.AddUint64(&eventSeq, 1),
+		When:    time.Now().UTC(),
+		What:    stringer(fmt.Sprintf(format, args...)),
+		Stack:   getStack(),
+		IsError: false,
 	}
 }
 
@@ -54,10 +56,33 @@ func MakeEvent(format string, args ...interface{}) Event {
 // be safe for concurrent access.
 func MakeLazyEvent(format string, args ...interface{}) Event {
 	return Event{
-		Seq:   atomic.AddUint64(&eventSeq, 1),
-		When:  time.Now().UTC(),
-		What:  &lazyStringer{fmt: format, args: args},
-		Stack: getStack(),
+		Seq:     atomic.AddUint64(&eventSeq, 1),
+		When:    time.Now().UTC(),
+		What:    &lazyStringer{fmt: format, args: args},
+		Stack:   getStack(),
+		IsError: false,
+	}
+}
+
+// MakeErrorEvent is equivalent to MakeEvent, and sets IsError.
+func MakeErrorEvent(format string, args ...interface{}) Event {
+	return Event{
+		Seq:     atomic.AddUint64(&eventSeq, 1),
+		When:    time.Now().UTC(),
+		What:    stringer(fmt.Sprintf(format, args...)),
+		Stack:   getStack(),
+		IsError: true,
+	}
+}
+
+// MakeLazyErrorEvent is equivalent to MakeLazyEvent, and sets IsError.
+func MakeLazyErrorEvent(format string, args ...interface{}) Event {
+	return Event{
+		Seq:     atomic.AddUint64(&eventSeq, 1),
+		When:    time.Now().UTC(),
+		What:    &lazyStringer{fmt: format, args: args},
+		Stack:   getStack(),
+		IsError: true,
 	}
 }
 

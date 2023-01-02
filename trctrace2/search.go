@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"net/url"
-	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -121,6 +121,7 @@ func (req *SearchRequest) Allow(tr trc.Trace) bool {
 		var found bool
 		for _, id := range req.IDs {
 			if id == tr.ID() {
+				log.Printf("### req.ID=%q tr.ID=%q -- match", id, tr.ID())
 				found = true
 				break
 			}
@@ -176,33 +177,35 @@ func (req *SearchRequest) Allow(tr trc.Trace) bool {
 func (req *SearchRequest) QueryParams(keyvals ...string) template.URL {
 	values := url.Values{}
 
-	if len(req.IDs) > 0 {
-		values["id"] = req.IDs
-	}
+	/*
+		if len(req.IDs) > 0 {
+			values["id"] = req.IDs
+		}
 
-	if req.Category != "" {
-		values.Set("category", req.Category)
-	}
+		if req.Category != "" {
+			values.Set("category", req.Category)
+		}
 
-	if req.IsActive {
-		values.Set("active", "true")
-	}
+		if req.IsActive {
+			values.Set("active", "true")
+		}
 
-	if len(req.Bucketing) > 0 {
-		if !reflect.DeepEqual(req.Bucketing, DefaultBucketing) {
-			for _, b := range req.Bucketing {
-				values.Add("b", b.String())
+		if len(req.Bucketing) > 0 {
+			if !reflect.DeepEqual(req.Bucketing, DefaultBucketing) {
+				for _, b := range req.Bucketing {
+					values.Add("b", b.String())
+				}
 			}
 		}
-	}
 
-	if req.MinDuration != nil {
-		values.Set("min", req.MinDuration.String())
-	}
+		if req.MinDuration != nil {
+			values.Set("min", req.MinDuration.String())
+		}
 
-	if req.IsFailed {
-		values.Set("failed", "true")
-	}
+		if req.IsFailed {
+			values.Set("failed", "true")
+		}
+	*/
 
 	if req.Regexp != nil {
 		values.Set("q", req.Regexp.String())
@@ -215,6 +218,9 @@ func (req *SearchRequest) QueryParams(keyvals ...string) template.URL {
 	for i := 0; i < len(keyvals); i += 2 {
 		key := keyvals[i]
 		val := keyvals[i+1]
+		if key == "category" && val == "overall" {
+			continue
+		}
 		values.Set(key, val)
 	}
 

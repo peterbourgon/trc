@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/peterbourgon/trc/trchttp"
 	trctrace "github.com/peterbourgon/trc/trctrace2"
@@ -45,18 +46,18 @@ func main() {
 		trcHandlers[i] = &trctracehttp.Server{Origin: origins[i], Local: collectors[i]}
 	}
 
-	testServers := make([]*httptest.Server, len(origins))
-	for i := range testServers {
+	servers := make([]*http.Server, len(origins))
+	for i := range servers {
 		mux := http.NewServeMux()
 		mux.Handle("/api", http.StripPrefix("/api", apiHandlers[i]))
 		mux.Handle("/trc", http.StripPrefix("/trc", trcHandlers[i]))
-		testServers[i] = httptest.NewServer(mux)
-		defer testServers[i].Close()
-		log.Printf("%[2]s/api %[2]s/trc", origins[i], testServers[i].URL)
+		addr := fmt.Sprintf(":%d", 8080+i)
+		servers[i] = &http.Server{Addr: addr, Handler: mux}
+		go servers[i].ListenAndServe()
+		log.Printf("http://localhost:%[1]d/api http://localhost:%[1]d/trc", 8080+i)
 	}
 
 	select {}
-
 }
 
 func load(ctx context.Context, dst http.Handler) {
@@ -85,5 +86,6 @@ func load(ctx context.Context, dst http.Handler) {
 			rec := httptest.NewRecorder()
 			dst.ServeHTTP(rec, req)
 		}
+		time.Sleep(time.Millisecond)
 	}
 }

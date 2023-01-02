@@ -51,10 +51,17 @@ func (s *Stats) IsZero() bool {
 
 func (s *Stats) Overall() *CategoryStats {
 	overall := NewCategoryStats("overall", s.Bucketing)
+	rateSum := float64(0.0)
 	for _, c := range s.Categories {
 		overall.Merge(c)
+		rateSum += c.Rate
 	}
+	overall.Rate = rateSum
 	return overall
+}
+
+func (s *Stats) Everything() []CategoryStats {
+	return append(s.Categories, *s.Overall())
 }
 
 // CategoryStats are summary statistics for a group of traces in a single
@@ -68,6 +75,7 @@ type CategoryStats struct {
 	NumFailed uint64    `json:"num_failed"` // not active and errored
 	Oldest    time.Time `json:"oldest"`
 	Newest    time.Time `json:"newest"`
+	Rate      float64   `json:"rate"`
 }
 
 func NewCategoryStats(name string, bucketing []time.Duration) *CategoryStats {
@@ -85,7 +93,8 @@ func (c *CategoryStats) IsZero() bool {
 		zeroNumFailed  = c.NumFailed == 0
 		zeroOldest     = c.Oldest.IsZero()
 		zeroNewest     = c.Newest.IsZero()
-		zeroEverything = zeroName && zeroNumActive && zeroNumBucket && zeroNumFailed && zeroOldest && zeroNewest
+		zeroRate       = c.Rate == 0
+		zeroEverything = zeroName && zeroNumActive && zeroNumBucket && zeroNumFailed && zeroOldest && zeroNewest && zeroRate
 	)
 	return zeroEverything
 }
@@ -117,6 +126,7 @@ func (cs *CategoryStats) Observe(tr trc.Trace, bucketing []time.Duration) {
 
 	cs.Oldest = olderOf(cs.Oldest, start)
 	cs.Newest = newerOf(cs.Newest, start)
+	cs.Rate = calcRate(cs.NumTotal(), cs.Newest.Sub(cs.Oldest))
 }
 
 func (cs *CategoryStats) Merge(other CategoryStats) {
@@ -144,26 +154,25 @@ func (cs *CategoryStats) Merge(other CategoryStats) {
 	cs.NumFailed += other.NumFailed
 
 	cs.Oldest = olderOf(cs.Oldest, other.Oldest)
-
 	cs.Newest = newerOf(cs.Newest, other.Newest)
+	cs.Rate = calcRate(cs.NumTotal(), cs.Newest.Sub(cs.Oldest))
 }
 
 func (cs *CategoryStats) NumTotal() uint64 {
 	var total uint64
 	total += cs.NumActive
-	for _, n := range cs.NumBucket {
-		total += n
+	if len(cs.NumBucket) > 0 {
+		total += cs.NumBucket[0] // always 0s
 	}
 	total += cs.NumFailed
 	return total
 }
 
-func (cs *CategoryStats) Rate() float64 {
-	span := cs.Newest.Sub(cs.Oldest).Seconds()
-	if span <= 0 {
+func calcRate(n uint64, d time.Duration) float64 {
+	if d <= 0 {
 		return 0
 	}
-	return float64(cs.NumTotal()) / span
+	return float64(n) / d.Seconds()
 }
 
 //

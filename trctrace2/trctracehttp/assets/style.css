@@ -81,7 +81,7 @@ table#summary td.progress div.progress-bar {
 }
 
 /* error cells show percent from the the right side */
-table#summary td.errored div.progress-bar {
+table#summary td.failed div.progress-bar {
 	right: 0;
 	background-color: rgba(224, 0, 0, 0.10);
 }
@@ -195,6 +195,10 @@ div#traces .trace .events div.event div.what {
 	padding-left: 2em;
 	text-indent: -2em;
 	overflow: scroll;
+}
+
+div#traces .trace .events div.event div.what.error {
+	color: rgb(224, 0, 0);
 }
 
 div#traces .trace .events div.event div.what.meta {
