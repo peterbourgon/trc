@@ -20,7 +20,7 @@ table#summary
 		{{ end -}}
 	}
 {{ else if not .Request.IDs -}}
-table#summary tr:last-child {
+table#summary tr:last-child td:first-child {
 	font-weight: bold;
 }
 {{ end -}}
@@ -298,6 +298,7 @@ function highlightquery() {
 		<div id="topline-search-matched" class="topline-search">matched={{ .Matched }}</div>
 		<div id="topline-search-shown"   class="topline-search">shown={{ len .Selected }}</div>
 		<div id="topline-search-took"    class="topline-search">took={{ humanizeduration .Duration }}</div>
+		{{ if .Problems -}}<div id="topline-search-problems" class="topline-search">problems={{ len .Problems -}}</div>{{ end -}}
 	</div>
 
 </div>

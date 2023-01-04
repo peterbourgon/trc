@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trchttp"
 	trctrace "github.com/peterbourgon/trc/trctrace2"
 )
 
@@ -98,8 +97,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func parseSearchRequest(r *http.Request) (*trctrace.SearchRequest, error) {
 	var (
 		urlquery    = r.URL.Query()
-		limit       = trchttp.ParseDefault(urlquery.Get("n"), strconv.Atoi, 10)
-		minDuration = trchttp.ParseDefault(urlquery.Get("min"), trchttp.ParseDurationPointer, nil)
+		limit       = parseDefault(urlquery.Get("n"), strconv.Atoi, 10)
+		minDuration = parseDefault(urlquery.Get("min"), parseDurationPointer, nil)
 		bucketing   = parseBucketing(urlquery["b"]) // can be nil, no problem
 		query       = urlquery.Get("q")
 	)
@@ -146,4 +145,19 @@ func parseBucketing(bs []string) []time.Duration {
 	}
 
 	return ds
+}
+
+func parseDefault[T any](s string, parse func(string) (T, error), def T) T {
+	if v, err := parse(s); err == nil {
+		return v
+	}
+	return def
+}
+
+func parseDurationPointer(s string) (*time.Duration, error) {
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return nil, err
+	}
+	return &d, nil
 }

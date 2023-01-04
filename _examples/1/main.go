@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/peterbourgon/trc/trchttp"
 	trctrace "github.com/peterbourgon/trc/trctrace2"
 	"github.com/peterbourgon/trc/trctrace2/trctracehttp"
 )
@@ -32,7 +31,7 @@ func main() {
 	apiHandlers := make([]http.Handler, len(ports))
 	for i := range apiHandlers {
 		apiHandlers[i] = kvs[i]
-		apiHandlers[i] = trchttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return r.Method })(apiHandlers[i])
+		apiHandlers[i] = trctracehttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return r.Method })(apiHandlers[i])
 	}
 
 	apiWorkers := sync.WaitGroup{}
@@ -52,6 +51,8 @@ func main() {
 	for i := range trcClients {
 		trcClients[i] = trctracehttp.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/trc", ports[i]))
 	}
+
+	//trcClients = append(trcClients, trctracehttp.NewClient(http.DefaultClient, "http://localhost:9999/trc"))
 
 	global := make(trctrace.MultiSearcher, len(trcClients))
 	for i := range trcClients {

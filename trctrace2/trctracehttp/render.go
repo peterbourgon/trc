@@ -19,12 +19,16 @@ import (
 func Render(ctx context.Context, w http.ResponseWriter, r *http.Request, fs fs.FS, templateName string, funcs template.FuncMap, data any) {
 	var (
 		asksForJSON = r.URL.Query().Has("json")
+		acceptsJSON = requestExplicitlyAccepts(r, "application/json")
 		acceptsHTML = requestExplicitlyAccepts(r, "text/html")
-		useHTML     = !asksForJSON && acceptsHTML
+		useHTML     = acceptsHTML && !asksForJSON
+		useJSON     = acceptsJSON || asksForJSON
 	)
 	switch {
 	case useHTML:
 		renderHTML(ctx, w, fs, templateName, funcs, data)
+	case useJSON:
+		renderJSON(ctx, w, data)
 	default:
 		renderJSON(ctx, w, data)
 	}

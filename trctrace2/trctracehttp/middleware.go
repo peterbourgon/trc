@@ -1,4 +1,4 @@
-package trchttp
+package trctracehttp
 
 import (
 	"context"

@@ -108,8 +108,8 @@ func (req *SearchRequest) HTTPRequest(ctx context.Context, baseurl string) (*htt
 		urlquery.Set("q", req.Regexp.String())
 	}
 
-	urlquery.Set("json", "true")
 	urlquery.Set("local", "true")
+	urlquery.Set("json", "true")
 
 	r.URL.RawQuery = urlquery.Encode()
 
