@@ -16,11 +16,11 @@ table#summary
 		{{ if .Request.Regexp -}}
 		background-color: rgba(255, 255, 0, 0.4);
 		{{ else -}}
-		background-color: rgba(0, 255, 255, 0.4);
+		background-color: rgba(173, 216, 230, 0.4);
 		{{ end -}}
 	}
 {{ else if not .Request.IDs -}}
-table#summary tr:last-child td {
+table#summary tr:last-child {
 	font-weight: bold;
 }
 {{ end -}}
@@ -141,22 +141,18 @@ function highlightquery() {
 	</th>
 </tr>
 
-{{ range .Stats.Everything -}}
+{{ range .Stats.Categories -}}
 <tr class="category">
 	{{ $category_name       := .Name                              -}}
 	{{ $category_class_name := category2class .Name               -}}
 	{{ $num_active          := .NumActive                         -}}
 	{{ $num_failed          := .NumFailed                         -}}
 	{{ $num_total           := .NumTotal                          -}}
-	{{ $pct_active          := 0                                  -}}
-	{{ $pct_errored         := 0                                  -}}
+	{{ $pct_active          := uint64percent $num_active $num_total -}}
+	{{ $pct_failed          := uint64percent $num_failed $num_total -}}
 
 	<td class="category text {{$category_class_name}}">
-		{{ if eq $category_name "overall" -}}
-		<a href="?{{$query_params}}">{{$category_name}}</a>
-		{{ else -}}
 		<a href="?category={{$category_name}}{{$query_params}}">{{$category_name}}</a>
-		{{ end -}}
 	</td>
 
 	<td class="active count progress active {{$category_class_name}}" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
@@ -173,8 +169,8 @@ function highlightquery() {
 	</td>
 	{{ end -}}
 
-	<td class="failed count progress {{$category_class_name}}" title="{{$num_failed}} of {{$num_total}}, {{$pct_errored}}%">
-		<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
+	<td class="failed count progress {{$category_class_name}}" title="{{$num_failed}} of {{$num_total}}, {{$pct_failed}}%">
+		<div class="progress-bar" style="width:{{$pct_failed}}%;"></div>
 		<a href="?category={{$category_name}}&failed{{$query_params}}">{{$num_failed}}</a>
 	</td>
 
@@ -199,6 +195,62 @@ function highlightquery() {
 	</td>
 </tr>
 {{ end -}}
+
+{{ with .Stats.Overall -}}
+<tr class="category">
+	{{ $category_name       := .Name                              -}}
+	{{ $category_class_name := category2class .Name               -}}
+	{{ $num_active          := .NumActive                         -}}
+	{{ $num_failed          := .NumFailed                         -}}
+	{{ $num_total           := .NumTotal                          -}}
+	{{ $pct_active          := uint64percent $num_active $num_total -}}
+	{{ $pct_failed          := uint64percent $num_failed $num_total -}}
+
+	<td class="category text {{$category_class_name}}">
+		<a href="?{{$query_params}}">{{$category_name}}</a>
+	</td>
+
+	<td class="active count progress active {{$category_class_name}}" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
+		<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
+		{{$num_active}}
+	</td>
+
+	{{ range $i, $n := .NumBucket -}}
+	{{ $min := index $r.Bucketing $i -}}
+	{{ $pct := uint64percent $n $num_total -}}
+	<td class="bucket count progress min-{{$min}} {{$category_class_name}}" title="{{$n}} of {{$num_total}}, {{$pct}}%">
+		<div class="progress-bar" style="width:{{$pct}}%;"></div>
+		{{$n}}
+	</td>
+	{{ end -}}
+
+	<td class="failed count progress {{$category_class_name}}" title="{{$num_failed}} of {{$num_total}}, {{$pct_failed}}%">
+		<div class="progress-bar" style="width:{{$pct_failed}}%;"></div>
+		{{$num_failed}}
+	</td>
+
+	<td class="total count {{$category_class_name}}" title="{{$num_total}} total traces">
+		{{$num_total}}
+	</td>
+
+	<td class="separator {{$category_class_name}}">
+		&nbsp;
+	</td>
+
+	<td class="oldest {{$category_class_name}}" title="{{.Oldest}}">
+		{{humanizeduration (timesince .Oldest)}}
+	</td>
+
+	<td class="newest {{$category_class_name}}" title="{{.Newest}}">
+		{{humanizeduration (timesince .Newest)}}
+	</td>
+
+	<td class="rate numeric {{$category_class_name}}">
+		{{ humanizefloat .Rate }}/s
+	</td>
+</tr>
+{{ end -}}
+
 </table>
 
 <!-- --------------------------------- -->
@@ -207,16 +259,16 @@ function highlightquery() {
 
 	<div id="topline-form">
 		<form id="search-form" method="GET" target="">
-			<input id="search-box" type="text" name="q" placeholder="regex" {{if .Request.Query}}value="{{.Request.Query}}"{{end}} size="32" autofocus />
+			<input id="search-box" type="text" name="q" placeholder="regex" {{if .Request.Regexp}}value="{{.Request.Regexp.String}}"{{end}} size="32" autofocus />
 			{{ if .Request.Category    -}}<input type="hidden" name="category"  value="{{.Request.Category}}"    />{{ end -}}
 			{{ if .Request.IsActive    -}}<input type="hidden" name="active"    value="{{.Request.IsActive}}"    />{{ end -}}
 			{{ if .Request.MinDuration -}}<input type="hidden" name="min"       value="{{.Request.MinDuration}}" />{{ end -}}
 			{{ if .Request.IsFailed    -}}<input type="hidden" name="failed"    value="{{.Request.IsFailed}}"    />{{ end -}}
 			<select id="search-limit" name="n">
 				<option name="10"   {{ if eq .Request.Limit 10   -}}selected{{ end -}}>10  </option>
+				<option name="25"   {{ if eq .Request.Limit 25   -}}selected{{ end -}}>25  </option>
 				<option name="100"  {{ if eq .Request.Limit 100  -}}selected{{ end -}}>100 </option>
-				<option name="1000" {{ if eq .Request.Limit 1000 -}}selected{{ end -}}>1000</option>
-				{{ if not ( or ( or (eq .Request.Limit 10) (eq .Request.Limit 100) ) (eq .Request.Limit 1000) ) -}}
+				{{ if not ( or ( or (eq .Request.Limit 10) (eq .Request.Limit 25) ) (eq .Request.Limit 100) ) -}}
 				<option name="{{.Request.Limit}}" selected>{{.Request.Limit}}</option>
 				{{ end -}}
 			</select>
@@ -241,7 +293,8 @@ function highlightquery() {
 	</script>
 
 	<div id="topline-metadata">
-		<div id="topline-search-total"  class="topline-search">total={{ .Stats.Overall.NumTotal }}</div>
+		<div id="topline-search-origins" class="topline-search" title="{{range .Origins}} {{.}} {{end}}">origins={{ len .Origins }}</div>
+		<div id="topline-search-total"   class="topline-search">total={{ .Stats.Overall.NumTotal }}</div>
 		<div id="topline-search-matched" class="topline-search">matched={{ .Matched }}</div>
 		<div id="topline-search-shown"   class="topline-search">shown={{ len .Selected }}</div>
 		<div id="topline-search-took"    class="topline-search">took={{ humanizeduration .Duration }}</div>
@@ -261,7 +314,9 @@ function highlightquery() {
 
 	<div class="metadata">
 		<strong class="searchable"><a href="?id={{.ID}}">{{ .ID }}</a></strong>
-		&middot; <a href="?id={{.ID}}&json">JSON</a>
+		&middot;
+		<a href="?id={{.ID}}&json">JSON</a>
+		{{ if .Origin -}} &middot; {{.Origin}} {{ end -}}
 		<span class="right">
 			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">
 				<a href="#" onclick="showstacks({{.ID}});"><strong>[≡]</strong></a>
@@ -359,6 +414,15 @@ function highlightquery() {
 </div>
 {{ end -}}
 </div>
+
+<!-- ------------------ -->
+<div id="problems">
+	{{ range .Problems -}}
+	<div class="problem">{{.}}</div>
+	{{ end -}}
+</div>
+<!-- ------------------ -->
+
 
 <!-- -------------------- -->
 <script>

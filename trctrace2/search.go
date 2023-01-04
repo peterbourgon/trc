@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -110,6 +109,7 @@ func (req *SearchRequest) HTTPRequest(ctx context.Context, baseurl string) (*htt
 	}
 
 	urlquery.Set("json", "true")
+	urlquery.Set("local", "true")
 
 	r.URL.RawQuery = urlquery.Encode()
 
@@ -121,7 +121,6 @@ func (req *SearchRequest) Allow(tr trc.Trace) bool {
 		var found bool
 		for _, id := range req.IDs {
 			if id == tr.ID() {
-				log.Printf("### req.ID=%q tr.ID=%q -- match", id, tr.ID())
 				found = true
 				break
 			}
@@ -140,7 +139,7 @@ func (req *SearchRequest) Allow(tr trc.Trace) bool {
 	}
 
 	if req.MinDuration != nil {
-		if tr.Active() { // we assert that a min duration excludes active traces
+		if tr.Active() || tr.Errored() { // we assert that a min duration excludes active and failed traces
 			return false
 		}
 		if tr.Duration() < *req.MinDuration {

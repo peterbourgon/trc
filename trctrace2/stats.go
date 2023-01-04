@@ -211,8 +211,12 @@ func CombineStats(a, b Stats) Stats {
 
 	categories := make([]CategoryStats, 0, len(index))
 	for _, c := range index {
-		a.Categories = append(a.Categories, c) // TODO: allocs
+		categories = append(categories, c) // TODO: allocs
 	}
+
+	sort.Slice(categories, func(i, j int) bool {
+		return categories[i].Name < categories[j].Name
+	})
 
 	return Stats{
 		Bucketing:  a.Bucketing,

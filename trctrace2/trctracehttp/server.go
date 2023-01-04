@@ -3,7 +3,6 @@ package trctracehttp
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -31,14 +30,16 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		problems = []string{}
 	)
 
+	var (
+		isGlobal = s.Global != nil && !urlquery.Has("local")
+		isLocal  = !isGlobal
+	)
 	var target trctrace.Searcher
 	switch {
-	case s.Global != nil && urlquery.Has("global"):
+	case isGlobal:
 		target = s.Global
-		log.Printf("### target Global")
-	default:
+	case isLocal:
 		target = s.Local
-		log.Printf("### target local")
 	}
 
 	req, err := parseSearchRequest(r)
@@ -74,8 +75,20 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res.Duration = time.Since(begin)
-	res.Origins = append(res.Origins, s.Origin)
+
 	res.Problems = append(problems, res.Problems...)
+
+	for _, tr := range res.Selected {
+		if tr.Origin == "" {
+			tr.Origin = s.Origin
+		}
+	}
+
+	if len(res.Origins) <= 0 {
+		res.Origins = append(res.Origins, s.Origin)
+	}
+
+	sort.Strings(res.Origins)
 
 	tr.Tracef("search: total %d, matched %d, selected %d, duration %s", res.Total, res.Matched, len(res.Selected), res.Duration)
 
