@@ -145,10 +145,6 @@ func getDelay(word string, base time.Duration) time.Duration {
 	return time.Duration(len(word)) * base
 }
 
-func getMethodPath(r *http.Request) string {
-	return r.Method + " " + r.URL.Path
-}
-
 //
 //
 //

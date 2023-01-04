@@ -33,10 +33,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var target trctrace.Searcher
 	switch {
-	case s.Global != nil && !urlquery.Has("local"):
+	case s.Global != nil && urlquery.Has("global"):
 		target = s.Global
+		log.Printf("### target Global")
 	default:
 		target = s.Local
+		log.Printf("### target local")
 	}
 
 	req, err := parseSearchRequest(r)
@@ -102,8 +104,6 @@ func parseSearchRequest(r *http.Request) (*trctrace.SearchRequest, error) {
 	if err := req.Normalize(); err != nil {
 		return nil, err
 	}
-
-	log.Printf("### urlquery['id']=%q, req.IDs=%v", urlquery["id"], req.IDs)
 
 	return req, nil
 }

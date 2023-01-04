@@ -17,19 +17,19 @@ import (
 )
 
 func main() {
-	origins := []string{"arena", "bravo", "cable"}
+	ports := []string{"8080", "8081", "8082"}
 
-	collectors := make([]*trctrace.Collector, len(origins))
+	collectors := make([]*trctrace.Collector, len(ports))
 	for i := range collectors {
 		collectors[i] = trctrace.NewCollector(1000)
 	}
 
-	kvs := make([]*KV, len(origins))
+	kvs := make([]*KV, len(ports))
 	for i := range kvs {
 		kvs[i] = NewKV(NewStore())
 	}
 
-	apiHandlers := make([]http.Handler, len(origins))
+	apiHandlers := make([]http.Handler, len(ports))
 	for i := range apiHandlers {
 		apiHandlers[i] = kvs[i]
 		apiHandlers[i] = trchttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return r.Method })(apiHandlers[i])
@@ -38,23 +38,44 @@ func main() {
 	apiWorkers := sync.WaitGroup{}
 	for _, h := range apiHandlers {
 		apiWorkers.Add(1)
-		go func(h http.Handler) { defer apiWorkers.Done(); load(context.Background(), h) }(h)
+		go func(h http.Handler) {
+			defer apiWorkers.Done()
+			load(context.Background(), h)
+		}(h)
 	}
 
-	trcHandlers := make([]http.Handler, len(origins))
-	for i := range trcHandlers {
-		trcHandlers[i] = &trctracehttp.Server{Origin: origins[i], Local: collectors[i]}
+	//
+	//
+	//
+
+	trcClients := make([]*trctracehttp.Client, len(ports))
+	for i := range trcClients {
+		trcClients[i] = trctracehttp.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/trc", ports[i]))
 	}
 
-	servers := make([]*http.Server, len(origins))
-	for i := range servers {
+	global := make(trctrace.MultiSearcher, len(trcClients))
+	for i := range trcClients {
+		global[i] = trcClients[i]
+	}
+
+	trcServers := make([]*trctracehttp.Server, len(ports))
+	for i := range trcServers {
+		trcServers[i] = &trctracehttp.Server{
+			Origin: ports[i],
+			Local:  collectors[i],
+			Global: global,
+		}
+	}
+
+	httpServers := make([]*http.Server, len(ports))
+	for i := range httpServers {
+		addr := "localhost:" + ports[i]
 		mux := http.NewServeMux()
 		mux.Handle("/api", http.StripPrefix("/api", apiHandlers[i]))
-		mux.Handle("/trc", http.StripPrefix("/trc", trcHandlers[i]))
-		addr := fmt.Sprintf(":%d", 8080+i)
-		servers[i] = &http.Server{Addr: addr, Handler: mux}
-		go servers[i].ListenAndServe()
-		log.Printf("http://localhost:%[1]d/api http://localhost:%[1]d/trc", 8080+i)
+		mux.Handle("/trc", http.StripPrefix("/trc", trcServers[i]))
+		httpServers[i] = &http.Server{Addr: addr, Handler: mux}
+		go httpServers[i].ListenAndServe()
+		log.Printf("http://localhost:%[1]s/api http://localhost:%[1]s/trc", ports[i])
 	}
 
 	select {}
