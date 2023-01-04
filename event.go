@@ -42,11 +42,10 @@ var eventSeq uint64
 // Arguments are evaluated immediately.
 func MakeEvent(format string, args ...interface{}) Event {
 	return Event{
-		Seq:     atomic.AddUint64(&eventSeq, 1),
-		When:    time.Now().UTC(),
-		What:    stringer(fmt.Sprintf(format, args...)),
-		Stack:   getStack(),
-		IsError: false,
+		Seq:   atomic.AddUint64(&eventSeq, 1),
+		When:  time.Now().UTC(),
+		What:  stringer(fmt.Sprintf(format, args...)),
+		Stack: getStack(),
 	}
 }
 
@@ -56,11 +55,10 @@ func MakeEvent(format string, args ...interface{}) Event {
 // be safe for concurrent access.
 func MakeLazyEvent(format string, args ...interface{}) Event {
 	return Event{
-		Seq:     atomic.AddUint64(&eventSeq, 1),
-		When:    time.Now().UTC(),
-		What:    &lazyStringer{fmt: format, args: args},
-		Stack:   getStack(),
-		IsError: false,
+		Seq:   atomic.AddUint64(&eventSeq, 1),
+		When:  time.Now().UTC(),
+		What:  &lazyStringer{fmt: format, args: args},
+		Stack: getStack(),
 	}
 }
 
@@ -191,7 +189,7 @@ func (z *lazyStringer) String() string {
 
 func getStack() CallStack {
 	var cs CallStack
-	for _, c := range stack.Trace().TrimRuntime() { // TODO: trim package trc
+	for _, c := range stack.Trace().TrimRuntime().TrimBelow(stack.Caller(3)) { // TODO: trim package trc
 		fr := c.Frame()
 		cs = append(cs, Call{
 			Function: funcNameOnly(fr.Function),

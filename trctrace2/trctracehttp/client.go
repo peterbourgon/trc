@@ -32,8 +32,7 @@ func NewClient(client HTTPClient, baseurl string) *Client {
 }
 
 func (c *Client) Search(ctx context.Context, req *trctrace.SearchRequest) (*trctrace.SearchResponse, error) {
-	ctx, tr, finish := trc.Region(ctx, "<%s>", c.baseurl)
-	defer finish()
+	tr := trc.FromContext(ctx)
 
 	httpReq, err := req.HTTPRequest(ctx, c.baseurl)
 	if err != nil {
@@ -42,7 +41,7 @@ func (c *Client) Search(ctx context.Context, req *trctrace.SearchRequest) (*trct
 
 	httpReq.Header.Set("accept", "application/json")
 
-	tr.Tracef("using remote URL %s", httpReq.URL.String())
+	tr.Tracef("URL %s", httpReq.URL.String())
 
 	httpResp, err := c.client.Do(httpReq)
 	if err != nil {

@@ -68,12 +68,18 @@ func main() {
 		}
 	}
 
+	trcHandlers := make([]http.Handler, len(trcServers))
+	for i := range trcHandlers {
+		trcHandlers[i] = trcServers[i]
+		trcHandlers[i] = trctracehttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return "traces" })(trcServers[i])
+	}
+
 	httpServers := make([]*http.Server, len(ports))
 	for i := range httpServers {
 		addr := "localhost:" + ports[i]
 		mux := http.NewServeMux()
 		mux.Handle("/api", http.StripPrefix("/api", apiHandlers[i]))
-		mux.Handle("/trc", http.StripPrefix("/trc", trcServers[i]))
+		mux.Handle("/trc", http.StripPrefix("/trc", trcHandlers[i]))
 		s := &http.Server{Addr: addr, Handler: mux}
 		log.Printf("using addr %s", addr)
 		go func() { log.Fatal(s.ListenAndServe()) }()

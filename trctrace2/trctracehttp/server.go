@@ -1,6 +1,7 @@
 package trctracehttp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -24,53 +25,28 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer finish()
 
 	var (
-		begin    = time.Now()
-		urlquery = r.URL.Query()
-		problems = []string{}
+		begin         = time.Now()
+		req, problems = parseSearchRequest(ctx, r)
+		isGlobal      = s.Global != nil && !r.URL.Query().Has("local")
 	)
 
-	var (
-		isGlobal = s.Global != nil && !urlquery.Has("local")
-		isLocal  = !isGlobal
-	)
 	var target trctrace.Searcher
 	switch {
 	case isGlobal:
+		tr.Tracef("global search")
 		target = s.Global
-	case isLocal:
+	default:
+		tr.Tracef("local search")
 		target = s.Local
-	}
-
-	req, err := parseSearchRequest(r)
-	if err != nil {
-		problems = append(problems, err.Error())
-		tr.Errorf("parse search request: %v", err)
-		req = &trctrace.SearchRequest{} // default
-	}
-
-	// TODO: content length, transfer encoding?
-	if contentType := r.Header.Get("content-type"); strings.Contains(contentType, "application/json") {
-		tr.Tracef("request content type %s, parsing search request from body", contentType)
-		err := json.NewDecoder(r.Body).Decode(req)
-		if err != nil {
-			err = fmt.Errorf("parse request body: %w", err)
-			problems = append(problems, err.Error())
-			tr.Errorf(err.Error())
-		}
-	}
-
-	if err := req.Normalize(); err != nil {
-		err = fmt.Errorf("normalize request: %w", err)
-		problems = append(problems, err.Error())
-		tr.Errorf(err.Error())
 	}
 
 	res, err := target.Search(ctx, req)
 	if err != nil {
-		err = fmt.Errorf("perform search: %w", err)
+		tr.Errorf("search failed: %v", err)
 		problems = append(problems, err.Error())
-		tr.Errorf(err.Error())
 		res = &trctrace.SearchResponse{Request: req} // default
+	} else {
+		tr.Tracef("search finished")
 	}
 
 	res.Duration = time.Since(begin)
@@ -89,35 +65,53 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	sort.Strings(res.Origins)
 
-	tr.Tracef("search: total %d, matched %d, selected %d, duration %s", res.Total, res.Matched, len(res.Selected), res.Duration)
+	tr.Tracef("origins %d, total %d, matched %d, selected %d, duration %s", len(res.Origins), res.Total, res.Matched, len(res.Selected), res.Duration)
 
 	Render(ctx, w, r, assets, "traces2.html", templateFuncs, res)
 }
 
-func parseSearchRequest(r *http.Request) (*trctrace.SearchRequest, error) {
+func parseSearchRequest(ctx context.Context, r *http.Request) (*trctrace.SearchRequest, []string) {
 	var (
+		tr          = trc.FromContext(ctx)
+		isJSON      = strings.Contains(r.Header.Get("content-type"), "application/json")
 		urlquery    = r.URL.Query()
 		limit       = parseDefault(urlquery.Get("n"), strconv.Atoi, 10)
 		minDuration = parseDefault(urlquery.Get("min"), parseDurationPointer, nil)
 		bucketing   = parseBucketing(urlquery["b"]) // can be nil, no problem
 		query       = urlquery.Get("q")
+		req         = &trctrace.SearchRequest{}
+		problems    = []string{}
 	)
 
-	req := &trctrace.SearchRequest{
-		IDs:         urlquery["id"],
-		Category:    urlquery.Get("category"),
-		IsActive:    urlquery.Has("active"),
-		Bucketing:   bucketing,
-		MinDuration: minDuration,
-		IsFailed:    urlquery.Has("failed"),
-		Query:       query,
-		Limit:       limit,
-	}
-	if err := req.Normalize(); err != nil {
-		return nil, err
+	switch {
+	case isJSON:
+		tr.Tracef("parsing search request from JSON request body")
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			err = fmt.Errorf("parse JSON request body: %w", err)
+			problems = append(problems, err.Error())
+			tr.Errorf(err.Error())
+		}
+	default:
+		tr.Tracef("parsing search request from URL")
+		req = &trctrace.SearchRequest{
+			IDs:         urlquery["id"],
+			Category:    urlquery.Get("category"),
+			IsActive:    urlquery.Has("active"),
+			Bucketing:   bucketing,
+			MinDuration: minDuration,
+			IsFailed:    urlquery.Has("failed"),
+			Query:       query,
+			Limit:       limit,
+		}
 	}
 
-	return req, nil
+	if err := req.Normalize(); err != nil {
+		err = fmt.Errorf("normalize request: %w", err)
+		problems = append(problems, err.Error())
+		tr.Errorf(err.Error())
+	}
+
+	return req, problems
 }
 
 func parseBucketing(bs []string) []time.Duration {

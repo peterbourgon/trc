@@ -248,8 +248,7 @@ type SearchResponse struct {
 type MultiSearcher []Searcher
 
 func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
-	ctx, tr, finish := trc.Region(ctx, "MultiSearcher (%d)", len(ms))
-	defer finish()
+	tr := trc.FromContext(ctx)
 
 	begin := time.Now()
 
@@ -260,14 +259,15 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 
 	// Scatter.
 	tuplec := make(chan tuple, len(ms))
-	for _, s := range ms {
-		go func(s Searcher) {
+	for i, s := range ms {
+		go func(id string, s Searcher) {
+			ctx, _ := trc.PrefixTraceContext(ctx, "<%s>", id)
 			res, err := s.Search(ctx, req)
 			tuplec <- tuple{res, err}
-		}(s)
+		}(strconv.Itoa(i+1), s)
 	}
 
-	tr.Tracef("scattered requests")
+	tr.Tracef("scattered requests, count %d", len(ms))
 
 	// Gather.
 	aggregate := &SearchResponse{Request: req}

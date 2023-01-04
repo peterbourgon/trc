@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+type traceContextKey struct{}
+
+var traceContextVal traceContextKey
+
 // NewTrace creates a new trace with the given category, and injects it to the
 // given context. If the context already contained a trace, it becomes
 // "shadowed" by the new one.
@@ -32,7 +36,7 @@ func MaybeFromContext(ctx context.Context) (Trace, bool) {
 	return tr, ok
 }
 
-// ToContext derives a new context from the given context containing the given
+// ToContext derives a new context from the given context, containing the given
 // trace. If the context already contained a trace, it becomes "shadowed" by the
 // new trace.
 func ToContext(ctx context.Context, tr Trace) context.Context {
@@ -92,7 +96,7 @@ func LazyErrorf(ctx context.Context, format string, args ...interface{}) {
 func Region(ctx context.Context, format string, args ...any) (context.Context, Trace, func()) {
 	begin := time.Now()
 	inputTrace := FromContext(ctx)
-	outputTrace := WithPrefix(inputTrace, "· ")
+	outputTrace := PrefixTrace(inputTrace, "· ")
 	outputContext := ToContext(ctx, outputTrace)
 
 	inputTrace.LazyTracef("→ "+format, args...)
@@ -104,6 +108,32 @@ func Region(ctx context.Context, format string, args ...any) (context.Context, T
 	return outputContext, outputTrace, finish
 }
 
-type traceContextKey struct{}
+/*
+//
+//	[foo 42] →
+//	[foo 42] trace event in foo
+//	[foo 42] another event in foo
+//	[foo 42] [bar] →
+//	[foo 42] [bar] something in bar
+//	[foo 42] [bar] ← (1.23ms)
+//	[foo 42] final event in foo
+//	[foo 42] ← (2.34ms)
+//
+// Region may incur non-negligable costs to performance, and is meant to be used
+// deliberately and sparingly. It explicitly should not be applied "by default"
+// to code via e.g. code generation.
+func Region(ctx context.Context, format string, args ...any) (context.Context, Trace, func()) {
+	begin := time.Now()
 
-var traceContextVal traceContextKey
+	ctx, tr := PrefixTraceContext(ctx, "["+format+"] ", args...)
+
+	tr.LazyTracef("→")
+	finish := func() {
+		took := time.Since(begin)
+		tr.LazyTracef("← (%s)", took)
+	}
+
+	return ctx, tr, finish
+}
+
+*/
