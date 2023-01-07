@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NYTimes/gziphandler"
 	"github.com/peterbourgon/trc"
 	trctrace "github.com/peterbourgon/trc/trctrace2"
 	"github.com/peterbourgon/trc/trctrace2/trctracehttp"
@@ -54,7 +55,6 @@ func main() {
 	for i := range trcClients {
 		trcClients[i] = trctracehttp.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/trc", ports[i]))
 	}
-	//trcClients = append(trcClients, trctracehttp.NewClient(http.DefaultClient, "http://localhost:9999/trc"))
 
 	globalSearcher := make(trctrace.MultiSearcher, len(trcClients))
 	for i := range trcClients {
@@ -79,7 +79,7 @@ func main() {
 		}
 
 		trcHandlers[i] = server
-		//trcHandlers[i] = gziphandler.GzipHandler(trcHandlers[i])
+		trcHandlers[i] = gziphandler.GzipHandler(trcHandlers[i])
 		trcHandlers[i] = trctracehttp.Middleware(collectors[i].NewTrace, categorize)(trcHandlers[i])
 	}
 
