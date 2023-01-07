@@ -13,13 +13,13 @@ import (
 	"github.com/go-stack/stack"
 )
 
-// Event represents the information captured as part of a trace or log
-// statement. It includes metadata like a timestamp and call stack.
+// Event represents the information captured as part of a trace statement from
+// user code.
 //
 // Events may be retained for an indeterminate length of time, and accessed
 // concurrently by multiple goroutines. Once created, an event is expected to be
-// immutable. In particular, the fmt.Stringer implementation used in the "what"
-// field must be safe for concurrent use, including any values it may capture by
+// immutable. In particular, the fmt.Stringer implementation of the What field
+// must be safe for concurrent use, including any values it may capture by
 // reference.
 type Event struct {
 	Seq     uint64       // should be unique for each event
