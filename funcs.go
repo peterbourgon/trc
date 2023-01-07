@@ -74,9 +74,9 @@ func LazyErrorf(ctx context.Context, format string, args ...interface{}) {
 // code, typically functions. Typical usage is as follows.
 //
 //	func foo(ctx context.Context, id int) {
-//	    ctx, tr, finish := trc.Region(ctx, "foo %d", id)
-//	    defer finish()
-//	    ...
+//		ctx, tr, finish := trc.Region(ctx, "foo %d", id)
+//		defer finish()
+//		...
 //	}
 //
 // Region produces hierarchical trace events as follows.
@@ -107,33 +107,3 @@ func Region(ctx context.Context, format string, args ...any) (context.Context, T
 
 	return outputContext, outputTrace, finish
 }
-
-/*
-//
-//	[foo 42] →
-//	[foo 42] trace event in foo
-//	[foo 42] another event in foo
-//	[foo 42] [bar] →
-//	[foo 42] [bar] something in bar
-//	[foo 42] [bar] ← (1.23ms)
-//	[foo 42] final event in foo
-//	[foo 42] ← (2.34ms)
-//
-// Region may incur non-negligable costs to performance, and is meant to be used
-// deliberately and sparingly. It explicitly should not be applied "by default"
-// to code via e.g. code generation.
-func Region(ctx context.Context, format string, args ...any) (context.Context, Trace, func()) {
-	begin := time.Now()
-
-	ctx, tr := PrefixTraceContext(ctx, "["+format+"] ", args...)
-
-	tr.LazyTracef("→")
-	finish := func() {
-		took := time.Since(begin)
-		tr.LazyTracef("← (%s)", took)
-	}
-
-	return ctx, tr, finish
-}
-
-*/

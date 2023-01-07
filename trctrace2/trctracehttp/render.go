@@ -65,6 +65,7 @@ func renderJSON(ctx context.Context, w http.ResponseWriter, data any) {
 	buf, err := json.Marshal(data)
 	if err != nil {
 		tr.Errorf("marshal response: %v", err)
+		buf = []byte(`{"error":"failed to marshal response"}`)
 	}
 
 	tr.Tracef("JSON response size %dB", len(buf))
