@@ -11,15 +11,14 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// Trace is an interface describing metadata related to something that happened,
-// typically an event or request. A common use case is to create a new trace for
-// each incoming request to an HTTP server.
+// Trace is an interface describing metadata for an operation that occurred in a
+// process. A common use case is to create a new trace for each incoming request
+// to an HTTP server.
 //
-// Traces should represent ephemeral, short-lived events, and should be accessed
-// through a context object. If this doesn't describe your use case, consider
-// using the Log type instead.
+// Traces should normally represent ephemeral and short-lived events, and should
+// be accessed through a context object.
 //
-// Implementations of Trace are expected to be safe for concurrent access.
+// Implementations of Trace are expected to be safe for concurrent use.
 type Trace interface {
 	// ID should return a unique identifier for the trace.
 	ID() string
@@ -340,6 +339,10 @@ type Source struct {
 	URL  string `json:"url,omitempty"`
 }
 
+//
+//
+//
+
 type StaticTrace struct {
 	Source          Source    `json:"source,omitempty"`
 	StaticID        string    `json:"id"`
@@ -459,27 +462,4 @@ func (ptr *PrefixedTrace) Errorf(format string, args ...interface{}) {
 // LazyErrorf implements Trace.
 func (ptr *PrefixedTrace) LazyErrorf(format string, args ...interface{}) {
 	ptr.Trace.LazyErrorf(ptr.format+format, append(ptr.args, args...)...)
-}
-
-//
-//
-//
-
-type Finalized struct {
-	Trace
-	finalize func()
-}
-
-var _ Trace = (*Finalized)(nil)
-
-func WithFinalize(tr Trace, finalize func()) Trace {
-	return &Finalized{
-		Trace:    tr,
-		finalize: finalize,
-	}
-}
-
-func (tr *Finalized) Finish() {
-	tr.finalize()
-	tr.Trace.Finish()
 }
