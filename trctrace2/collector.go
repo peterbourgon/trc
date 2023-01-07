@@ -101,6 +101,8 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 
 	return &SearchResponse{
 		Request:  req,
+		ServedBy: "",  //
+		DataFrom: nil, //
 		Stats:    stats,
 		Total:    total,
 		Matched:  matched,

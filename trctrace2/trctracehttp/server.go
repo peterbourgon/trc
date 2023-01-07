@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -15,60 +16,163 @@ import (
 )
 
 type Server struct {
-	Origin string
-	Local  trctrace.Searcher
-	Global trctrace.Searcher
+	//
 }
 
+func NewServerOver(targets ...Target) http.Handler {
+	if len(targets) <= 0 {
+		panic("no targets")
+	}
+	s := &Server{}
+	m := TargetMiddleware(targets...)(s)
+	return m
+}
+
+//func NewServer(origin string, s trctrace.Searcher) *Server {
+//	return &Server{
+//		target: Target{
+//			Origin:   origin,
+//			Searcher: s,
+//		},
+//	}
+//}
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx, tr, finish := trc.Region(r.Context(), "ServeHTTP")
+	ctx, tr, finish := trc.Region(r.Context(), "trctracehttp.Server.ServeHTTP")
 	defer finish()
 
-	var (
-		begin         = time.Now()
-		req, problems = parseSearchRequest(ctx, r)
-		isGlobal      = s.Global != nil && !r.URL.Query().Has("local")
-	)
+	begin := time.Now()
 
-	var target trctrace.Searcher
-	switch {
-	case isGlobal:
-		tr.Tracef("global search")
-		target = s.Global
-	default:
-		tr.Tracef("local search")
-		target = s.Local
+	target := getTarget(ctx)
+	if target.Searcher == nil {
+		http.Error(w, "no targets configured", http.StatusInternalServerError)
+		return
 	}
+	log.Printf("### ServeHTTP target=%v", target)
 
-	res, err := target.Search(ctx, req)
+	req, problems := parseSearchRequest(ctx, r)
+
+	tr.Tracef("starting search")
+
+	res, err := target.Searcher.Search(ctx, req)
 	if err != nil {
-		tr.Errorf("search failed: %v", err)
+		tr.Errorf("search error: %v", err)
 		problems = append(problems, err.Error())
 		res = &trctrace.SearchResponse{Request: req} // default
-	} else {
-		tr.Tracef("search finished")
 	}
 
-	res.Duration = time.Since(begin)
+	tr.Tracef("search complete")
 
 	res.Problems = append(problems, res.Problems...)
-
-	for _, tr := range res.Selected {
-		if tr.Origin == "" {
-			tr.Origin = s.Origin
+	res.Duration = time.Since(begin)
+	res.ServedBy = target.Origin
+	if len(res.DataFrom) <= 0 {
+		res.DataFrom = append(res.DataFrom, target.Origin)
+		for i := range res.Selected {
+			res.Selected[i].Origin = target.Origin
 		}
 	}
 
-	if len(res.Origins) <= 0 {
-		res.Origins = append(res.Origins, s.Origin)
-	}
-
-	sort.Strings(res.Origins)
-
-	tr.Tracef("origins %d, total %d, matched %d, selected %d, duration %s", len(res.Origins), res.Total, res.Matched, len(res.Selected), res.Duration)
+	tr.Tracef("total=%d matched=%d selected=%d duration=%s", res.Total, res.Matched, len(res.Selected), res.Duration)
 
 	Render(ctx, w, r, assets, "traces2.html", templateFuncs, res)
 }
+
+//
+//
+//
+
+func TargetMiddleware(targets ...Target) func(http.Handler) http.Handler {
+	// TODO: validate targets
+
+	names := make([]string, len(targets))
+	index := make(map[string]Target, len(targets))
+	for i, t := range targets {
+		names[i] = t.Origin
+		index[t.Origin] = t
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			tr := trc.FromContext(ctx)
+
+			origin := r.URL.Query().Get("origin")
+			tr.Tracef("query origin %q", origin)
+
+			target, ok := index[origin]
+			if !ok {
+				target = targets[0]
+			}
+
+			ctx = putTarget(ctx, target)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+//
+//
+//
+
+func putTarget(ctx context.Context, t Target) context.Context {
+	return context.WithValue(ctx, targetContextKey{}, t)
+}
+
+func getTarget(ctx context.Context) Target {
+	t, ok := ctx.Value(targetContextKey{}).(Target)
+	if ok {
+		return t
+	}
+	return Target{}
+}
+
+func putSearcher(ctx context.Context, s trctrace.Searcher) context.Context {
+	return context.WithValue(ctx, searcherContextKey{}, s)
+}
+
+func getSearcher(ctx context.Context, def trctrace.Searcher) trctrace.Searcher {
+	if s, ok := ctx.Value(searcherContextKey{}).(trctrace.Searcher); ok {
+		log.Printf("### getSearcher got Searcher")
+		return s
+	}
+	log.Printf("### getSearcher not get Searcher")
+	return def
+}
+
+func putTargetOrigins(ctx context.Context, target Target, origins []string) context.Context {
+	return context.WithValue(ctx, targetOriginsContextKey{}, targetOriginsContextVal{
+		Target:  target,
+		Origins: origins,
+	})
+}
+
+func getTargetOrigins(ctx context.Context) (Target, []string, bool) {
+	to, ok := ctx.Value(targetOriginsContextKey{}).(targetOriginsContextVal)
+	if !ok {
+		return Target{}, nil, false
+	}
+	return to.Target, to.Origins, true
+}
+
+type (
+	targetContextKey        struct{}
+	searcherContextKey      struct{}
+	targetOriginsContextKey struct{}
+	targetOriginsContextVal struct {
+		Target  Target
+		Origins []string
+	}
+)
+
+type Target struct {
+	Origin   string
+	Searcher trctrace.Searcher
+}
+
+//
+//
+//
 
 func parseSearchRequest(ctx context.Context, r *http.Request) (*trctrace.SearchRequest, []string) {
 	var (

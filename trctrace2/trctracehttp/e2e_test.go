@@ -15,7 +15,7 @@ import (
 func TestE2E(t *testing.T) {
 	ctx := context.Background()
 	collector := trctrace.NewCollector(100)
-	traceServer := &trctracehttp.Server{Origin: "default origin", Local: collector, Global: collector}
+	traceServer := trctracehttp.NewServerOver(trctracehttp.Target{Origin: "base", Searcher: collector})
 	httpServer := httptest.NewServer(traceServer)
 	defer httpServer.Close()
 	traceClient := trctracehttp.NewClient(http.DefaultClient, httpServer.URL)

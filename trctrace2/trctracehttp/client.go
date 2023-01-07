@@ -69,7 +69,7 @@ func (c *Client) Search(ctx context.Context, req *trctrace.SearchRequest) (*trct
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
-	tr.Tracef("search response: origins %v, total %d, matched %d, selected %d", searchResp.Origins, searchResp.Total, searchResp.Matched, len(searchResp.Selected))
+	tr.Tracef("response served_by=%s data_from=%v total=%d matched=%d selected=%d", searchResp.ServedBy, searchResp.DataFrom, searchResp.Total, searchResp.Matched, len(searchResp.Selected))
 
 	return &searchResp, nil
 }

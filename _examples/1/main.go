@@ -51,27 +51,26 @@ func main() {
 	for i := range trcClients {
 		trcClients[i] = trctracehttp.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/trc", ports[i]))
 	}
-
 	//trcClients = append(trcClients, trctracehttp.NewClient(http.DefaultClient, "http://localhost:9999/trc"))
 
-	global := make(trctrace.MultiSearcher, len(trcClients))
+	globalSearcher := make(trctrace.MultiSearcher, len(trcClients))
 	for i := range trcClients {
-		global[i] = trcClients[i]
+		globalSearcher[i] = trcClients[i]
 	}
 
-	trcServers := make([]*trctracehttp.Server, len(ports))
-	for i := range trcServers {
-		trcServers[i] = &trctracehttp.Server{
-			Origin: ports[i],
-			Local:  collectors[i],
-			Global: global,
-		}
+	globalTarget := trctracehttp.Target{
+		Origin:   "global",
+		Searcher: globalSearcher,
 	}
+	_ = globalTarget
 
-	trcHandlers := make([]http.Handler, len(trcServers))
+	trcHandlers := make([]http.Handler, len(collectors))
 	for i := range trcHandlers {
-		trcHandlers[i] = trcServers[i]
-		trcHandlers[i] = trctracehttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return "traces" })(trcServers[i])
+		localTarget := trctracehttp.Target{Origin: ports[i], Searcher: collectors[i]}
+		trcHandlers[i] = trctracehttp.NewServerOver(localTarget, globalTarget)
+		// trcHandlers[i] = trctracehttp.NewServer(ports[i], collectors[i])
+		// trcHandlers[i] = trctracehttp.TargetMiddleware(globalTarget)(trcHandlers[i])
+		trcHandlers[i] = trctracehttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return "traces" })(trcHandlers[i])
 	}
 
 	httpServers := make([]*http.Server, len(ports))

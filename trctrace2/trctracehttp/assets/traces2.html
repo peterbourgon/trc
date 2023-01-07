@@ -98,6 +98,7 @@ function highlightquery() {
 
 {{ $query_params := printf "&n=%d" $r.Limit | safeurl -}}
 {{ if $r.Regexp -}}{{ $query_params = printf "&q=%s%s" $r.Regexp.String $query_params | safeurl -}}{{ end -}}
+{{ if .ServedBy -}}{{ $query_params = printf "&origin=%s%s" .ServedBy $query_params | safeurl -}}{{ end -}}
 
 <table id="summary">
 
@@ -293,7 +294,8 @@ function highlightquery() {
 	</script>
 
 	<div id="topline-metadata">
-		<div id="topline-search-origins" class="topline-search" title="{{range .Origins}} {{.}} {{end}}">origins={{ len .Origins }}</div>
+		<div id="topline-search-servedby" class="topline-search">served-by={{ .ServedBy }}</div>
+		<div id="topline-search-datafrom" class="topline-search">data-from={{ .DataFrom }}</div>
 		<div id="topline-search-total"   class="topline-search">total={{ .Stats.Overall.NumTotal }}</div>
 		<div id="topline-search-matched" class="topline-search">matched={{ .Matched }}</div>
 		<div id="topline-search-shown"   class="topline-search">shown={{ len .Selected }}</div>

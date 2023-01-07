@@ -232,7 +232,8 @@ func (req *SearchRequest) QueryParams(keyvals ...string) template.URL {
 
 type SearchResponse struct {
 	Request  *SearchRequest     `json:"request"`
-	Origins  []string           `json:"origins,omitempty"`
+	ServedBy string             `json:"served_by,omitempty"`
+	DataFrom []string           `json:"data_from,omitempty"`
 	Stats    Stats              `json:"stats"`
 	Total    int                `json:"total"`
 	Matched  int                `json:"matched"`
@@ -281,22 +282,22 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 			tr.Tracef("error: %v", t.err)
 			aggregate.Problems = append(aggregate.Problems, t.err.Error())
 		case t.res != nil && t.err == nil: // success case
-			tr.Tracef("success: origins=%v total=%v matched=%v selected=%v", t.res.Origins, t.res.Total, t.res.Matched, len(t.res.Selected))
-			aggregate.Origins = append(aggregate.Origins, t.res.Origins...)
+			tr.Tracef("success: total=%v matched=%v selected=%v", t.res.Total, t.res.Matched, len(t.res.Selected))
 			aggregate.Stats = CombineStats(aggregate.Stats, t.res.Stats)
 			aggregate.Total += t.res.Total
 			aggregate.Matched += t.res.Matched
 			aggregate.Selected = append(aggregate.Selected, t.res.Selected...) // needs sort+limit
 			aggregate.Problems = append(aggregate.Problems, t.res.Problems...)
+			aggregate.DataFrom = append(aggregate.DataFrom, t.res.ServedBy)
 		case t.res != nil && t.err != nil: // weird
-			tr.Tracef("weird: origins=%v total=%v matched=%v selected=%v error=%v", t.res.Origins, t.res.Total, t.res.Matched, len(t.res.Selected), t.err)
-			aggregate.Origins = append(aggregate.Origins, t.res.Origins...)
+			tr.Tracef("weird: total=%v matched=%v selected=%v error=%v", t.res.Total, t.res.Matched, len(t.res.Selected), t.err)
 			aggregate.Stats = CombineStats(aggregate.Stats, t.res.Stats)
 			aggregate.Total += t.res.Total
 			aggregate.Matched += t.res.Matched
 			aggregate.Selected = append(aggregate.Selected, t.res.Selected...) // needs sort+limit
 			aggregate.Problems = append(aggregate.Problems, t.res.Problems...)
-			aggregate.Problems = append(aggregate.Problems, fmt.Sprintf("got valid search response (origins %v) with error (%v) -- weird", t.res.Origins, t.err))
+			aggregate.Problems = append(aggregate.Problems, fmt.Sprintf("got valid search response with error (%v) -- weird", t.err))
+			aggregate.DataFrom = append(aggregate.DataFrom, t.res.ServedBy)
 		}
 	}
 
