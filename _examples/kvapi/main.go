@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	_ "net/http/pprof"
 	"strings"
 	"sync"
 	"time"
@@ -90,10 +91,14 @@ func main() {
 		mux.Handle("/api", http.StripPrefix("/api", apiHandlers[i]))
 		mux.Handle("/trc", http.StripPrefix("/trc", trcHandlers[i]))
 		s := &http.Server{Addr: addr, Handler: mux}
-		log.Printf("using addr %s", addr)
 		go func() { log.Fatal(s.ListenAndServe()) }()
-		log.Printf("http://localhost:%[1]s/api http://localhost:%[1]s/trc", ports[i])
+		log.Printf("http://localhost:%s/trc", ports[i])
 	}
+
+	go func() {
+		log.Printf("http://localhost:8079/debug/pprof")
+		log.Fatal(http.ListenAndServe(":8079", nil))
+	}()
 
 	select {}
 }
