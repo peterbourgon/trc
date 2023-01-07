@@ -95,10 +95,11 @@ function highlightquery() {
 {{ $n := .Request.Limit }}
 {{ $q := .Request.Query }}
 {{ $r := .Request }}
+{{ $o := .ServedBy }}
 
 {{ $query_params := printf "&n=%d" $r.Limit | safeurl -}}
 {{ if $r.Regexp -}}{{ $query_params = printf "&q=%s%s" $r.Regexp.String $query_params | safeurl -}}{{ end -}}
-{{ if .ServedBy -}}{{ $query_params = printf "&origin=%s%s" .ServedBy $query_params | safeurl -}}{{ end -}}
+{{ if $o -}}{{ $query_params = printf "&origin=%s%s" $o $query_params | safeurl -}}{{ end -}}
 
 <table id="summary">
 
@@ -265,6 +266,13 @@ function highlightquery() {
 			{{ if .Request.IsActive    -}}<input type="hidden" name="active"    value="{{.Request.IsActive}}"    />{{ end -}}
 			{{ if .Request.MinDuration -}}<input type="hidden" name="min"       value="{{.Request.MinDuration}}" />{{ end -}}
 			{{ if .Request.IsFailed    -}}<input type="hidden" name="failed"    value="{{.Request.IsFailed}}"    />{{ end -}}
+			{{ if .Origins -}}
+			<select id="search-origin" name="origin">
+				{{ range .Origins -}}
+				<option name="{{.}}" {{ if eq $o . -}}selected{{ end -}}>{{.}}</option>
+				{{ end -}}
+			</select>
+			{{ end -}}
 			<select id="search-limit" name="n">
 				<option name="10"   {{ if eq .Request.Limit 10   -}}selected{{ end -}}>10  </option>
 				<option name="25"   {{ if eq .Request.Limit 25   -}}selected{{ end -}}>25  </option>

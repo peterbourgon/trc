@@ -232,6 +232,7 @@ func (req *SearchRequest) QueryParams(keyvals ...string) template.URL {
 
 type SearchResponse struct {
 	Request  *SearchRequest     `json:"request"`
+	Origins  []string           `json:"origins,omitempty"`
 	ServedBy string             `json:"served_by,omitempty"`
 	DataFrom []string           `json:"data_from,omitempty"`
 	Stats    Stats              `json:"stats"`

@@ -43,6 +43,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	begin := time.Now()
 
+	origins := getOrigins(ctx)
 	target := getTarget(ctx)
 	if target.Searcher == nil {
 		http.Error(w, "no targets configured", http.StatusInternalServerError)
@@ -63,6 +64,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	tr.Tracef("search complete")
 
+	res.Origins = origins
 	res.Problems = append(problems, res.Problems...)
 	res.Duration = time.Since(begin)
 	res.ServedBy = target.Origin
@@ -106,6 +108,7 @@ func TargetMiddleware(targets ...Target) func(http.Handler) http.Handler {
 			}
 
 			ctx = putTarget(ctx, target)
+			ctx = putOrigins(ctx, names)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -125,6 +128,15 @@ func getTarget(ctx context.Context) Target {
 		return t
 	}
 	return Target{}
+}
+
+func putOrigins(ctx context.Context, origins []string) context.Context {
+	return context.WithValue(ctx, originsContextKey{}, origins)
+}
+
+func getOrigins(ctx context.Context) []string {
+	origins := ctx.Value(originsContextKey{}).([]string)
+	return origins
 }
 
 func putSearcher(ctx context.Context, s trctrace.Searcher) context.Context {
@@ -157,6 +169,7 @@ func getTargetOrigins(ctx context.Context) (Target, []string, bool) {
 
 type (
 	targetContextKey        struct{}
+	originsContextKey       struct{}
 	searcherContextKey      struct{}
 	targetOriginsContextKey struct{}
 	targetOriginsContextVal struct {
