@@ -14,8 +14,8 @@ import (
 
 	"github.com/NYTimes/gziphandler"
 	"github.com/peterbourgon/trc"
-	trctrace "github.com/peterbourgon/trc/trctrace2"
-	"github.com/peterbourgon/trc/trctrace2/trctracehttp"
+	"github.com/peterbourgon/trc/trctrace"
+	"github.com/peterbourgon/trc/trctrace/trctracehttp"
 )
 
 func main() {

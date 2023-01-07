@@ -9,8 +9,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/peterbourgon/trc"
-	trctrace "github.com/peterbourgon/trc/trctrace2"
-	"github.com/peterbourgon/trc/trctrace2/trctracehttp"
+	"github.com/peterbourgon/trc/trctrace"
+	"github.com/peterbourgon/trc/trctrace/trctracehttp"
 )
 
 func TestE2E(t *testing.T) {

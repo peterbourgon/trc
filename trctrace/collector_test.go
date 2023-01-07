@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc"
-	trctrace "github.com/peterbourgon/trc/trctrace2"
+	"github.com/peterbourgon/trc/trctrace"
 )
 
 func TestCollector(t *testing.T) {

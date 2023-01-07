@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/peterbourgon/trc"
-	trctrace "github.com/peterbourgon/trc/trctrace2"
+	"github.com/peterbourgon/trc/trctrace"
 )
 
 var collector = trctrace.NewCollector(trc.Source{Name: "local"}, 1000) // TODO

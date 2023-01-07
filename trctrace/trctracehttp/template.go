@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	trctrace "github.com/peterbourgon/trc/trctrace2"
+	"github.com/peterbourgon/trc/trctrace"
 )
 
 const timeFormat = "15:04:05.000000"
