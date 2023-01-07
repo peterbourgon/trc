@@ -18,8 +18,9 @@ func TestE2E(t *testing.T) {
 	src := trc.Source{Name: "base"}
 	max := 1000
 	collector := trctrace.NewCollector(src, max)
-	local := trctracehttp.Target{Name: "local", Searcher: collector}
-	traceServer := trctracehttp.NewServer(local)
+	local := &trctracehttp.Target{Name: "local", Searcher: collector}
+	config := trctracehttp.ServerConfig{Local: local}
+	traceServer, _ := trctracehttp.NewServer(config)
 	httpServer := httptest.NewServer(traceServer)
 	defer httpServer.Close()
 	traceClient := trctracehttp.NewClient(http.DefaultClient, httpServer.URL)

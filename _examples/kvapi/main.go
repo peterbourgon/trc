@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NYTimes/gziphandler"
 	"github.com/peterbourgon/trc"
 	trctrace "github.com/peterbourgon/trc/trctrace2"
 	"github.com/peterbourgon/trc/trctrace2/trctracehttp"
@@ -67,13 +68,19 @@ func main() {
 
 	trcHandlers := make([]http.Handler, len(collectors))
 	for i := range trcHandlers {
-		localTarget := &trctracehttp.Target{Name: "local", Searcher: collectors[i]}
-		trcHandlers[i] = trctracehttp.NewServer(trctracehttp.ServerConfig{
-			Local:   localTarget,
+		categorize := func(r *http.Request) string { return "traces" }
+		server, err := trctracehttp.NewServer(trctracehttp.ServerConfig{
+			Local:   &trctracehttp.Target{Name: "local", Searcher: collectors[i]},
 			Other:   []*trctracehttp.Target{globalTarget},
 			Default: globalTarget,
 		})
-		trcHandlers[i] = trctracehttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return "traces" })(trcHandlers[i])
+		if err != nil {
+			panic(err)
+		}
+
+		trcHandlers[i] = server
+		trcHandlers[i] = gziphandler.GzipHandler(trcHandlers[i])
+		trcHandlers[i] = trctracehttp.Middleware(collectors[i].NewTrace, categorize)(trcHandlers[i])
 	}
 
 	httpServers := make([]*http.Server, len(ports))

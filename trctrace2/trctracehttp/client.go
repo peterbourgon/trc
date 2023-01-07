@@ -39,9 +39,7 @@ func (c *Client) Search(ctx context.Context, req *trctrace.SearchRequest) (*trct
 		return nil, fmt.Errorf("make HTTP request: %w", err)
 	}
 
-	httpReq.Header.Set("accept", "application/json")
-
-	tr.Tracef("URL %s", httpReq.URL.String())
+	tr.Tracef("⇒ %s", httpReq.URL.String())
 
 	httpResp, err := c.client.Do(httpReq)
 	if err != nil {
@@ -56,20 +54,12 @@ func (c *Client) Search(ctx context.Context, req *trctrace.SearchRequest) (*trct
 		return nil, fmt.Errorf("remote status code %d", httpResp.StatusCode)
 	}
 
-	//{
-	//	var debugBuf bytes.Buffer
-	//	io.Copy(&debugBuf, httpResp.Body)
-	//	bodyStr := debugBuf.String()
-	//	log.Printf("### %s", bodyStr)
-	//	httpResp.Body = io.NopCloser(strings.NewReader(bodyStr))
-	//}
-
 	var d ResponseData
 	if err := json.NewDecoder(httpResp.Body).Decode(&d); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
-	tr.Tracef("response target=%s total=%d matched=%d selected=%d", d.Target, d.Response.Total, d.Response.Matched, len(d.Response.Selected))
+	tr.Tracef("⇐ total=%d matched=%d selected=%d", d.Response.Total, d.Response.Matched, len(d.Response.Selected))
 
 	return d.Response, nil
 }

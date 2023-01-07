@@ -310,7 +310,7 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 		}(strconv.Itoa(i+1), s)
 	}
 
-	tr.Tracef("scattered requests, count %d", len(ms))
+	tr.Tracef("scattered request count %d", len(ms))
 
 	// Gather.
 	aggregate := &SearchResponse{}
@@ -353,9 +353,11 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	// gonna get. We need to do a little bit of post-processing. First, we need
 	// to sort all of the selected traces by start time, and then limit them by
 	// the requested limit.
+
 	sort.Slice(aggregate.Selected, func(i, j int) bool {
-		return aggregate.Selected[i].Start().Before(aggregate.Selected[j].Start())
+		return aggregate.Selected[i].Start().After(aggregate.Selected[j].Start())
 	})
+
 	if len(aggregate.Selected) > req.Limit {
 		aggregate.Selected = aggregate.Selected[:req.Limit]
 	}

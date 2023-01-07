@@ -35,7 +35,7 @@ func Render(ctx context.Context, w http.ResponseWriter, r *http.Request, fs fs.F
 }
 
 func renderHTML(ctx context.Context, w http.ResponseWriter, fs fs.FS, templateName string, funcs template.FuncMap, data any) {
-	ctx, tr, finish := trc.Region(ctx, "renderHTML")
+	ctx, tr, finish := trc.Region(ctx, "render HTML")
 	defer finish()
 
 	code := http.StatusOK
@@ -45,7 +45,7 @@ func renderHTML(ctx context.Context, w http.ResponseWriter, fs fs.FS, templateNa
 		body = []byte(fmt.Sprintf(`<html><body><h1>Error</h1><p>%v</p>`, err))
 	}
 
-	tr.Tracef("template OK")
+	tr.Tracef("template OK, body size %dB", len(body))
 
 	{
 		_, _, finish := trc.Region(ctx, "write HTML response")
@@ -59,12 +59,18 @@ func renderHTML(ctx context.Context, w http.ResponseWriter, fs fs.FS, templateNa
 }
 
 func renderJSON(ctx context.Context, w http.ResponseWriter, data any) {
-	_, _, finish := trc.Region(ctx, "write JSON response")
+	_, tr, finish := trc.Region(ctx, "render JSON")
 	defer finish()
+
+	buf, err := json.Marshal(data)
+	if err != nil {
+		tr.Errorf("marshal response: %v", err)
+	}
+
+	tr.Tracef("JSON response size %dB", len(buf))
+
 	w.Header().Set("content-type", "application/json; charset=utf-8")
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "    ")
-	enc.Encode(data)
+	w.Write(buf)
 }
 
 func requestExplicitlyAccepts(r *http.Request, acceptable ...string) bool {

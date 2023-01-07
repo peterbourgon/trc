@@ -32,9 +32,21 @@ type ServerConfig struct {
 	Default *Target
 }
 
-func NewServer(cfg ServerConfig) http.Handler {
+func (cfg *ServerConfig) Validate() error {
+	if cfg.Local == nil {
+		return fmt.Errorf("local target is required")
+	}
+
 	if cfg.Default == nil {
 		cfg.Default = cfg.Local
+	}
+
+	return nil
+}
+
+func NewServer(cfg ServerConfig) (http.Handler, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("config: %w", err)
 	}
 
 	names := make([]string, 1+len(cfg.Other))
@@ -85,7 +97,7 @@ func NewServer(cfg ServerConfig) http.Handler {
 			Request:  req,
 			Response: res,
 		})
-	})
+	}), nil
 }
 
 //
@@ -283,7 +295,7 @@ func parseSearchRequest(ctx context.Context, r *http.Request) (*trctrace.SearchR
 			tr.Errorf(err.Error())
 		}
 	default:
-		tr.Tracef("parsing search request from URL: %s", urlquery.Encode())
+		tr.Tracef("parsing search request from URL %q", urlquery.Encode())
 
 		req = &trctrace.SearchRequest{
 			IDs:         urlquery["id"],
@@ -303,7 +315,7 @@ func parseSearchRequest(ctx context.Context, r *http.Request) (*trctrace.SearchR
 		tr.Errorf(err.Error())
 	}
 
-	tr.Tracef("parsed search request: %s", req)
+	tr.Tracef("parsed search request %s", req)
 
 	return req, problems
 }
