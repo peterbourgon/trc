@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NYTimes/gziphandler"
 	"github.com/peterbourgon/trc"
 	trctrace "github.com/peterbourgon/trc/trctrace2"
 	"github.com/peterbourgon/trc/trctrace2/trctracehttp"
@@ -80,7 +79,7 @@ func main() {
 		}
 
 		trcHandlers[i] = server
-		trcHandlers[i] = gziphandler.GzipHandler(trcHandlers[i])
+		//trcHandlers[i] = gziphandler.GzipHandler(trcHandlers[i])
 		trcHandlers[i] = trctracehttp.Middleware(collectors[i].NewTrace, categorize)(trcHandlers[i])
 	}
 

@@ -13,8 +13,8 @@ import (
 type MultiSearcher []Searcher
 
 func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
-	begin := time.Now()
 	tr := trc.FromContext(ctx)
+	begin := time.Now()
 
 	type tuple struct {
 		id  string

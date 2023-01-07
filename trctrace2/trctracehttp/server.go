@@ -107,15 +107,15 @@ func NewServer(cfg ServerConfig) (http.Handler, error) {
 
 func parseSearchRequest(ctx context.Context, r *http.Request) (*trctrace.SearchRequest, []string) {
 	var (
-		tr          = trc.FromContext(ctx)
-		isJSON      = strings.Contains(r.Header.Get("content-type"), "application/json")
-		urlquery    = r.URL.Query()
-		limit       = parseDefault(urlquery.Get("n"), strconv.Atoi, 10)
-		minDuration = parseDefault(urlquery.Get("min"), parseDurationPointer, nil)
-		bucketing   = parseBucketing(urlquery["b"]) // can be nil, no problem
-		query       = urlquery.Get("q")
-		req         = &trctrace.SearchRequest{}
-		prs         = []string{}
+		tr       = trc.FromContext(ctx)
+		isJSON   = strings.Contains(r.Header.Get("content-type"), "application/json")
+		urlquery = r.URL.Query()
+		n        = parseRange(urlquery.Get("n"), strconv.Atoi, 1, 10, 250)
+		min      = parseDefault(urlquery.Get("min"), parseDurationPointer, nil)
+		bs       = parseBucketing(urlquery["b"]) // can be nil, no problem
+		q        = urlquery.Get("q")
+		req      = &trctrace.SearchRequest{}
+		prs      = []string{}
 	)
 
 	switch {
@@ -133,11 +133,11 @@ func parseSearchRequest(ctx context.Context, r *http.Request) (*trctrace.SearchR
 			IDs:         urlquery["id"],
 			Category:    urlquery.Get("category"),
 			IsActive:    urlquery.Has("active"),
-			Bucketing:   bucketing,
-			MinDuration: minDuration,
+			Bucketing:   bs,
+			MinDuration: min,
 			IsFailed:    urlquery.Has("failed"),
-			Query:       query,
-			Limit:       limit,
+			Query:       q,
+			Limit:       n,
 		}
 	}
 
@@ -184,6 +184,20 @@ func parseDefault[T any](s string, parse func(string) (T, error), def T) T {
 		return v
 	}
 	return def
+}
+
+func parseRange[T int](s string, parse func(string) (T, error), min, def, max T) T {
+	v, err := parse(s)
+	switch {
+	case err != nil:
+		return def
+	case err == nil && v < min:
+		return min
+	case err == nil && v > max:
+		return max
+	default:
+		return v
+	}
 }
 
 func parseDurationPointer(s string) (*time.Duration, error) {
