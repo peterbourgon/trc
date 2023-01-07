@@ -27,7 +27,7 @@ func Middleware(create NewTraceFunc, category GetCategoryFunc) func(http.Handler
 			ctx, tr := create(r.Context(), category(r))
 			defer tr.Finish()
 
-			tr.Tracef("%s %s %s (%s)", r.RemoteAddr, r.Method, r.URL.Path)
+			tr.Tracef("%s %s %s", r.RemoteAddr, r.Method, r.URL.String())
 
 			iw := newInterceptor(w)
 
