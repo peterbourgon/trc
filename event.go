@@ -119,18 +119,20 @@ func (ev *Event) UnmarshalJSON(data []byte) error {
 //
 
 type jsonEvent struct {
-	Seq   uint64        `json:"seq"`
-	When  time.Time     `json:"when"`
-	What  string        `json:"what"`
-	Stack jsonCallStack `json:"stack"`
+	Seq     uint64        `json:"seq"`
+	When    time.Time     `json:"when"`
+	What    string        `json:"what"`
+	Stack   jsonCallStack `json:"stack"`
+	IsError bool          `json:"is_error"`
 }
 
 func jsonEventFrom(ev *Event) jsonEvent {
 	return jsonEvent{
-		Seq:   ev.Seq,
-		When:  ev.When,
-		What:  ev.What.String(),
-		Stack: jsonCallStackFrom(ev.Stack),
+		Seq:     ev.Seq,
+		When:    ev.When,
+		What:    ev.What.String(),
+		Stack:   jsonCallStackFrom(ev.Stack),
+		IsError: ev.IsError,
 	}
 }
 
@@ -139,6 +141,7 @@ func (jev *jsonEvent) writeTo(ev *Event) {
 	ev.When = jev.When
 	ev.What = stringer(jev.What)
 	ev.Stack = jev.Stack.toCallStack()
+	ev.IsError = jev.IsError
 }
 
 type jsonCallStack []*jsonCall

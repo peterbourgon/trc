@@ -8,14 +8,18 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/peterbourgon/trc"
 	trctrace "github.com/peterbourgon/trc/trctrace2"
 	"github.com/peterbourgon/trc/trctrace2/trctracehttp"
 )
 
 func TestE2E(t *testing.T) {
 	ctx := context.Background()
-	collector := trctrace.NewCollector(100)
-	traceServer := trctracehttp.NewServerOver(trctracehttp.Target{Origin: "base", Searcher: collector})
+	src := trc.Source{Name: "base"}
+	max := 1000
+	collector := trctrace.NewCollector(src, max)
+	local := trctracehttp.Target{Name: "local", Searcher: collector}
+	traceServer := trctracehttp.NewServer(local)
 	httpServer := httptest.NewServer(traceServer)
 	defer httpServer.Close()
 	traceClient := trctracehttp.NewClient(http.DefaultClient, httpServer.URL)
@@ -47,7 +51,7 @@ func TestE2E(t *testing.T) {
 		t.Logf("direct: total %d, matched %d, selected %d, err %v", res1.Total, res1.Matched, len(res1.Selected), err1)
 		res2, err2 := traceClient.Search(ctx, req)
 		t.Logf("client: total %d, matched %d, selected %d, err %v", res2.Total, res2.Matched, len(res2.Selected), err2)
-		opts := cmpopts.IgnoreFields(trctrace.SearchResponse{}, "Duration", "Origins", "Request.Regexp")
+		opts := cmpopts.IgnoreFields(trctrace.SearchResponse{}, "Sources", "Duration")
 		if !cmp.Equal(res1, res2, opts) {
 			t.Fatal(cmp.Diff(res1, res2, opts))
 		}

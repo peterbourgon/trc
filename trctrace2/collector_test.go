@@ -27,7 +27,9 @@ func TestCollector(t *testing.T) {
 						categories[i] = fmt.Sprintf("cat%d", i)
 					}
 
-					collector := trctrace.NewCollector(maxPerCategory)
+					src := trc.Source{Name: "base"}
+					max := maxPerCategory
+					collector := trctrace.NewCollector(src, max)
 					for i := 0; i < traceCount; i++ {
 						category := categories[rng.Intn(len(categories))]
 						_, tr := collector.NewTrace(ctx, category)

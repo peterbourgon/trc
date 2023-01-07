@@ -95,11 +95,11 @@ function highlightquery() {
 {{ $n := .Request.Limit }}
 {{ $q := .Request.Query }}
 {{ $r := .Request }}
-{{ $o := .ServedBy }}
+{{ $target := .Target }}
 
-{{ $query_params := printf "&n=%d" $r.Limit | safeurl -}}
-{{ if $r.Regexp -}}{{ $query_params = printf "&q=%s%s" $r.Regexp.String $query_params | safeurl -}}{{ end -}}
-{{ if $o -}}{{ $query_params = printf "&origin=%s%s" $o $query_params | safeurl -}}{{ end -}}
+{{ $query_params := printf "n=%d" $r.Limit | safeurl -}}
+{{ if $target    }}{{ $query_params = printf "t=%s&%s" $target $query_params          | safeurl }}{{ end }}
+{{ if $r.Regexp  }}{{ $query_params = printf "%s&q=%s"   $query_params $r.Regexp.String | safeurl }}{{ end }}
 
 <table id="summary">
 
@@ -109,17 +109,17 @@ function highlightquery() {
 	</th>
 
 	<th class="active count">
-		<a href="?active{{$query_params}}">Active</a>
+		<a href="?{{$query_params}}&active">Active</a>
 	</th>
 
-	{{ range .Stats.Bucketing -}}
+	{{ range .Response.Stats.Bucketing -}}
 	<th class="bucket count min-{{.String}}">
-		<a href="?min={{.String}}{{$query_params}}">&geq;{{.String}}</a>
+		<a href="?{{$query_params}}&min={{.String}}">&geq;{{.String}}</a>
 	</th>
 	{{ end -}}
 
 	<th class="failed count">
-		<a href="?failed{{$query_params}}">Failed</a>
+		<a href="?{{$query_params}}&failed">Failed</a>
 	</th>
 
 	<th class="total count">
@@ -143,7 +143,7 @@ function highlightquery() {
 	</th>
 </tr>
 
-{{ range .Stats.Categories -}}
+{{ range .Response.Stats.Categories -}}
 <tr class="category">
 	{{ $category_name       := .Name                              -}}
 	{{ $category_class_name := category2class .Name               -}}
@@ -154,12 +154,12 @@ function highlightquery() {
 	{{ $pct_failed          := uint64percent $num_failed $num_total -}}
 
 	<td class="category text {{$category_class_name}}">
-		<a href="?category={{$category_name}}{{$query_params}}">{{$category_name}}</a>
+		<a href="?{{$query_params}}&category={{$category_name}}">{{$category_name}}</a>
 	</td>
 
 	<td class="active count progress active {{$category_class_name}}" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
 		<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
-		<a href="?category={{$category_name}}&active{{$query_params}}">{{$num_active}}</a>
+		<a href="?{{$query_params}}&category={{$category_name}}&active">{{$num_active}}</a>
 	</td>
 
 	{{ range $i, $n := .NumBucket -}}
@@ -167,13 +167,13 @@ function highlightquery() {
 	{{ $pct := uint64percent $n $num_total -}}
 	<td class="bucket count progress min-{{$min}} {{$category_class_name}}" title="{{$n}} of {{$num_total}}, {{$pct}}%">
 		<div class="progress-bar" style="width:{{$pct}}%;"></div>
-		<a href="?category={{$category_name}}&min={{$min.String}}{{$query_params}}">{{$n}}</a>
+		<a href="?{{$query_params}}&category={{$category_name}}&min={{$min.String}}">{{$n}}</a>
 	</td>
 	{{ end -}}
 
 	<td class="failed count progress {{$category_class_name}}" title="{{$num_failed}} of {{$num_total}}, {{$pct_failed}}%">
 		<div class="progress-bar" style="width:{{$pct_failed}}%;"></div>
-		<a href="?category={{$category_name}}&failed{{$query_params}}">{{$num_failed}}</a>
+		<a href="?{{$query_params}}&category={{$category_name}}&failed">{{$num_failed}}</a>
 	</td>
 
 	<td class="total count {{$category_class_name}}" title="{{$num_total}} total traces">
@@ -198,7 +198,7 @@ function highlightquery() {
 </tr>
 {{ end -}}
 
-{{ with .Stats.Overall -}}
+{{ with .Response.Stats.Overall -}}
 <tr class="category">
 	{{ $category_name       := .Name                              -}}
 	{{ $category_class_name := category2class .Name               -}}
@@ -261,18 +261,18 @@ function highlightquery() {
 
 	<div id="topline-form">
 		<form id="search-form" method="GET" target="">
+			{{ if .Targets }}
+			<select id="search-target" name="t">
+				{{ range .Targets }}
+				<option name="{{.}}" {{ if eq $target . -}}selected{{ end -}}>{{.}}</option>
+				{{ end }}
+			</select>
+			{{ end }}
 			<input id="search-box" type="text" name="q" placeholder="regex" {{if .Request.Regexp}}value="{{.Request.Regexp.String}}"{{end}} size="32" autofocus />
 			{{ if .Request.Category    -}}<input type="hidden" name="category"  value="{{.Request.Category}}"    />{{ end -}}
 			{{ if .Request.IsActive    -}}<input type="hidden" name="active"    value="{{.Request.IsActive}}"    />{{ end -}}
 			{{ if .Request.MinDuration -}}<input type="hidden" name="min"       value="{{.Request.MinDuration}}" />{{ end -}}
 			{{ if .Request.IsFailed    -}}<input type="hidden" name="failed"    value="{{.Request.IsFailed}}"    />{{ end -}}
-			{{ if .Origins -}}
-			<select id="search-origin" name="origin">
-				{{ range .Origins -}}
-				<option name="{{.}}" {{ if eq $o . -}}selected{{ end -}}>{{.}}</option>
-				{{ end -}}
-			</select>
-			{{ end -}}
 			<select id="search-limit" name="n">
 				<option name="10"   {{ if eq .Request.Limit 10   -}}selected{{ end -}}>10  </option>
 				<option name="25"   {{ if eq .Request.Limit 25   -}}selected{{ end -}}>25  </option>
@@ -302,13 +302,12 @@ function highlightquery() {
 	</script>
 
 	<div id="topline-metadata">
-		<div id="topline-search-servedby" class="topline-search">served-by={{ .ServedBy }}</div>
-		<div id="topline-search-datafrom" class="topline-search">data-from={{ .DataFrom }}</div>
-		<div id="topline-search-total"   class="topline-search">total={{ .Stats.Overall.NumTotal }}</div>
-		<div id="topline-search-matched" class="topline-search">matched={{ .Matched }}</div>
-		<div id="topline-search-shown"   class="topline-search">shown={{ len .Selected }}</div>
-		<div id="topline-search-took"    class="topline-search">took={{ humanizeduration .Duration }}</div>
-		{{ if .Problems -}}<div id="topline-search-problems" class="topline-search">problems={{ len .Problems -}}</div>{{ end -}}
+		<div id="topline-search-source"   class="topline-search">target={{ $target }}</div>
+		<div id="topline-search-total"    class="topline-search">total={{ .Response.Stats.Overall.NumTotal }}</div>
+		<div id="topline-search-matched"  class="topline-search">matched={{ .Response.Matched }}</div>
+		<div id="topline-search-shown"    class="topline-search">shown={{ len .Response.Selected }}</div>
+		<div id="topline-search-took"     class="topline-search">took={{ humanizeduration .Response.Duration }}</div>
+		{{ if .Response.Problems -}}<div id="topline-search-problems" class="topline-search">problems={{ len .Response.Problems -}}</div>{{ end -}}
 	</div>
 
 </div>
@@ -316,18 +315,27 @@ function highlightquery() {
 <!-- --------------------------------- -->
 
 <div id="traces">
-{{ if not .Selected -}}
+{{ if not .Response.Selected -}}
 <p>No matching traces found.</p>
 {{ end -}}
 
-{{ range .Selected -}}
+{{ range .Response.Selected -}}
 <div id="{{.ID}}" class="trace">
 
 	<div class="metadata">
-		<strong class="searchable"><a href="?id={{.ID}}">{{ .ID }}</a></strong>
+		{{ $href := printf "id=%s" .ID | safeurl }}
+		{{ if $target }} {{ $href = printf "%s&t=%s" $href $target | safeurl }} {{ end }}
+		<strong class="searchable"><a href="?{{$href}}">{{ .ID }}</a></strong>
 		&middot;
-		<a href="?id={{.ID}}&json">JSON</a>
-		{{ if .Origin -}} &middot; {{.Origin}} {{ end -}}
+		<a href="?{{$href}}&json">JSON</a>
+		{{ if .Source }}
+			&middot;
+			{{ if .Source.URL }}
+				via <a href="{{.Source.URL}}">{{.Source.Name}}</a>
+			{{ else }}
+				via {{.Source.Name}}
+			{{ end }}
+		{{ end }}
 		<span class="right">
 			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">
 				<a href="#" onclick="showstacks({{.ID}});"><strong>[≡]</strong></a>
@@ -360,14 +368,14 @@ function highlightquery() {
 		{{ range .Events -}}
 		<div class="event">
 			{{ $delta   := timediff .When $prev_ts      -}}
-			{{ $overall := timediff .When $start        -}}
+			{{ $targetverall := timediff .When $start        -}}
 			{{ $percent := durationpercent $delta $duration -}}
 
 			<div class="timestamp">
 				{{timetrunc .When}}
 			</div>
 
-			<div class="delta" title="+{{$delta}} = {{$overall}}">
+			<div class="delta" title="+{{$delta}} = {{$targetverall}}">
 				<div class="progress-bar" style="width:{{$percent}}%;"></div>
 				+{{ humanizeduration $delta }}
 				{{ $prev_ts = .When -}}
@@ -428,7 +436,7 @@ function highlightquery() {
 
 <!-- ------------------ -->
 <div id="problems">
-	{{ range .Problems -}}
+	{{ range .Response.Problems -}}
 	<div class="problem">{{.}}</div>
 	{{ end -}}
 </div>

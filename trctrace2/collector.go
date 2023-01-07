@@ -11,14 +11,16 @@ import (
 )
 
 type Collector struct {
+	source     trc.Source
 	categories *trcds.RingBuffers[trc.Trace]
 }
 
 var _ Searcher = (*Collector)(nil)
 
-func NewCollector(maxPerCategory int) *Collector {
+func NewCollector(src trc.Source, max int) *Collector {
 	return &Collector{
-		categories: trcds.NewRingBuffers[trc.Trace](maxPerCategory),
+		source:     src,
+		categories: trcds.NewRingBuffers[trc.Trace](max),
 	}
 }
 
@@ -80,7 +82,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 
 	selected := make([]*trc.StaticTrace, len(allowed))
 	for i := range allowed {
-		selected[i] = trc.NewStaticTrace(allowed[i])
+		selected[i] = trc.NewStaticTraceFrom(allowed[i], c.source)
 	}
 
 	stopwatch.Lap("select")
@@ -100,9 +102,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 	duration := stopwatch.Overall()
 
 	return &SearchResponse{
-		Request:  req,
-		ServedBy: "",  //
-		DataFrom: nil, //
+		Sources:  []trc.Source{c.source},
 		Stats:    stats,
 		Total:    total,
 		Matched:  matched,

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/peterbourgon/trc"
 	trctrace "github.com/peterbourgon/trc/trctrace2"
 	"github.com/peterbourgon/trc/trctrace2/trctracehttp"
 )
@@ -20,7 +21,8 @@ func main() {
 
 	collectors := make([]*trctrace.Collector, len(ports))
 	for i := range collectors {
-		collectors[i] = trctrace.NewCollector(1000)
+		src := &trc.Source{Name: ports[i], URL: fmt.Sprintf("http://localhost:%s/trc", ports[i])}
+		collectors[i] = trctrace.NewCollector(src, 1000)
 	}
 
 	kvs := make([]*KV, len(ports))
@@ -59,15 +61,14 @@ func main() {
 	}
 
 	globalTarget := trctracehttp.Target{
-		Origin:   "global",
+		Name:     "global",
 		Searcher: globalSearcher,
 	}
-	_ = globalTarget
 
 	trcHandlers := make([]http.Handler, len(collectors))
 	for i := range trcHandlers {
-		localTarget := trctracehttp.Target{Origin: ports[i], Searcher: collectors[i]}
-		trcHandlers[i] = trctracehttp.NewServerOver(localTarget, globalTarget)
+		localTarget := trctracehttp.Target{Name: "local", Searcher: collectors[i]}
+		trcHandlers[i] = trctracehttp.NewServer(localTarget, globalTarget)
 		// trcHandlers[i] = trctracehttp.NewServer(ports[i], collectors[i])
 		// trcHandlers[i] = trctracehttp.TargetMiddleware(globalTarget)(trcHandlers[i])
 		trcHandlers[i] = trctracehttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return "traces" })(trcHandlers[i])

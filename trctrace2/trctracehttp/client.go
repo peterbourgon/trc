@@ -64,14 +64,14 @@ func (c *Client) Search(ctx context.Context, req *trctrace.SearchRequest) (*trct
 	//	httpResp.Body = io.NopCloser(strings.NewReader(bodyStr))
 	//}
 
-	var searchResp trctrace.SearchResponse
-	if err := json.NewDecoder(httpResp.Body).Decode(&searchResp); err != nil {
+	var d ResponseData
+	if err := json.NewDecoder(httpResp.Body).Decode(&d); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
-	tr.Tracef("response served_by=%s data_from=%v total=%d matched=%d selected=%d", searchResp.ServedBy, searchResp.DataFrom, searchResp.Total, searchResp.Matched, len(searchResp.Selected))
+	tr.Tracef("response target=%s total=%d matched=%d selected=%d", d.Target, d.Response.Total, d.Response.Matched, len(d.Response.Selected))
 
-	return &searchResp, nil
+	return d.Response, nil
 }
 
 func redactURL(err error) error {

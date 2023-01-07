@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/peterbourgon/trc"
@@ -32,6 +33,48 @@ type SearchRequest struct {
 	Query       string          `json:"query"`
 	Regexp      *regexp.Regexp  `json:"-"`
 	Limit       int             `json:"limit,omitempty"`
+}
+
+func (req *SearchRequest) String() string {
+	var tokens []string
+
+	if len(req.IDs) > 0 {
+		tokens = append(tokens, fmt.Sprintf("ids=%v", req.IDs))
+	}
+
+	if req.Category != "" {
+		tokens = append(tokens, fmt.Sprintf("category=%q", req.Category))
+	}
+
+	if req.IsActive {
+		tokens = append(tokens, "active")
+	}
+
+	if len(req.Bucketing) > 0 {
+		tokens = append(tokens, fmt.Sprintf("bucketing=%v", req.Bucketing))
+	}
+
+	if req.MinDuration != nil {
+		tokens = append(tokens, fmt.Sprintf("min=%s", req.MinDuration))
+	}
+
+	if req.IsFailed {
+		tokens = append(tokens, "failed")
+	}
+
+	if req.Query != "" {
+		tokens = append(tokens, fmt.Sprintf("query=%s", req.Query))
+	}
+
+	if req.Regexp != nil {
+		tokens = append(tokens, fmt.Sprintf("regexp=%s", req.Regexp.String()))
+	}
+
+	if req.Limit != 0 {
+		tokens = append(tokens, fmt.Sprintf("limit=%d", req.Limit))
+	}
+
+	return strings.Join(tokens, " ")
 }
 
 func (req *SearchRequest) Normalize() error {
@@ -108,10 +151,9 @@ func (req *SearchRequest) HTTPRequest(ctx context.Context, baseurl string) (*htt
 		urlquery.Set("q", req.Regexp.String())
 	}
 
-	urlquery.Set("local", "true")
-	urlquery.Set("json", "true")
-
 	r.URL.RawQuery = urlquery.Encode()
+
+	r.Header.Set("accept", "application/json")
 
 	return r, nil
 }
@@ -231,10 +273,7 @@ func (req *SearchRequest) QueryParams(keyvals ...string) template.URL {
 //
 
 type SearchResponse struct {
-	Request  *SearchRequest     `json:"request"`
-	Origins  []string           `json:"origins,omitempty"`
-	ServedBy string             `json:"served_by,omitempty"`
-	DataFrom []string           `json:"data_from,omitempty"`
+	Sources  []trc.Source       `json:"sources,omitempty"`
 	Stats    Stats              `json:"stats"`
 	Total    int                `json:"total"`
 	Matched  int                `json:"matched"`
@@ -250,11 +289,11 @@ type SearchResponse struct {
 type MultiSearcher []Searcher
 
 func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
+	begin := time.Now()
 	tr := trc.FromContext(ctx)
 
-	begin := time.Now()
-
 	type tuple struct {
+		id  string
 		res *SearchResponse
 		err error
 	}
@@ -265,44 +304,48 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 		go func(id string, s Searcher) {
 			ctx, _ := trc.PrefixTraceContext(ctx, "<%s>", id)
 			res, err := s.Search(ctx, req)
-			tuplec <- tuple{res, err}
+			tuplec <- tuple{id, res, err}
 		}(strconv.Itoa(i+1), s)
 	}
 
 	tr.Tracef("scattered requests, count %d", len(ms))
 
 	// Gather.
-	aggregate := &SearchResponse{Request: req}
+	aggregate := &SearchResponse{}
 	for i := 0; i < cap(tuplec); i++ {
 		t := <-tuplec
 		switch {
 		case t.res == nil && t.err == nil: // weird
-			tr.Tracef("weird: no result, no error")
+			tr.Tracef("%s: weird: no result, no error", t.id)
 			aggregate.Problems = append(aggregate.Problems, "got nil search response with nil error -- weird")
 		case t.res == nil && t.err != nil: // error case
-			tr.Tracef("error: %v", t.err)
+			tr.Tracef("%s: error: %v", t.id, t.err)
 			aggregate.Problems = append(aggregate.Problems, t.err.Error())
 		case t.res != nil && t.err == nil: // success case
-			tr.Tracef("success: total=%v matched=%v selected=%v", t.res.Total, t.res.Matched, len(t.res.Selected))
+			//tr.Tracef("%s: success", t.id)
+			aggregate.Sources = append(aggregate.Sources, t.res.Sources...)
 			aggregate.Stats = CombineStats(aggregate.Stats, t.res.Stats)
 			aggregate.Total += t.res.Total
 			aggregate.Matched += t.res.Matched
 			aggregate.Selected = append(aggregate.Selected, t.res.Selected...) // needs sort+limit
 			aggregate.Problems = append(aggregate.Problems, t.res.Problems...)
-			aggregate.DataFrom = append(aggregate.DataFrom, t.res.ServedBy)
 		case t.res != nil && t.err != nil: // weird
-			tr.Tracef("weird: total=%v matched=%v selected=%v error=%v", t.res.Total, t.res.Matched, len(t.res.Selected), t.err)
+			tr.Tracef("%s: weird: valid result (accepting it) with error: %v", t.id, t.err)
+			aggregate.Sources = append(aggregate.Sources, t.res.Sources...)
 			aggregate.Stats = CombineStats(aggregate.Stats, t.res.Stats)
 			aggregate.Total += t.res.Total
 			aggregate.Matched += t.res.Matched
 			aggregate.Selected = append(aggregate.Selected, t.res.Selected...) // needs sort+limit
 			aggregate.Problems = append(aggregate.Problems, t.res.Problems...)
 			aggregate.Problems = append(aggregate.Problems, fmt.Sprintf("got valid search response with error (%v) -- weird", t.err))
-			aggregate.DataFrom = append(aggregate.DataFrom, t.res.ServedBy)
 		}
 	}
 
 	tr.Tracef("gathered responses")
+
+	sort.Slice(aggregate.Sources, func(i, j int) bool {
+		return aggregate.Sources[i].Name < aggregate.Sources[j].Name
+	})
 
 	// At this point, the aggregate response has all of the raw data it's ever
 	// gonna get. We need to do a little bit of post-processing. First, we need

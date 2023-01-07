@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -15,6 +14,72 @@ import (
 	trctrace "github.com/peterbourgon/trc/trctrace2"
 )
 
+type Target struct {
+	Name     string
+	Searcher trctrace.Searcher
+}
+
+type ResponseData struct {
+	Target   string                   `json:"target,omitempty"`
+	Targets  []string                 `json:"targets,omitempty"`
+	Request  *trctrace.SearchRequest  `json:"request"`
+	Response *trctrace.SearchResponse `json:"response"`
+}
+
+func NewServer(local Target, other ...Target) http.Handler {
+	names := make([]string, 1+len(other))
+	index := make(map[string]Target, 1+len(other))
+	for i, t := range append([]Target{local}, other...) {
+		names[i] = t.Name
+		index[t.Name] = t
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		begin := time.Now()
+
+		ctx, tr, finish := trc.Region(r.Context(), "ServeHTTP")
+		defer finish()
+
+		req, problems := parseSearchRequest(ctx, r)
+
+		t := r.URL.Query().Get("t")
+		target, ok := index[t]
+		if !ok {
+			target = local
+		}
+
+		tr.Tracef("target=%v", target.Name)
+
+		tr.Tracef("starting search")
+
+		res, err := target.Searcher.Search(ctx, req)
+		if err != nil {
+			tr.Errorf("search error: %v", err)
+			problems = append(problems, err.Error())
+			res = &trctrace.SearchResponse{} // default
+		}
+
+		tr.Tracef("search complete")
+
+		res.Problems = append(problems, res.Problems...)
+		res.Duration = time.Since(begin)
+
+		tr.Tracef("total=%d matched=%d selected=%d duration=%s", res.Total, res.Matched, len(res.Selected), res.Duration)
+
+		Render(ctx, w, r, assets, "traces2.html", templateFuncs, &ResponseData{
+			Target:   target.Name,
+			Targets:  names,
+			Request:  req,
+			Response: res,
+		})
+	})
+}
+
+//
+//
+//
+
+/*
 type Server struct {
 	//
 }
@@ -177,11 +242,7 @@ type (
 		Origins []string
 	}
 )
-
-type Target struct {
-	Origin   string
-	Searcher trctrace.Searcher
-}
+*/
 
 //
 //
@@ -209,7 +270,8 @@ func parseSearchRequest(ctx context.Context, r *http.Request) (*trctrace.SearchR
 			tr.Errorf(err.Error())
 		}
 	default:
-		tr.Tracef("parsing search request from URL")
+		tr.Tracef("parsing search request from URL: %s", urlquery.Encode())
+
 		req = &trctrace.SearchRequest{
 			IDs:         urlquery["id"],
 			Category:    urlquery.Get("category"),
@@ -227,6 +289,8 @@ func parseSearchRequest(ctx context.Context, r *http.Request) (*trctrace.SearchR
 		problems = append(problems, err.Error())
 		tr.Errorf(err.Error())
 	}
+
+	tr.Tracef("parsed search request: %s", req)
 
 	return req, problems
 }
@@ -271,4 +335,13 @@ func parseDurationPointer(s string) (*time.Duration, error) {
 		return nil, err
 	}
 	return &d, nil
+}
+
+func firstOf(strs ...string) string {
+	for _, s := range strs {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
 }

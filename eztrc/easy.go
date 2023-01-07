@@ -7,7 +7,7 @@ import (
 	trctrace "github.com/peterbourgon/trc/trctrace2"
 )
 
-var collector = trctrace.NewCollector(1000) // TODO
+var collector = trctrace.NewCollector(trc.Source{Name: "local"}, 1000) // TODO
 
 func Collector() *trctrace.Collector { return collector }
 
