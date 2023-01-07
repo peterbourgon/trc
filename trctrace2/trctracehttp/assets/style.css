@@ -95,23 +95,23 @@ th.oldest {
  * topline
  */
 
-div#topline-metadata {
-	margin-left: 1ch;
-}
-
 div#topline {
+	margin: 4ch 2ch;
 	display: flex;
 	align-items: baseline;
+	flex-direction: column;
+	/* justify-content: space-between; */
 }
 
 div#topline>div {
 	display: flex;
 	align-items: baseline;
+	margin: 0 1ch;
 	gap: 1ch;
 }
 
-.origin {
-	font-weight: bold;
+div#topline-metadata {
+	padding-left: 1ch;
 }
 
 /*

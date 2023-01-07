@@ -21,7 +21,7 @@ func main() {
 
 	collectors := make([]*trctrace.Collector, len(ports))
 	for i := range collectors {
-		src := &trc.Source{Name: ports[i], URL: fmt.Sprintf("http://localhost:%s/trc", ports[i])}
+		src := trc.Source{Name: ports[i], URL: fmt.Sprintf("http://localhost:%s/trc", ports[i])}
 		collectors[i] = trctrace.NewCollector(src, 1000)
 	}
 
@@ -60,17 +60,19 @@ func main() {
 		globalSearcher[i] = trcClients[i]
 	}
 
-	globalTarget := trctracehttp.Target{
+	globalTarget := &trctracehttp.Target{
 		Name:     "global",
 		Searcher: globalSearcher,
 	}
 
 	trcHandlers := make([]http.Handler, len(collectors))
 	for i := range trcHandlers {
-		localTarget := trctracehttp.Target{Name: "local", Searcher: collectors[i]}
-		trcHandlers[i] = trctracehttp.NewServer(localTarget, globalTarget)
-		// trcHandlers[i] = trctracehttp.NewServer(ports[i], collectors[i])
-		// trcHandlers[i] = trctracehttp.TargetMiddleware(globalTarget)(trcHandlers[i])
+		localTarget := &trctracehttp.Target{Name: "local", Searcher: collectors[i]}
+		trcHandlers[i] = trctracehttp.NewServer(trctracehttp.ServerConfig{
+			Local:   localTarget,
+			Other:   []*trctracehttp.Target{globalTarget},
+			Default: globalTarget,
+		})
 		trcHandlers[i] = trctracehttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return "traces" })(trcHandlers[i])
 	}
 

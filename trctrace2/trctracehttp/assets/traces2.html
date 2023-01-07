@@ -261,6 +261,8 @@ function highlightquery() {
 
 	<div id="topline-form">
 		<form id="search-form" method="GET" target="">
+			<input id="search-box" type="text" name="q" placeholder="regex" {{if .Request.Regexp}}value="{{.Request.Regexp.String}}"{{end}} size="32" autofocus />
+
 			{{ if .Targets }}
 			<select id="search-target" name="t">
 				{{ range .Targets }}
@@ -268,11 +270,7 @@ function highlightquery() {
 				{{ end }}
 			</select>
 			{{ end }}
-			<input id="search-box" type="text" name="q" placeholder="regex" {{if .Request.Regexp}}value="{{.Request.Regexp.String}}"{{end}} size="32" autofocus />
-			{{ if .Request.Category    -}}<input type="hidden" name="category"  value="{{.Request.Category}}"    />{{ end -}}
-			{{ if .Request.IsActive    -}}<input type="hidden" name="active"    value="{{.Request.IsActive}}"    />{{ end -}}
-			{{ if .Request.MinDuration -}}<input type="hidden" name="min"       value="{{.Request.MinDuration}}" />{{ end -}}
-			{{ if .Request.IsFailed    -}}<input type="hidden" name="failed"    value="{{.Request.IsFailed}}"    />{{ end -}}
+
 			<select id="search-limit" name="n">
 				<option name="10"   {{ if eq .Request.Limit 10   -}}selected{{ end -}}>10  </option>
 				<option name="25"   {{ if eq .Request.Limit 25   -}}selected{{ end -}}>25  </option>
@@ -281,6 +279,12 @@ function highlightquery() {
 				<option name="{{.Request.Limit}}" selected>{{.Request.Limit}}</option>
 				{{ end -}}
 			</select>
+
+			{{ if .Request.Category    -}}<input type="hidden" name="category"  value="{{.Request.Category}}"    />{{ end -}}
+			{{ if .Request.IsActive    -}}<input type="hidden" name="active"    value="{{.Request.IsActive}}"    />{{ end -}}
+			{{ if .Request.MinDuration -}}<input type="hidden" name="min"       value="{{.Request.MinDuration}}" />{{ end -}}
+			{{ if .Request.IsFailed    -}}<input type="hidden" name="failed"    value="{{.Request.IsFailed}}"    />{{ end -}}
+
 			<input id="search-button" type="submit" value="search"/>
 		</form>
 	</div>

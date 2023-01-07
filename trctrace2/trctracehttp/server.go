@@ -26,10 +26,20 @@ type ResponseData struct {
 	Response *trctrace.SearchResponse `json:"response"`
 }
 
-func NewServer(local Target, other ...Target) http.Handler {
-	names := make([]string, 1+len(other))
-	index := make(map[string]Target, 1+len(other))
-	for i, t := range append([]Target{local}, other...) {
+type ServerConfig struct {
+	Local   *Target
+	Other   []*Target
+	Default *Target
+}
+
+func NewServer(cfg ServerConfig) http.Handler {
+	if cfg.Default == nil {
+		cfg.Default = cfg.Local
+	}
+
+	names := make([]string, 1+len(cfg.Other))
+	index := make(map[string]*Target, 1+len(cfg.Other))
+	for i, t := range append([]*Target{cfg.Local}, cfg.Other...) {
 		names[i] = t.Name
 		index[t.Name] = t
 	}
@@ -42,24 +52,27 @@ func NewServer(local Target, other ...Target) http.Handler {
 
 		req, problems := parseSearchRequest(ctx, r)
 
-		t := r.URL.Query().Get("t")
-		target, ok := index[t]
-		if !ok {
-			target = local
+		urlquery := r.URL.Query()
+		isLocal := urlquery.Has("local")
+		t := urlquery.Get("t")
+		tgt, ok := index[t]
+		switch {
+		case ok:
+			// great
+		case !ok && isLocal:
+			tgt = cfg.Local
+		case !ok && !isLocal:
+			tgt = cfg.Default
 		}
 
-		tr.Tracef("target=%v", target.Name)
+		tr.Tracef("target=%v", tgt.Name)
 
-		tr.Tracef("starting search")
-
-		res, err := target.Searcher.Search(ctx, req)
+		res, err := tgt.Searcher.Search(ctx, req)
 		if err != nil {
 			tr.Errorf("search error: %v", err)
 			problems = append(problems, err.Error())
 			res = &trctrace.SearchResponse{} // default
 		}
-
-		tr.Tracef("search complete")
 
 		res.Problems = append(problems, res.Problems...)
 		res.Duration = time.Since(begin)
@@ -67,7 +80,7 @@ func NewServer(local Target, other ...Target) http.Handler {
 		tr.Tracef("total=%d matched=%d selected=%d duration=%s", res.Total, res.Matched, len(res.Selected), res.Duration)
 
 		Render(ctx, w, r, assets, "traces2.html", templateFuncs, &ResponseData{
-			Target:   target.Name,
+			Target:   tgt.Name,
 			Targets:  names,
 			Request:  req,
 			Response: res,

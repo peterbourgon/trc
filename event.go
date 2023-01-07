@@ -123,7 +123,7 @@ type jsonEvent struct {
 	When    time.Time     `json:"when"`
 	What    string        `json:"what"`
 	Stack   jsonCallStack `json:"stack"`
-	IsError bool          `json:"is_error"`
+	IsError bool          `json:"iserr,omitempty"`
 }
 
 func jsonEventFrom(ev *Event) jsonEvent {

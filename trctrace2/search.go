@@ -30,7 +30,7 @@ type SearchRequest struct {
 	Bucketing   []time.Duration `json:"bucketing,omitempty"`
 	MinDuration *time.Duration  `json:"min_duration,omitempty"`
 	IsFailed    bool            `json:"is_failed,omitempty"`
-	Query       string          `json:"query"`
+	Query       string          `json:"query,omitempty"`
 	Regexp      *regexp.Regexp  `json:"-"`
 	Limit       int             `json:"limit,omitempty"`
 }
@@ -150,6 +150,8 @@ func (req *SearchRequest) HTTPRequest(ctx context.Context, baseurl string) (*htt
 	if req.Regexp != nil {
 		urlquery.Set("q", req.Regexp.String())
 	}
+
+	urlquery.Set("local", "true")
 
 	r.URL.RawQuery = urlquery.Encode()
 
