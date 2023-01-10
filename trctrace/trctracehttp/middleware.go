@@ -1,4 +1,4 @@
-package trchttp
+package trctracehttp
 
 import (
 	"context"
@@ -27,15 +27,10 @@ func Middleware(create NewTraceFunc, category GetCategoryFunc) func(http.Handler
 			ctx, tr := create(r.Context(), category(r))
 			defer tr.Finish()
 
-			tr.Tracef("%s %s %s", r.RemoteAddr, r.Method, r.URL.Path)
-
-			// for k, vs := range r.Header {
-			// for _, v := range vs {
-			// tr.Tracef("> %s: %v", k, v)
-			// }
-			// }
+			tr.Tracef("%s %s %s", r.RemoteAddr, r.Method, r.URL.String())
 
 			iw := newInterceptor(w)
+
 			defer func(b time.Time) {
 				code := iw.Code()
 				sent := iw.Written()

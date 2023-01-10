@@ -3,7 +3,6 @@ package trc
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -12,15 +11,14 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// Trace is an interface describing metadata related to something that happened,
-// typically an event or request. A common use case is to create a new trace for
-// each incoming request to an HTTP server.
+// Trace is an interface describing metadata for an operation that occurred in a
+// process. A common use case is to create a new trace for each incoming request
+// to an HTTP server.
 //
-// Traces should represent ephemeral, short-lived events, and should be accessed
-// through a context object. If this doesn't describe your use case, consider
-// using the Log type instead.
+// Traces should normally represent ephemeral and short-lived events, and should
+// be accessed through a context object.
 //
-// Implementations of Trace are expected to be safe for concurrent access.
+// Implementations of Trace are expected to be safe for concurrent use.
 type Trace interface {
 	// ID should return a unique identifier for the trace.
 	ID() string
@@ -181,7 +179,7 @@ func (tr *CoreTrace) Errorf(format string, args ...interface{}) {
 	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, MakeEvent(format, args...))
+		tr.events = append(tr.events, MakeErrorEvent(format, args...))
 	}
 }
 
@@ -200,7 +198,7 @@ func (tr *CoreTrace) LazyErrorf(format string, args ...interface{}) {
 	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, MakeLazyEvent(format, args...))
+		tr.events = append(tr.events, MakeLazyErrorEvent(format, args...))
 	}
 }
 
@@ -336,9 +334,17 @@ func getCoreTraceMaxEvents() int {
 //
 //
 
-type StaticTrace struct {
-	Origin string `json:"origin,omitempty"`
+type Source struct {
+	Name string `json:"name"`
+	URL  string `json:"url,omitempty"`
+}
 
+//
+//
+//
+
+type StaticTrace struct {
+	Source          Source    `json:"source,omitempty"`
 	StaticID        string    `json:"id"`
 	StaticCategory  string    `json:"category"`
 	StaticStart     time.Time `json:"start"`
@@ -353,7 +359,12 @@ type StaticTrace struct {
 var _ Trace = (*StaticTrace)(nil)
 
 func NewStaticTrace(tr Trace) *StaticTrace {
+	return NewStaticTraceFrom(tr, Source{})
+}
+
+func NewStaticTraceFrom(tr Trace, src Source) *StaticTrace {
 	return &StaticTrace{
+		Source:          src,
 		StaticID:        tr.ID(),
 		StaticCategory:  tr.Category(),
 		StaticStart:     tr.Start(),
@@ -396,92 +407,59 @@ func (d *duration) UnmarshalJSON(data []byte) error {
 //
 //
 
-// Prefixed decorates a Trace such that all messages are prefixed with a
-// given string. This can be useful to show important stages or sub-sections of
-// a call stack in traces without needing to inspect call stacks.
-//
-//	func process(ctx context.Context, i int, vs []string) error {
-//	    ctx = Prefixf(ctx, "[process %02d]", i)
-//	    eztrc.Tracef(ctx, "doing something")     // [process 01] doing something
-//	    ...
-//	    for _, v := range vs {
-//	        ctx = Prefixf(ctx, "<%s>", v)
-//	        eztrc.Tracef(ctx, "inner loop")      // [process 01] <abc> inner loop
-//	        ...
-type Prefixed struct {
+// PrefixedTrace decorates a trace and adds a user-supplied prefix to each event.
+// This can be useful to show important regions of execution without needing to
+// inspect full call stacks.
+type PrefixedTrace struct {
 	Trace
-	prefix string
+	format string
+	args   []interface{}
 }
 
-// WithPrefix wraps the trace and prefixes all events with the format string.
-func WithPrefix(tr Trace, format string, args ...interface{}) Trace {
-	prefix := strings.TrimSpace(fmt.Sprintf(format, args...))
-	if prefix == "" {
+func PrefixTrace(tr Trace, format string, args ...interface{}) Trace {
+	format = strings.TrimSpace(format)
+
+	if format == "" {
 		return tr
 	}
 
-	return &Prefixed{
+	return &PrefixedTrace{
 		Trace:  tr,
-		prefix: prefix + " ",
+		format: format + " ",
+		args:   args,
 	}
 }
 
-// WithPrefixContext prefixes the trace in the context (if it exists) and
-// returns a new context containing that prefixed trace.
-func WithPrefixContext(ctx context.Context, format string, args ...interface{}) context.Context {
+// PrefixTraceContext decorates and decorates it with PrefixTrace. It returns a new context containing that prefixed traceprefixes the trace in the context (if it exists) and returns a
+// new context containing that prefixed trace.
+func PrefixTraceContext(ctx context.Context, format string, args ...interface{}) (context.Context, Trace) {
 	tr, ok := MaybeFromContext(ctx)
 	if !ok {
-		return ctx
+		return ctx, nil
 	}
 
-	prefix := strings.TrimSpace(fmt.Sprintf(format, args...))
-	if prefix == "" {
-		return ctx
-	}
+	prefixedTrace := PrefixTrace(tr, format, args...)
+	newContext := ToContext(ctx, prefixedTrace)
 
-	ptr := &Prefixed{Trace: tr, prefix: prefix + " "}
-	return context.WithValue(ctx, traceContextVal, ptr)
+	return newContext, prefixedTrace
 }
 
 // Tracef implements Trace.
-func (ptr *Prefixed) Tracef(format string, args ...interface{}) {
-	ptr.Trace.Tracef(ptr.prefix+format, args...)
+func (ptr *PrefixedTrace) Tracef(format string, args ...interface{}) {
+	ptr.Trace.Tracef(ptr.format+format, append(ptr.args, args...)...)
 }
 
 // LazyTracef implements Trace.
-func (ptr *Prefixed) LazyTracef(format string, args ...interface{}) {
-	ptr.Trace.LazyTracef(ptr.prefix+format, args...)
+func (ptr *PrefixedTrace) LazyTracef(format string, args ...interface{}) {
+	ptr.Trace.LazyTracef(ptr.format+format, append(ptr.args, args...)...)
 }
 
 // Errorf implements Trace.
-func (ptr *Prefixed) Errorf(format string, args ...interface{}) {
-	ptr.Trace.Errorf(ptr.prefix+format, args...)
+func (ptr *PrefixedTrace) Errorf(format string, args ...interface{}) {
+	ptr.Trace.Errorf(ptr.format+format, append(ptr.args, args...)...)
 }
 
 // LazyErrorf implements Trace.
-func (ptr *Prefixed) LazyErrorf(format string, args ...interface{}) {
-	ptr.Trace.LazyErrorf(ptr.prefix+format, args...)
-}
-
-//
-//
-//
-
-type Finalized struct {
-	Trace
-	finalize func()
-}
-
-var _ Trace = (*Finalized)(nil)
-
-func WithFinalize(tr Trace, finalize func()) Trace {
-	return &Finalized{
-		Trace:    tr,
-		finalize: finalize,
-	}
-}
-
-func (tr *Finalized) Finish() {
-	tr.finalize()
-	tr.Trace.Finish()
+func (ptr *PrefixedTrace) LazyErrorf(format string, args ...interface{}) {
+	ptr.Trace.LazyErrorf(ptr.format+format, append(ptr.args, args...)...)
 }

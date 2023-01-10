@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+type traceContextKey struct{}
+
+var traceContextVal traceContextKey
+
 // NewTrace creates a new trace with the given category, and injects it to the
 // given context. If the context already contained a trace, it becomes
 // "shadowed" by the new one.
@@ -32,7 +36,7 @@ func MaybeFromContext(ctx context.Context) (Trace, bool) {
 	return tr, ok
 }
 
-// ToContext derives a new context from the given context containing the given
+// ToContext derives a new context from the given context, containing the given
 // trace. If the context already contained a trace, it becomes "shadowed" by the
 // new trace.
 func ToContext(ctx context.Context, tr Trace) context.Context {
@@ -70,9 +74,9 @@ func LazyErrorf(ctx context.Context, format string, args ...interface{}) {
 // code, typically functions. Typical usage is as follows.
 //
 //	func foo(ctx context.Context, id int) {
-//	    ctx, tr, finish := trc.Region(ctx, "foo %d", id)
-//	    defer finish()
-//	    ...
+//		ctx, tr, finish := trc.Region(ctx, "foo %d", id)
+//		defer finish()
+//		...
 //	}
 //
 // Region produces hierarchical trace events as follows.
@@ -92,7 +96,7 @@ func LazyErrorf(ctx context.Context, format string, args ...interface{}) {
 func Region(ctx context.Context, format string, args ...any) (context.Context, Trace, func()) {
 	begin := time.Now()
 	inputTrace := FromContext(ctx)
-	outputTrace := WithPrefix(inputTrace, "· ")
+	outputTrace := PrefixTrace(inputTrace, "· ")
 	outputContext := ToContext(ctx, outputTrace)
 
 	inputTrace.LazyTracef("→ "+format, args...)
@@ -103,7 +107,3 @@ func Region(ctx context.Context, format string, args ...any) (context.Context, T
 
 	return outputContext, outputTrace, finish
 }
-
-type traceContextKey struct{}
-
-var traceContextVal traceContextKey

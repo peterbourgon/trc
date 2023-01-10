@@ -13,19 +13,20 @@ import (
 	"github.com/go-stack/stack"
 )
 
-// Event represents the information captured as part of a trace or log
-// statement. It includes metadata like a timestamp and call stack.
+// Event represents the information captured as part of a trace statement from
+// user code.
 //
 // Events may be retained for an indeterminate length of time, and accessed
 // concurrently by multiple goroutines. Once created, an event is expected to be
-// immutable. In particular, the fmt.Stringer implementation used in the "what"
-// field must be safe for concurrent use, including any values it may capture by
+// immutable. In particular, the fmt.Stringer implementation of the What field
+// must be safe for concurrent use, including any values it may capture by
 // reference.
 type Event struct {
-	Seq   uint64       // should be unique for each event
-	When  time.Time    // ideally UTC
-	What  fmt.Stringer // must be safe for concurrent use
-	Stack CallStack    // optional but recommented
+	Seq     uint64       // should be unique for each event
+	When    time.Time    // ideally UTC
+	What    fmt.Stringer // must be safe for concurrent use
+	Stack   CallStack    // optional but recommented
+	IsError bool         //
 }
 
 type CallStack []Call
@@ -58,6 +59,28 @@ func MakeLazyEvent(format string, args ...interface{}) Event {
 		When:  time.Now().UTC(),
 		What:  &lazyStringer{fmt: format, args: args},
 		Stack: getStack(),
+	}
+}
+
+// MakeErrorEvent is equivalent to MakeEvent, and sets IsError.
+func MakeErrorEvent(format string, args ...interface{}) Event {
+	return Event{
+		Seq:     atomic.AddUint64(&eventSeq, 1),
+		When:    time.Now().UTC(),
+		What:    stringer(fmt.Sprintf(format, args...)),
+		Stack:   getStack(),
+		IsError: true,
+	}
+}
+
+// MakeLazyErrorEvent is equivalent to MakeLazyEvent, and sets IsError.
+func MakeLazyErrorEvent(format string, args ...interface{}) Event {
+	return Event{
+		Seq:     atomic.AddUint64(&eventSeq, 1),
+		When:    time.Now().UTC(),
+		What:    &lazyStringer{fmt: format, args: args},
+		Stack:   getStack(),
+		IsError: true,
 	}
 }
 
@@ -96,18 +119,20 @@ func (ev *Event) UnmarshalJSON(data []byte) error {
 //
 
 type jsonEvent struct {
-	Seq   uint64        `json:"seq"`
-	When  time.Time     `json:"when"`
-	What  string        `json:"what"`
-	Stack jsonCallStack `json:"stack"`
+	Seq     uint64        `json:"seq"`
+	When    time.Time     `json:"when"`
+	What    string        `json:"what"`
+	Stack   jsonCallStack `json:"stack"`
+	IsError bool          `json:"iserr,omitempty"`
 }
 
 func jsonEventFrom(ev *Event) jsonEvent {
 	return jsonEvent{
-		Seq:   ev.Seq,
-		When:  ev.When,
-		What:  ev.What.String(),
-		Stack: jsonCallStackFrom(ev.Stack),
+		Seq:     ev.Seq,
+		When:    ev.When,
+		What:    ev.What.String(),
+		Stack:   jsonCallStackFrom(ev.Stack),
+		IsError: ev.IsError,
 	}
 }
 
@@ -116,6 +141,7 @@ func (jev *jsonEvent) writeTo(ev *Event) {
 	ev.When = jev.When
 	ev.What = stringer(jev.What)
 	ev.Stack = jev.Stack.toCallStack()
+	ev.IsError = jev.IsError
 }
 
 type jsonCallStack []*jsonCall
@@ -166,7 +192,7 @@ func (z *lazyStringer) String() string {
 
 func getStack() CallStack {
 	var cs CallStack
-	for _, c := range stack.Trace().TrimRuntime() { // TODO: trim package trc
+	for _, c := range stack.Trace().TrimRuntime().TrimBelow(stack.Caller(3)) { // TODO: trim package trc
 		fr := c.Frame()
 		cs = append(cs, Call{
 			Function: funcNameOnly(fr.Function),

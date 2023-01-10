@@ -11,12 +11,16 @@ import (
 )
 
 type Collector struct {
+	source     trc.Source
 	categories *trcds.RingBuffers[trc.Trace]
 }
 
-func NewCollector(maxPerCategory int) *Collector {
+var _ Searcher = (*Collector)(nil)
+
+func NewCollector(src trc.Source, max int) *Collector {
 	return &Collector{
-		categories: trcds.NewRingBuffers[trc.Trace](maxPerCategory),
+		source:     src,
+		categories: trcds.NewRingBuffers[trc.Trace](max),
 	}
 }
 
@@ -31,17 +35,18 @@ func (c *Collector) NewTrace(ctx context.Context, category string) (context.Cont
 	return ctx, tr
 }
 
-func (c *Collector) Query(ctx context.Context, req *QueryRequest) (*QueryResponse, error) {
-	_, tr, finish := trc.Region(ctx, "Collector Query")
+func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
+	_, tr, finish := trc.Region(ctx, "Collector Search")
 	defer finish()
 
-	if err := req.Sanitize(); err != nil {
+	stopwatch := trc.NewStopwatch()
+	defer func() { tr.Tracef("%s", stopwatch) }()
+
+	if err := req.Normalize(); err != nil {
 		return nil, fmt.Errorf("sanitize request: %w", err)
 	}
 
-	begin := time.Now()
-
-	var overall trc.Traces
+	var overall trc.Traces // TODO: allocs
 	for cat, rb := range c.categories.GetAll() {
 		if err := rb.Walk(func(tr trc.Trace) error {
 			overall = append(overall, tr)
@@ -51,6 +56,14 @@ func (c *Collector) Query(ctx context.Context, req *QueryRequest) (*QueryRespons
 		}
 	}
 
+	total := len(overall)
+
+	walkTime := stopwatch.Lap("walk")
+
+	stats := NewStatsFrom(req.Bucketing, overall)
+
+	statsTime := stopwatch.Lap("stats")
+
 	var allowed trc.Traces
 	for _, tr := range overall {
 		if req.Allow(tr) {
@@ -58,17 +71,9 @@ func (c *Collector) Query(ctx context.Context, req *QueryRequest) (*QueryRespons
 		}
 	}
 
-	var (
-		matched  = len(allowed)
-		took     = time.Since(begin)
-		perTrace = time.Duration(float64(took) / float64(len(overall)))
-	)
+	matched := len(allowed)
 
-	tr.Tracef("evaluated %d, matched %d, took %s, %s/trace", len(overall), matched, took, perTrace)
-
-	stats := newQueryStats(req, overall)
-
-	tr.Tracef("computed stats")
+	evalTime := stopwatch.Lap("eval")
 
 	sort.Sort(allowed)
 	if len(allowed) > req.Limit {
@@ -77,17 +82,32 @@ func (c *Collector) Query(ctx context.Context, req *QueryRequest) (*QueryRespons
 
 	selected := make([]*trc.StaticTrace, len(allowed))
 	for i := range allowed {
-		selected[i] = trc.NewStaticTrace(allowed[i])
+		selected[i] = trc.NewStaticTraceFrom(allowed[i], c.source)
 	}
 
-	tr.Tracef("selected %d", len(selected))
+	stopwatch.Lap("select")
 
-	return &QueryResponse{
-		Request:  req,
+	{
+		if n := time.Duration(len(overall)); n > 0 {
+			tr.Tracef(
+				"total trace count %d: walk %d ns/trace, stats %d ns/trace, eval %d ns/trace",
+				total,
+				walkTime/n,
+				statsTime/n,
+				evalTime/n,
+			)
+		}
+	}
+
+	duration := stopwatch.Overall()
+
+	return &SearchResponse{
+		Sources:  []trc.Source{c.source},
 		Stats:    stats,
-		Total:    len(overall),
+		Total:    total,
 		Matched:  matched,
 		Selected: selected,
 		Problems: nil,
+		Duration: duration,
 	}, nil
 }
