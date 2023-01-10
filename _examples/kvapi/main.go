@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	_ "net/http/pprof"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,8 +25,11 @@ func main() {
 
 	collectors := make([]*trctrace.Collector, len(ports))
 	for i := range collectors {
-		src := trc.Source{Name: ports[i], URL: fmt.Sprintf("http://localhost:%s/trc", ports[i])}
-		collectors[i] = trctrace.NewCollector(src, 1000)
+		name := ports[i]
+		url := fmt.Sprintf("http://localhost:%s/trc", ports[i])
+		src := trc.Source{Name: name, URL: url}
+		limit := 1000
+		collectors[i] = trctrace.NewCollector(src, limit)
 	}
 
 	kvs := make([]*KV, len(ports))
@@ -61,18 +66,27 @@ func main() {
 		globalSearcher[i] = trcClients[i]
 	}
 
-	globalTarget := &trctracehttp.Target{
-		Name:     "global",
-		Searcher: globalSearcher,
+	globalTarget := trctracehttp.NewTarget("global", globalSearcher)
+	otherTargets := []*trctracehttp.Target{globalTarget}
+	defaultTarget := globalTarget
+
+	if b, err := strconv.ParseBool(os.Getenv("NO_GLOBAL")); err == nil && b {
+		log.Printf("NO_GLOBAL=%v, not offering global target", b)
+		otherTargets = []*trctracehttp.Target{}
+		defaultTarget = nil
 	}
 
 	trcHandlers := make([]http.Handler, len(collectors))
 	for i := range trcHandlers {
+		localName := fmt.Sprintf("localhost:%s", ports[i])
+		localSearcher := collectors[i]
+		localTarget := trctracehttp.NewTarget(localName, localSearcher)
 		categorize := func(r *http.Request) string { return "traces" }
+
 		server, err := trctracehttp.NewServer(trctracehttp.ServerConfig{
-			Local:   &trctracehttp.Target{Name: "local", Searcher: collectors[i]},
-			Other:   []*trctracehttp.Target{globalTarget},
-			Default: globalTarget,
+			Local:   localTarget,
+			Other:   otherTargets,
+			Default: defaultTarget,
 		})
 		if err != nil {
 			panic(err)

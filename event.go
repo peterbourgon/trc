@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -38,50 +39,56 @@ type Call struct {
 
 var eventSeq uint64
 
+var eventPool = sync.Pool{
+	New: func() any { return &Event{} },
+}
+
 // MakeEvent creates a new event with the provided format string and args.
 // Arguments are evaluated immediately.
-func MakeEvent(format string, args ...interface{}) Event {
-	return Event{
-		Seq:   atomic.AddUint64(&eventSeq, 1),
-		When:  time.Now().UTC(),
-		What:  stringer(fmt.Sprintf(format, args...)),
-		Stack: getStack(),
-	}
+func NewEvent(format string, args ...interface{}) *Event {
+	ev := eventPool.Get().(*Event)
+	ev.Seq = atomic.AddUint64(&eventSeq, 1)
+	ev.When = time.Now().UTC()
+	ev.What = stringer(fmt.Sprintf(format, args...))
+	ev.Stack = getStack()
+	ev.IsError = false
+	return ev
 }
 
 // MakeLazyEvent creates a new event with the provided format string and args.
 // Arguments are evaluated lazily upon read. Reads can happen at any point in
 // the future, and from any number of concurrent goroutines, so arguments must
 // be safe for concurrent access.
-func MakeLazyEvent(format string, args ...interface{}) Event {
-	return Event{
-		Seq:   atomic.AddUint64(&eventSeq, 1),
-		When:  time.Now().UTC(),
-		What:  &lazyStringer{fmt: format, args: args},
-		Stack: getStack(),
-	}
+func NewLazyEvent(format string, args ...interface{}) *Event {
+	ev := eventPool.Get().(*Event)
+	ev.Seq = atomic.AddUint64(&eventSeq, 1)
+	ev.When = time.Now().UTC()
+	ev.What = &lazyStringer{fmt: format, args: args}
+	ev.Stack = getStack()
+	ev.IsError = false
+	return ev
 }
 
 // MakeErrorEvent is equivalent to MakeEvent, and sets IsError.
-func MakeErrorEvent(format string, args ...interface{}) Event {
-	return Event{
-		Seq:     atomic.AddUint64(&eventSeq, 1),
-		When:    time.Now().UTC(),
-		What:    stringer(fmt.Sprintf(format, args...)),
-		Stack:   getStack(),
-		IsError: true,
-	}
+func NewErrorEvent(format string, args ...interface{}) *Event {
+	ev := eventPool.Get().(*Event)
+	ev.Seq = atomic.AddUint64(&eventSeq, 1)
+	ev.When = time.Now().UTC()
+	ev.What = stringer(fmt.Sprintf(format, args...))
+	ev.Stack = getStack()
+	ev.IsError = true
+	return ev
 }
 
 // MakeLazyErrorEvent is equivalent to MakeLazyEvent, and sets IsError.
-func MakeLazyErrorEvent(format string, args ...interface{}) Event {
-	return Event{
-		Seq:     atomic.AddUint64(&eventSeq, 1),
-		When:    time.Now().UTC(),
-		What:    &lazyStringer{fmt: format, args: args},
-		Stack:   getStack(),
-		IsError: true,
-	}
+func NewLazyErrorEvent(format string, args ...interface{}) *Event {
+	ev := eventPool.Get().(*Event)
+	ev.Seq = atomic.AddUint64(&eventSeq, 1)
+	ev.When = time.Now().UTC()
+	ev.What = &lazyStringer{fmt: format, args: args}
+	ev.Stack = getStack()
+	ev.IsError = true
+	return ev
 }
 
 // MatchRegexp returns true if the regexp matches relevant event metadata.
@@ -112,6 +119,10 @@ func (ev *Event) UnmarshalJSON(data []byte) error {
 	}
 	jev.writeTo(ev)
 	return nil
+}
+
+func (ev *Event) Close() {
+	eventPool.Put(ev)
 }
 
 //

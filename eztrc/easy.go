@@ -2,11 +2,9 @@ package eztrc
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/trctrace"
-	"github.com/peterbourgon/trc/trctrace/trctracehttp"
 )
 
 var (
@@ -17,18 +15,20 @@ var (
 	Region     = trc.Region
 )
 
-//
-//
-
 var collector = trctrace.NewCollector(
-	trc.Source{
-		Name: "local",
-	},
+	trc.Source{Name: "local"},
 	1000,
-) // TODO
+)
 
 func Collector() *trctrace.Collector {
 	return collector
+}
+
+func SetCollector(c *trctrace.Collector) {
+	if c == nil {
+		panic("nil trctrace.Collector provided to SetCollector")
+	}
+	collector = c
 }
 
 func New(ctx context.Context, category string) (context.Context, trc.Trace) {
@@ -41,22 +41,4 @@ func Get(ctx context.Context, category string) (context.Context, trc.Trace) {
 		return ctx, tr
 	}
 	return New(ctx, category)
-}
-
-//
-//
-//
-
-func Handler(localName string, otherTargets ...*trctracehttp.Target) http.Handler {
-	s, err := trctracehttp.NewServer(trctracehttp.ServerConfig{
-		Local: &trctracehttp.Target{
-			Name:     localName,
-			Searcher: collector,
-		},
-		Other: otherTargets,
-	})
-	if err != nil {
-		panic(err)
-	}
-	return s
 }

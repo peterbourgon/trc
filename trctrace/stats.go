@@ -60,10 +60,6 @@ func (s *Stats) Overall() *CategoryStats {
 	return overall
 }
 
-func (s *Stats) Everything() []CategoryStats {
-	return append(s.Categories, *s.Overall())
-}
-
 // CategoryStats are summary statistics for a group of traces in a single
 // category. It's meant to model a single row in the summary table at the top of
 // the HTML user interface. Category stats are always part of a parent summary

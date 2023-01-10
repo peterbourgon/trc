@@ -80,7 +80,7 @@ type Trace interface {
 	LazyErrorf(format string, args ...interface{})
 
 	// Events should return the immutable events collected by the trace so far.
-	Events() []Event
+	Events() []*Event
 }
 
 //
@@ -113,7 +113,7 @@ type CoreTrace struct {
 	errored   bool
 	finished  bool
 	duration  time.Duration
-	events    []Event
+	events    []*Event
 	truncated int
 }
 
@@ -143,7 +143,7 @@ func (tr *CoreTrace) Tracef(format string, args ...interface{}) {
 	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, MakeEvent(format, args...))
+		tr.events = append(tr.events, NewEvent(format, args...))
 	}
 }
 
@@ -160,7 +160,7 @@ func (tr *CoreTrace) LazyTracef(format string, args ...interface{}) {
 	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, MakeLazyEvent(format, args...))
+		tr.events = append(tr.events, NewLazyEvent(format, args...))
 	}
 }
 
@@ -179,7 +179,7 @@ func (tr *CoreTrace) Errorf(format string, args ...interface{}) {
 	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, MakeErrorEvent(format, args...))
+		tr.events = append(tr.events, NewErrorEvent(format, args...))
 	}
 }
 
@@ -198,7 +198,7 @@ func (tr *CoreTrace) LazyErrorf(format string, args ...interface{}) {
 	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, MakeLazyErrorEvent(format, args...))
+		tr.events = append(tr.events, NewLazyErrorEvent(format, args...))
 	}
 }
 
@@ -276,15 +276,15 @@ func (tr *CoreTrace) Duration() time.Duration {
 }
 
 // Events implements Trace.
-func (tr *CoreTrace) Events() []Event {
+func (tr *CoreTrace) Events() []*Event {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
-	events := make([]Event, len(tr.events))
+	events := make([]*Event, len(tr.events))
 	copy(events, tr.events)
 
 	if tr.truncated > 0 {
-		events = append(events, MakeEvent("(truncated event count %d)", tr.truncated))
+		events = append(events, NewEvent("(truncated event count %d)", tr.truncated))
 	}
 
 	return events
@@ -335,8 +335,15 @@ func getCoreTraceMaxEvents() int {
 //
 
 type Source struct {
+	// Name is a human-readable string that should uniquely identify a source of
+	// trace data. A trace is typically annotated with the source from which it
+	// originates.
 	Name string `json:"name"`
-	URL  string `json:"url,omitempty"`
+
+	// URL is an optional address. If it's specified, it's assumed to represent
+	// a user-accessible trctracehttp.Server which serves trace data from this
+	// source.
+	URL string `json:"url,omitempty"`
 }
 
 //
@@ -353,7 +360,7 @@ type StaticTrace struct {
 	StaticSucceeded bool      `json:"succeeded"`
 	StaticErrored   bool      `json:"errored"`
 	StaticDuration  duration  `json:"duration"`
-	StaticEvents    []Event   `json:"events"`
+	StaticEvents    []*Event  `json:"events"`
 }
 
 var _ Trace = (*StaticTrace)(nil)
@@ -390,7 +397,7 @@ func (tr *StaticTrace) Tracef(format string, args ...interface{})     { /* no-op
 func (tr *StaticTrace) LazyTracef(format string, args ...interface{}) { /* no-op */ }
 func (tr *StaticTrace) Errorf(format string, args ...interface{})     { /* no-op */ }
 func (tr *StaticTrace) LazyErrorf(format string, args ...interface{}) { /* no-op */ }
-func (tr *StaticTrace) Events() []Event                               { return tr.StaticEvents }
+func (tr *StaticTrace) Events() []*Event                              { return tr.StaticEvents }
 
 type duration time.Duration
 

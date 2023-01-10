@@ -102,6 +102,10 @@ func (req *SearchRequest) Normalize() error {
 	return nil
 }
 
+// HTTPRequest returns an HTTP request that will query the provided baseurl,
+// according to the parameters defined in the request. The baseurl is assumed to
+// represent a (remote) trctracehttp.Server. The request will query only the
+// local traces of that remote instance.
 func (req *SearchRequest) HTTPRequest(ctx context.Context, baseurl string) (*http.Request, error) {
 	if err := req.Normalize(); err != nil {
 		return nil, fmt.Errorf("normalize query request: %w", err)

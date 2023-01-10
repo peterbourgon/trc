@@ -63,8 +63,8 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	names := make([]string, 1+len(cfg.Other))
 	index := make(map[string]*Target, 1+len(cfg.Other))
 	for i, t := range append([]*Target{cfg.Local}, cfg.Other...) {
-		names[i] = t.Name
-		index[t.Name] = t
+		names[i] = t.name
+		index[t.name] = t
 	}
 
 	return &Server{
@@ -80,26 +80,26 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer finish()
 
 	var (
-		begin    = time.Now()
-		req, prs = parseSearchRequest(ctx, r)
-		urlquery = r.URL.Query()
-		hasLocal = urlquery.Has("local")
-		t        = urlquery.Get("t")
+		begin      = time.Now()
+		req, prs   = parseSearchRequest(ctx, r)
+		urlquery   = r.URL.Query()
+		hasLocal   = urlquery.Has("local")
+		targetName = urlquery.Get("t")
 	)
 
-	tgt, ok := s.targetIndex[t]
+	target, ok := s.targetIndex[targetName]
 	switch {
 	case ok:
 		// great
 	case !ok && hasLocal:
-		tgt = s.localTarget
+		target = s.localTarget
 	case !ok && !hasLocal:
-		tgt = s.defaultTarget
+		target = s.defaultTarget
 	}
 
-	tr.Tracef("target=%v", tgt.Name)
+	tr.Tracef("target=%v", target.name)
 
-	res, err := tgt.Searcher.Search(ctx, req)
+	res, err := target.searcher.Search(ctx, req)
 	if err != nil {
 		tr.Errorf("search error: %v", err)
 		prs = append(prs, err.Error())
@@ -112,7 +112,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	tr.Tracef("total=%d matched=%d selected=%d duration=%s", res.Total, res.Matched, len(res.Selected), res.Duration)
 
 	Render(ctx, w, r, assets, "traces.html", templateFuncs, &ResponseData{
-		Target:   tgt.Name,
+		Target:   target.name,
 		Targets:  s.availableTargets,
 		Request:  req,
 		Response: res,
