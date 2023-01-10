@@ -14,25 +14,26 @@ import (
 	"github.com/peterbourgon/trc/trctrace"
 )
 
-type Target struct {
-	Name     string
-	Searcher trctrace.Searcher
-}
-
-type ResponseData struct {
-	Target   string                   `json:"target,omitempty"`
-	Targets  []string                 `json:"targets,omitempty"`
-	Request  *trctrace.SearchRequest  `json:"request"`
-	Response *trctrace.SearchResponse `json:"response"`
-}
-
 type ServerConfig struct {
-	Local   *Target
-	Other   []*Target
+	// Local represents the server instance itself. Typically, the local
+	// searcher is implemented by a singleton collector.
+	//
+	// Required.
+	Local *Target
+
+	// Other targets are made available for searches.
+	//
+	// Optional.
+	Other []*Target
+
+	// Default is the target which should be used when no target is explicitly
+	// specified by the user.
+	//
+	// Optional. By default, the local target is used.
 	Default *Target
 }
 
-func (cfg *ServerConfig) Validate() error {
+func (cfg *ServerConfig) sanitize() error {
 	if cfg.Local == nil {
 		return fmt.Errorf("local target is required")
 	}
@@ -44,8 +45,18 @@ func (cfg *ServerConfig) Validate() error {
 	return nil
 }
 
-func NewServer(cfg ServerConfig) (http.Handler, error) {
-	if err := cfg.Validate(); err != nil {
+type Server struct {
+	targetIndex      map[string]*Target
+	localTarget      *Target
+	defaultTarget    *Target
+	availableTargets []string
+}
+
+// NewServer returns a server, which implements an HTTP API over the targets
+// provided in the config. That API can be consumed by the client type, also
+// provided in this package.
+func NewServer(cfg ServerConfig) (*Server, error) {
+	if err := cfg.sanitize(); err != nil {
 		return nil, fmt.Errorf("config: %w", err)
 	}
 
@@ -56,49 +67,67 @@ func NewServer(cfg ServerConfig) (http.Handler, error) {
 		index[t.Name] = t
 	}
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx, tr, finish := trc.Region(r.Context(), "ServeHTTP")
-		defer finish()
+	return &Server{
+		targetIndex:      index,
+		localTarget:      cfg.Local,
+		defaultTarget:    cfg.Default,
+		availableTargets: names,
+	}, nil
+}
 
-		var (
-			begin    = time.Now()
-			req, prs = parseSearchRequest(ctx, r)
-			urlquery = r.URL.Query()
-			hasLocal = urlquery.Has("local")
-			t        = urlquery.Get("t")
-		)
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx, tr, finish := trc.Region(r.Context(), "ServeHTTP")
+	defer finish()
 
-		tgt, ok := index[t]
-		switch {
-		case ok:
-			// great
-		case !ok && hasLocal:
-			tgt = cfg.Local
-		case !ok && !hasLocal:
-			tgt = cfg.Default
-		}
+	var (
+		begin    = time.Now()
+		req, prs = parseSearchRequest(ctx, r)
+		urlquery = r.URL.Query()
+		hasLocal = urlquery.Has("local")
+		t        = urlquery.Get("t")
+	)
 
-		tr.Tracef("target=%v", tgt.Name)
+	tgt, ok := s.targetIndex[t]
+	switch {
+	case ok:
+		// great
+	case !ok && hasLocal:
+		tgt = s.localTarget
+	case !ok && !hasLocal:
+		tgt = s.defaultTarget
+	}
 
-		res, err := tgt.Searcher.Search(ctx, req)
-		if err != nil {
-			tr.Errorf("search error: %v", err)
-			prs = append(prs, err.Error())
-			res = &trctrace.SearchResponse{} // default
-		}
+	tr.Tracef("target=%v", tgt.Name)
 
-		res.Problems = append(prs, res.Problems...)
-		res.Duration = time.Since(begin)
+	res, err := tgt.Searcher.Search(ctx, req)
+	if err != nil {
+		tr.Errorf("search error: %v", err)
+		prs = append(prs, err.Error())
+		res = &trctrace.SearchResponse{} // default
+	}
 
-		tr.Tracef("total=%d matched=%d selected=%d duration=%s", res.Total, res.Matched, len(res.Selected), res.Duration)
+	res.Problems = append(prs, res.Problems...)
+	res.Duration = time.Since(begin)
 
-		Render(ctx, w, r, assets, "traces.html", templateFuncs, &ResponseData{
-			Target:   tgt.Name,
-			Targets:  names,
-			Request:  req,
-			Response: res,
-		})
-	}), nil
+	tr.Tracef("total=%d matched=%d selected=%d duration=%s", res.Total, res.Matched, len(res.Selected), res.Duration)
+
+	Render(ctx, w, r, assets, "traces.html", templateFuncs, &ResponseData{
+		Target:   tgt.Name,
+		Targets:  s.availableTargets,
+		Request:  req,
+		Response: res,
+	})
+}
+
+//
+//
+//
+
+type ResponseData struct {
+	Target   string                   `json:"target,omitempty"`
+	Targets  []string                 `json:"targets,omitempty"`
+	Request  *trctrace.SearchRequest  `json:"request"`
+	Response *trctrace.SearchResponse `json:"response"`
 }
 
 //
