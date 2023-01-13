@@ -63,10 +63,8 @@ func (c *Client) Search(ctx context.Context, req *trctrace.SearchRequest) (*trct
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
-	via := trc.Source{Name: d.Target, URL: c.baseurl}
-	d.Response.Via = append(d.Response.Via, via)
 	for _, tr := range d.Response.Selected {
-		tr.Via = append(tr.Via, via)
+		tr.Via = append(tr.Via, c.baseurl)
 	}
 
 	tr.Tracef("⇐ total=%d matched=%d selected=%d", d.Response.Total, d.Response.Matched, len(d.Response.Selected))

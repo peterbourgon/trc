@@ -351,7 +351,7 @@ type Source struct {
 //
 
 type StaticTrace struct {
-	Via             []Source  `json:"via,omitempty"`
+	Via             []string  `json:"via,omitempty"`
 	StaticID        string    `json:"id"`
 	StaticCategory  string    `json:"category"`
 	StaticStart     time.Time `json:"start"`

@@ -9,14 +9,7 @@ import (
 )
 
 func Handler() http.Handler {
-	localTarget := trctracehttp.NewTarget("local", Collector())
-	server, err := trctracehttp.NewServer(trctracehttp.ServerConfig{
-		Local: localTarget,
-	})
-	if err != nil {
-		panic(err)
-	}
-	return server
+	return trctracehttp.NewServer2(Collector())
 }
 
 func PeersHandler(urls ...string) http.Handler {

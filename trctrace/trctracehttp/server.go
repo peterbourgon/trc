@@ -85,19 +85,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		urlquery   = r.URL.Query()
 		hasLocal   = urlquery.Has("local")
 		targetName = urlquery.Get("t")
+		remotes    = urlquery["r"]
 	)
 
-	target, ok := s.targetIndex[targetName]
-	switch {
-	case ok:
-		// great
-	case !ok && hasLocal:
-		target = s.localTarget
-	case !ok && !hasLocal:
-		target = s.defaultTarget
-	}
+	var target *Target
+	{
+		switch {
+		case len(remotes) > 0:
+			var multi trctrace.MultiSearcher
+			for _, r := range remotes {
+				multi = append(multi, NewClient(http.DefaultClient, r))
+			}
+			target = NewTarget("remotes", multi)
+			tr.Tracef("target=%v", remotes)
 
-	tr.Tracef("target=%v", target.name)
+		default:
+			t, ok := s.targetIndex[targetName]
+			switch {
+			case ok:
+				target = t
+			case !ok && hasLocal:
+				target = s.localTarget
+			case !ok && !hasLocal:
+				target = s.defaultTarget
+			}
+			tr.Tracef("target=%v", target.name)
+		}
+	}
 
 	res, err := target.searcher.Search(ctx, req)
 	if err != nil {
@@ -112,8 +126,68 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	tr.Tracef("total=%d matched=%d selected=%d duration=%s", res.Total, res.Matched, len(res.Selected), res.Duration)
 
 	Render(ctx, w, r, assets, "traces.html", templateFuncs, &ResponseData{
-		Target:   target.name,
-		Targets:  s.availableTargets,
+		Remotes: remotes,
+		//Target:   target.name,
+		//Targets:  s.availableTargets,
+		Request:  req,
+		Response: res,
+	})
+}
+
+//
+//
+//
+
+type Server2 struct {
+	searcher trctrace.Searcher
+}
+
+// NewServer returns a server, which implements an HTTP API over the targets
+// provided in the config. That API can be consumed by the client type, also
+// provided in this package.
+func NewServer2(searcher trctrace.Searcher) *Server2 {
+	return &Server2{
+		searcher: searcher,
+	}
+}
+
+func (s *Server2) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx, tr, finish := trc.Region(r.Context(), "ServeHTTP")
+	defer finish()
+
+	var (
+		begin    = time.Now()
+		req, prs = parseSearchRequest(ctx, r)
+		urlquery = r.URL.Query()
+		remotes  = urlquery["r"]
+		searcher = s.searcher
+	)
+
+	if len(remotes) > 0 {
+		var multi trctrace.MultiSearcher
+		for _, r := range remotes {
+			multi = append(multi, NewClient(http.DefaultClient, r))
+		}
+		tr.Tracef("searching remotes %v", remotes)
+		searcher = multi
+	}
+
+	res, err := searcher.Search(ctx, req)
+	if err != nil {
+		tr.Errorf("search error: %v", err)
+		prs = append(prs, err.Error())
+		res = &trctrace.SearchResponse{} // default
+	}
+
+	res.Problems = append(prs, res.Problems...)
+	res.Duration = time.Since(begin)
+
+	tr.Tracef("total=%d matched=%d selected=%d duration=%s", res.Total, res.Matched, len(res.Selected), res.Duration)
+
+	Render(ctx, w, r, assets, "traces.html", templateFuncs, &ResponseData{
+		Remotes: remotes,
+		//Target:   target.name,
+		//Targets:  s.availableTargets,
 		Request:  req,
 		Response: res,
 	})
@@ -124,6 +198,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //
 
 type ResponseData struct {
+	Remotes  []string                 `json:"remotes,omitempty"`
 	Target   string                   `json:"target,omitempty"`
 	Targets  []string                 `json:"targets,omitempty"`
 	Request  *trctrace.SearchRequest  `json:"request"`

@@ -95,11 +95,10 @@ function highlightquery() {
 {{ $n := .Request.Limit }}
 {{ $q := .Request.Query }}
 {{ $r := .Request }}
-{{ $target := .Target }}
 
-{{ $query_params := printf "n=%d" $r.Limit | safeurl -}}
-{{ if $target    }}{{ $query_params = printf "t=%s&%s" $target $query_params          | safeurl }}{{ end }}
-{{ if $r.Regexp  }}{{ $query_params = printf "%s&q=%s"   $query_params $r.Regexp.String | safeurl }}{{ end }}
+{{ $query_params := printf "n=%d" $r.Limit | safeurl }}
+{{ range .Remotes }}{{ $query_params = printf "r=%s&%s" . $query_params | safeurl }}{{ end }}
+{{ if $r.Regexp }}{{ $query_params = printf "%s&q=%s" $query_params $r.Regexp.String | safeurl }}{{ end }}
 
 <table id="summary">
 
@@ -263,14 +262,6 @@ function highlightquery() {
 		<form id="search-form" method="GET" target="">
 			<input id="search-box" type="text" name="q" placeholder="regex" {{if .Request.Regexp}}value="{{.Request.Regexp.String}}"{{end}} size="32" autofocus />
 
-			{{ if .Targets }}
-			<select id="search-target" name="t">
-				{{ range .Targets }}
-				<option name="{{.}}" {{ if eq $target . -}}selected{{ end -}}>{{.}}</option>
-				{{ end }}
-			</select>
-			{{ end }}
-
 			<select id="search-limit" name="n">
 				<option name="10"   {{ if eq .Request.Limit 10   -}}selected{{ end -}}>10  </option>
 				<option name="25"   {{ if eq .Request.Limit 25   -}}selected{{ end -}}>25  </option>
@@ -306,7 +297,7 @@ function highlightquery() {
 	</script>
 
 	<div id="topline-metadata">
-		<div id="topline-search-source"   class="topline-search">target={{ $target }}</div>
+		{{ if .Remotes }}<div id="topline-search-remotes" class="topline-search" title="{{stringsjoinnewline .Remotes}}">remotes={{ len .Remotes }}</div>{{ end }}
 		<div id="topline-search-total"    class="topline-search">total={{ .Response.Stats.Overall.NumTotal }}</div>
 		<div id="topline-search-matched"  class="topline-search">matched={{ .Response.Matched }}</div>
 		<div id="topline-search-shown"    class="topline-search">shown={{ len .Response.Selected }}</div>
@@ -327,13 +318,12 @@ function highlightquery() {
 <div id="{{.ID}}" class="trace">
 
 	<div class="metadata">
-		{{ $href := printf "id=%s" .ID | safeurl }}
-		{{ if $target }} {{ $href = printf "%s&t=%s" $href $target | safeurl }} {{ end }}
+		{{ $href := printf "%s&id=%s" $query_params .ID | safeurl }}
 		<strong class="searchable"><a href="?{{$href}}">{{ .ID }}</a></strong>
 		&middot;
 		<a href="?{{$href}}&json">JSON</a>
 		{{ range .Via }}
-			&middot; via {{if .URL}}<a href="{{.URL}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}
+			&middot; via <a href="{{.}}">{{.}}</a>
 		{{ end }}
 		<span class="right">
 			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">

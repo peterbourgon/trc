@@ -47,7 +47,6 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 			aggregate.Problems = append(aggregate.Problems, t.err.Error())
 		case t.res != nil && t.err == nil: // success case
 			//tr.Tracef("%s: success", t.id)
-			aggregate.Via = append(aggregate.Via, t.res.Via...)
 			aggregate.Stats = CombineStats(aggregate.Stats, t.res.Stats)
 			aggregate.Total += t.res.Total
 			aggregate.Matched += t.res.Matched
@@ -55,7 +54,6 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 			aggregate.Problems = append(aggregate.Problems, t.res.Problems...)
 		case t.res != nil && t.err != nil: // weird
 			tr.Tracef("%s: weird: valid result (accepting it) with error: %v", t.id, t.err)
-			aggregate.Via = append(aggregate.Via, t.res.Via...)
 			aggregate.Stats = CombineStats(aggregate.Stats, t.res.Stats)
 			aggregate.Total += t.res.Total
 			aggregate.Matched += t.res.Matched
@@ -66,10 +64,6 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	}
 
 	tr.Tracef("gathered responses")
-
-	sort.Slice(aggregate.Via, func(i, j int) bool {
-		return aggregate.Via[i].Name < aggregate.Via[j].Name
-	})
 
 	// At this point, the aggregate response has all of the raw data it's ever
 	// gonna get. We need to do a little bit of post-processing. First, we need
