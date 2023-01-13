@@ -332,13 +332,8 @@ function highlightquery() {
 		<strong class="searchable"><a href="?{{$href}}">{{ .ID }}</a></strong>
 		&middot;
 		<a href="?{{$href}}&json">JSON</a>
-		{{ if .Source }}
-			&middot;
-			{{ if .Source.URL }}
-				via <a href="{{.Source.URL}}">{{.Source.Name}}</a>
-			{{ else }}
-				via {{.Source.Name}}
-			{{ end }}
+		{{ range .Via }}
+			&middot; via {{if .URL}}<a href="{{.URL}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}
 		{{ end }}
 		<span class="right">
 			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">

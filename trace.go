@@ -351,7 +351,7 @@ type Source struct {
 //
 
 type StaticTrace struct {
-	Source          Source    `json:"source,omitempty"`
+	Via             []Source  `json:"via,omitempty"`
 	StaticID        string    `json:"id"`
 	StaticCategory  string    `json:"category"`
 	StaticStart     time.Time `json:"start"`
@@ -366,12 +366,7 @@ type StaticTrace struct {
 var _ Trace = (*StaticTrace)(nil)
 
 func NewStaticTrace(tr Trace) *StaticTrace {
-	return NewStaticTraceFrom(tr, Source{})
-}
-
-func NewStaticTraceFrom(tr Trace, src Source) *StaticTrace {
 	return &StaticTrace{
-		Source:          src,
 		StaticID:        tr.ID(),
 		StaticCategory:  tr.Category(),
 		StaticStart:     tr.Start(),

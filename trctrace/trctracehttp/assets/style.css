@@ -114,6 +114,11 @@ div#topline-metadata {
 	padding-left: 1ch;
 }
 
+div#topline-search-problems {
+	font-weight: bold;
+	color: rgb(224, 0, 0);
+}
+
 /*
  * traces
  */

@@ -8,16 +8,13 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/trctrace"
 	"github.com/peterbourgon/trc/trctrace/trctracehttp"
 )
 
 func TestE2E(t *testing.T) {
 	ctx := context.Background()
-	src := trc.Source{Name: "base"}
-	max := 1000
-	collector := trctrace.NewCollector(src, max)
+	collector := trctrace.NewCollector(1000)
 	local := trctracehttp.NewTarget("local", collector)
 	config := trctracehttp.ServerConfig{Local: local}
 	traceServer, _ := trctracehttp.NewServer(config)

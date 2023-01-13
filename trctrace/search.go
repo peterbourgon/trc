@@ -223,7 +223,7 @@ func (req *SearchRequest) Allow(tr trc.Trace) bool {
 //
 
 type SearchResponse struct {
-	Sources  []trc.Source       `json:"sources,omitempty"`
+	Via      []trc.Source       `json:"via,omitempty"`
 	Stats    Stats              `json:"stats"`
 	Total    int                `json:"total"`
 	Matched  int                `json:"matched"`

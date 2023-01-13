@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/trctrace"
@@ -25,6 +26,9 @@ type Client struct {
 var _ trctrace.Searcher = (*Client)(nil)
 
 func NewClient(client HTTPClient, baseurl string) *Client {
+	if !strings.HasPrefix(baseurl, "http") {
+		baseurl = "http://" + baseurl
+	}
 	return &Client{
 		client:  client,
 		baseurl: baseurl,
@@ -57,6 +61,12 @@ func (c *Client) Search(ctx context.Context, req *trctrace.SearchRequest) (*trct
 	var d ResponseData
 	if err := json.NewDecoder(httpResp.Body).Decode(&d); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	via := trc.Source{Name: d.Target, URL: c.baseurl}
+	d.Response.Via = append(d.Response.Via, via)
+	for _, tr := range d.Response.Selected {
+		tr.Via = append(tr.Via, via)
 	}
 
 	tr.Tracef("⇐ total=%d matched=%d selected=%d", d.Response.Total, d.Response.Matched, len(d.Response.Selected))

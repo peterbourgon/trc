@@ -15,10 +15,7 @@ var (
 	Region     = trc.Region
 )
 
-var collector = trctrace.NewCollector(
-	trc.Source{Name: "local"},
-	1000,
-)
+var collector = trctrace.NewCollector(1000)
 
 func Collector() *trctrace.Collector {
 	return collector
