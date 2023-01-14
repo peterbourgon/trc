@@ -78,7 +78,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 		selected[i] = NewStaticTrace(allowed[i])
 	}
 
-	tr.Tracef("matched %d, selected %d", matched, selected)
+	tr.Tracef("matched %d, selected %d", matched, len(selected))
 
 	return &SearchResponse{
 		Stats:    stats,
