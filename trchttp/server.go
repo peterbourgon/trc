@@ -13,6 +13,13 @@ import (
 	"github.com/peterbourgon/trc"
 )
 
+// ResponseData is what the server returns to requests.
+type ResponseData struct {
+	Remotes  []string            `json:"remotes,omitempty"`
+	Request  *trc.SearchRequest  `json:"request"`
+	Response *trc.SearchResponse `json:"response"`
+}
+
 // Server wraps a searcher and provides a JSON API and HTML UI for queries.
 // The API can be consumed by the client type also in this package, to allow
 // remote searching of traces.
@@ -31,7 +38,7 @@ func NewServer(searcher trc.Searcher) *Server {
 // UI based on the request's Accept header. Callers can force the JSON API
 // response by providing a `json` query parameter.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx, tr, finish := trc.Region(r.Context(), "ServeHTTP")
+	ctx, tr, finish := trc.Region(r.Context(), "trchttp.Server.ServeHTTP")
 	defer finish()
 
 	var (
@@ -68,16 +75,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Request:  req,
 		Response: res,
 	})
-}
-
-//
-//
-//
-
-type ResponseData struct {
-	Remotes  []string            `json:"remotes,omitempty"`
-	Request  *trc.SearchRequest  `json:"request"`
-	Response *trc.SearchResponse `json:"response"`
 }
 
 //

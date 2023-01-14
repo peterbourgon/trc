@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"runtime/trace"
 	"strings"
 	"time"
@@ -144,19 +145,22 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 	tr.Tracef("ParseFS OK")
 
 	{
-		var localFiles []string
-
+		var (
+			localPath  = filepath.Clean(os.Getenv("TRC_ASSETS_DIR")) // pwd by default
+			localFiles []string
+		)
+		tr.Tracef("check local assets path TRC_ASSETS_DIR %s", localPath)
 		for _, tp := range templateRoot.Templates() {
-			name := tp.Name()
-			if name == "" {
+			templateName := tp.Name()
+			if templateName == "" {
 				continue
 			}
-			if _, err := os.Stat(name); err != nil {
+			assetName := filepath.Join(localPath, templateName)
+			if _, err := os.Stat(assetName); err != nil {
 				continue
 			}
-			localFiles = append(localFiles, name)
+			localFiles = append(localFiles, assetName)
 		}
-
 		if len(localFiles) > 0 {
 			tt, err := templateRoot.ParseFiles(localFiles...)
 			if err != nil {
@@ -164,8 +168,7 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 			}
 			templateRoot = tt
 		}
-
-		tr.Tracef("check local template files OK, count %d", len(localFiles))
+		tr.Tracef("check local assets OK, count %d", len(localFiles))
 	}
 
 	templateFile := templateRoot.Lookup(templateName)

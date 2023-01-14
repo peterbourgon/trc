@@ -35,7 +35,7 @@ func (c *Collector) NewTrace(ctx context.Context, category string) (context.Cont
 func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
 	begin := time.Now()
 
-	_, tr, finish := Region(ctx, "collector search")
+	_, tr, finish := Region(ctx, "trc.Collector.Search")
 	defer finish()
 
 	problems := req.Normalize()
