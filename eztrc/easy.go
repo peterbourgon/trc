@@ -2,9 +2,10 @@ package eztrc
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trctrace"
+	"github.com/peterbourgon/trc/trchttp"
 )
 
 var (
@@ -15,17 +16,21 @@ var (
 	Region     = trc.Region
 )
 
-var collector = trctrace.NewCollector(1000)
+var collector = trc.NewCollector(1000)
 
-func Collector() *trctrace.Collector {
+func Collector() *trc.Collector {
 	return collector
 }
 
-func SetCollector(c *trctrace.Collector) {
+func SetCollector(c *trc.Collector) {
 	if c == nil {
-		panic("nil trctrace.Collector provided to SetCollector")
+		panic("nil trc.Collector provided to SetCollector")
 	}
 	collector = c
+}
+
+func Handler() http.Handler {
+	return trchttp.NewServer(Collector())
 }
 
 func New(ctx context.Context, category string) (context.Context, trc.Trace) {

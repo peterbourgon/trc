@@ -1,4 +1,4 @@
-package trctracehttp
+package trchttp
 
 import (
 	"context"
@@ -8,19 +8,21 @@ import (
 	"github.com/peterbourgon/trc"
 )
 
+// NewTraceFunc is a function that produces a new trace in a provided context.
+// It's implemented by the trace collector.
 type NewTraceFunc func(context.Context, string) (context.Context, trc.Trace)
 
+// GetCategoryFunc is a function that produces a category string from an HTTP
+// request. It's meant to be provided by callers.
 type GetCategoryFunc func(*http.Request) string
 
 // Middleware creates a trace for each request served by the handler. The trace
-// category is determined by passing the request to the getCategory function.
+// category is determined by passing the request to the get category function.
 // Basic metadata, such as method, path, duration, and response code, is
 // recorded in the trace.
 //
 // This is meant as a convenience for simple use cases. Users who want different
 // or more sophisticated behavior should implement their own middlewares.
-//
-// TODO: use a config, default getCategory
 func Middleware(create NewTraceFunc, category GetCategoryFunc) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

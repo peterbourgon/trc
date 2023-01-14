@@ -1,0 +1,59 @@
+name: test
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.x
+
+      - name: Check out repo
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Prepare cache
+        run: |
+          echo "GOCACHE=$(go env GOCACHE)" >> $GITHUB_ENV
+          echo "GOMODCACHE=$(go env GOMODCACHE)" >> $GITHUB_ENV
+          echo "GOVERSION=$(go env GOVERSION)" >> $GITHUB_ENV
+          mkdir -p $(go env GOCACHE)
+          mkdir -p $(go env GOMODCACHE)
+
+      - name: Cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.GOCACHE }}
+            ${{ env.GOMODCACHE }}
+          key: test.1-${{ runner.os }}-${{ env.GOVERSION }}-${{ hashFiles('**/go.mod') }}
+          restore-keys: |
+            test.1-${{ runner.os }}-${{ env.GOVERSION }}-
+            test.1-${{ runner.os }}-
+
+      - name: Install tools
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          go install mvdan.cc/gofumpt@latest
+
+      - name: gofmt
+        run: diff <(gofmt -d . 2>/dev/null) <(printf '')
+
+      - name: go vet
+        run: go vet --printfuncs=Tracef,Errorf,LazyTracef,LazyErrorf ./...
+
+      - name: staticcheck
+        run: staticcheck ./...
+
+      - name: gofumpt
+        run: diff <(gofumpt -d -e -l . 2>/dev/null) <(printf '')
+
+      - name: go test
+        run: go test -v -race ./...
