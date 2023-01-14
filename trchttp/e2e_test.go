@@ -47,9 +47,12 @@ func TestE2E(t *testing.T) {
 		t.Logf("direct: total %d, matched %d, selected %d, err %v", res1.Total, res1.Matched, len(res1.Selected), err1)
 		res2, err2 := traceClient.Search(ctx, req)
 		t.Logf("client: total %d, matched %d, selected %d, err %v", res2.Total, res2.Matched, len(res2.Selected), err2)
-		opts := cmpopts.IgnoreFields(trc.SearchResponse{}, "Sources", "Duration")
-		if !cmp.Equal(res1, res2, opts) {
-			t.Fatal(cmp.Diff(res1, res2, opts))
+		opts := []cmp.Option{
+			cmpopts.IgnoreFields(trc.SearchResponse{}, "Duration"),
+			cmpopts.IgnoreFields(trc.StaticTrace{}, "Via"),
+		}
+		if !cmp.Equal(res1, res2, opts...) {
+			t.Fatal(cmp.Diff(res1, res2, opts...))
 		}
 	}
 
