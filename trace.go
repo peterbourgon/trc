@@ -11,12 +11,9 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// Trace is an interface describing metadata for an operation that occurred in a
-// process. A common use case is to create a new trace for each incoming request
-// to an HTTP server.
-//
-// Traces should normally represent ephemeral and short-lived events, and should
-// be accessed through a context object.
+// Trace is a collection of events and metadata for an operation, typically a
+// request, in a program. Traces should normally represent ephemeral and
+// short-lived events, and should be accessed through a context object.
 //
 // Implementations of Trace are expected to be safe for concurrent use.
 type Trace interface {
@@ -30,12 +27,14 @@ type Trace interface {
 	Start() time.Time
 
 	// Active represents whether or not the trace is still ongoing. It should
-	// return true if and only if Finish has not yet been called.
+	// return true if and only if Finish has not yet been called. Once finished,
+	// a trace should not be re-started.
 	Active() bool
 
 	// Finished represents whether or not the trace is still ongoing. It's
 	// essentially a convenience method opposite to Active. It should return
-	// true if and only if Finish has been called.
+	// true if and only if Finish has been called. Once finished, a trace should
+	// not be re-started.
 	Finished() bool
 
 	// Succeeded represents whether a trace has finished without any errors. It
@@ -79,7 +78,12 @@ type Trace interface {
 	// method should have no effect.
 	LazyErrorf(format string, args ...interface{})
 
-	// Events should return the immutable events collected by the trace so far.
+	// Events should return the events collected by the trace so far.
+	//
+	// Implementations should ensure that the returned slice is safe for
+	// concurrent use. Events themselves are expected to be immutable, so this
+	// typically means that implementations should create and return a new slice
+	// for each caller.
 	Events() []*Event
 }
 
@@ -103,7 +107,10 @@ func (trs Traces) Len() int { return len(trs) }
 //
 //
 
-// CoreTrace is the default, mutable implementation of the Trace interface.
+// CoreTrace is the default, mutable implementation of a trace, used by the
+// package and the collector. Trace IDs are ULIDs, using a default monotonic
+// source of entropy. Traces can contain up to a max number of events defined by
+// SetCoreTraceMaxEvents.
 type CoreTrace struct {
 	mtx       sync.Mutex
 	uri       string
@@ -119,7 +126,7 @@ type CoreTrace struct {
 
 var _ Trace = (*CoreTrace)(nil)
 
-// NewCoreTrace creates a new CoreTrace with the given category.
+// NewCoreTrace creates and starts a new trace with the given category.
 func NewCoreTrace(category string) *CoreTrace {
 	now := time.Now().UTC()
 	id := ulid.MustNew(ulid.Timestamp(now), traceIDEntropy).String()
@@ -290,7 +297,8 @@ func (tr *CoreTrace) Events() []*Event {
 	return events
 }
 
-// MarshalJSON implements json.Marshaler for the trace.
+// MarshalJSON implements json.Marshaler for the trace by first converting it to
+// a static trace.
 func (tr *CoreTrace) MarshalJSON() ([]byte, error) {
 	return json.Marshal(NewStaticTrace(tr))
 }
@@ -334,37 +342,29 @@ func getCoreTraceMaxEvents() int {
 //
 //
 
-type Source struct {
-	// Name is a human-readable string that should uniquely identify a source of
-	// trace data. A trace is typically annotated with the source from which it
-	// originates.
-	Name string `json:"name"`
-
-	// URL is an optional address. If it's specified, it's assumed to represent
-	// a user-accessible trctracehttp.Server which serves trace data from this
-	// source.
-	URL string `json:"url,omitempty"`
-}
-
-//
-//
-//
-
+// StaticTrace is an immutable "copy" of a trace and its events, which, unlike
+// the core trace, can be serialized. Although static trace implements the trace
+// interface, the interfaces which would normally mutate the trace are no-ops.
 type StaticTrace struct {
-	Via             []string  `json:"via,omitempty"`
-	StaticID        string    `json:"id"`
-	StaticCategory  string    `json:"category"`
-	StaticStart     time.Time `json:"start"`
-	StaticActive    bool      `json:"active"`
-	StaticFinished  bool      `json:"finished"`
-	StaticSucceeded bool      `json:"succeeded"`
-	StaticErrored   bool      `json:"errored"`
-	StaticDuration  duration  `json:"duration"`
-	StaticEvents    []*Event  `json:"events"`
+	// Via records the source(s) of the trace, which is useful when aggregating
+	// traces from multiple collectors into a single result.
+	Via []string `json:"via,omitempty"`
+
+	StaticID        string         `json:"id"`
+	StaticCategory  string         `json:"category"`
+	StaticStart     time.Time      `json:"start"`
+	StaticActive    bool           `json:"active"`
+	StaticFinished  bool           `json:"finished"`
+	StaticSucceeded bool           `json:"succeeded"`
+	StaticErrored   bool           `json:"errored"`
+	StaticDuration  DurationString `json:"duration"`
+	StaticEvents    []*Event       `json:"events"`
 }
 
 var _ Trace = (*StaticTrace)(nil)
 
+// NewStaticTrace constructs a static copy of the provided trace, including a
+// copy of all of the current trace events.
 func NewStaticTrace(tr Trace) *StaticTrace {
 	return &StaticTrace{
 		StaticID:        tr.ID(),
@@ -374,34 +374,67 @@ func NewStaticTrace(tr Trace) *StaticTrace {
 		StaticFinished:  tr.Finished(),
 		StaticSucceeded: tr.Succeeded(),
 		StaticErrored:   tr.Errored(),
-		StaticDuration:  duration(tr.Duration()),
+		StaticDuration:  DurationString(tr.Duration()),
 		StaticEvents:    tr.Events(),
 	}
 }
 
-func (tr *StaticTrace) ID() string                                    { return tr.StaticID }
-func (tr *StaticTrace) Category() string                              { return tr.StaticCategory }
-func (tr *StaticTrace) Start() time.Time                              { return tr.StaticStart }
-func (tr *StaticTrace) Active() bool                                  { return tr.StaticActive }
-func (tr *StaticTrace) Finished() bool                                { return tr.StaticFinished }
-func (tr *StaticTrace) Succeeded() bool                               { return tr.StaticSucceeded }
-func (tr *StaticTrace) Errored() bool                                 { return tr.StaticErrored }
-func (tr *StaticTrace) Duration() time.Duration                       { return time.Duration(tr.StaticDuration) }
-func (tr *StaticTrace) Finish()                                       { /* no-op */ }
-func (tr *StaticTrace) Tracef(format string, args ...interface{})     { /* no-op */ }
+// ID implements Trace.
+func (tr *StaticTrace) ID() string { return tr.StaticID }
+
+// Category implements Trace.
+func (tr *StaticTrace) Category() string { return tr.StaticCategory }
+
+// Start implements Trace.
+func (tr *StaticTrace) Start() time.Time { return tr.StaticStart }
+
+// Active implements Trace.
+func (tr *StaticTrace) Active() bool { return tr.StaticActive }
+
+// Finished implements Trace.
+func (tr *StaticTrace) Finished() bool { return tr.StaticFinished }
+
+// Succeeded implements Trace.
+func (tr *StaticTrace) Succeeded() bool { return tr.StaticSucceeded }
+
+// Errored implements Trace.
+func (tr *StaticTrace) Errored() bool { return tr.StaticErrored }
+
+// Duration implements Trace.
+func (tr *StaticTrace) Duration() time.Duration { return time.Duration(tr.StaticDuration) }
+
+// Finish implements Trace, but does nothing.
+func (tr *StaticTrace) Finish() { /* no-op */ }
+
+// Tracef implements Trace, but does nothing.
+func (tr *StaticTrace) Tracef(format string, args ...interface{}) { /* no-op */ }
+
+// LazyTracef implements Trace, but does nothing.
 func (tr *StaticTrace) LazyTracef(format string, args ...interface{}) { /* no-op */ }
-func (tr *StaticTrace) Errorf(format string, args ...interface{})     { /* no-op */ }
+
+// Errorf implements Trace, but does nothing.
+func (tr *StaticTrace) Errorf(format string, args ...interface{}) { /* no-op */ }
+
+// LazyErrorf implements Trace, but does nothing.
 func (tr *StaticTrace) LazyErrorf(format string, args ...interface{}) { /* no-op */ }
-func (tr *StaticTrace) Events() []*Event                              { return tr.StaticEvents }
 
-type duration time.Duration
+// Events implements Trace.
+func (tr *StaticTrace) Events() []*Event { return tr.StaticEvents }
 
-func (d *duration) UnmarshalJSON(data []byte) error {
+// DurationString is a time.Duration which JSON marshals as a string.
+type DurationString time.Duration
+
+// MarshalJSON implements json.Marshaler.
+func (d DurationString) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Duration(d).String())
+}
+
+// UnmarshalJSON implements json.Marshaler.
+func (d *DurationString) UnmarshalJSON(data []byte) error {
 	if dur, err := time.ParseDuration(strings.Trim(string(data), `"`)); err == nil {
-		*d = duration(dur)
+		*d = DurationString(dur)
 		return nil
 	}
-
 	return json.Unmarshal(data, (*time.Duration)(d))
 }
 
@@ -418,6 +451,7 @@ type PrefixedTrace struct {
 	args   []interface{}
 }
 
+// PrefixTrace wraps the trace with the provided prefix.
 func PrefixTrace(tr Trace, format string, args ...interface{}) Trace {
 	format = strings.TrimSpace(format)
 
@@ -432,36 +466,31 @@ func PrefixTrace(tr Trace, format string, args ...interface{}) Trace {
 	}
 }
 
-// PrefixTraceContext decorates and decorates it with PrefixTrace. It returns a new context containing that prefixed traceprefixes the trace in the context (if it exists) and returns a
-// new context containing that prefixed trace.
+// PrefixTraceContext extracts a trace from the context with FromContext, and
+// decorates that trace with PrefixTrace. It returns a new context containing
+// the prefixed trace.
 func PrefixTraceContext(ctx context.Context, format string, args ...interface{}) (context.Context, Trace) {
-	tr, ok := MaybeFromContext(ctx)
-	if !ok {
-		return ctx, nil
-	}
-
-	prefixedTrace := PrefixTrace(tr, format, args...)
+	prefixedTrace := PrefixTrace(FromContext(ctx), format, args...)
 	newContext := ToContext(ctx, prefixedTrace)
-
 	return newContext, prefixedTrace
 }
 
-// Tracef implements Trace.
+// Tracef implements Trace, adding a prefix to the provided format string.
 func (ptr *PrefixedTrace) Tracef(format string, args ...interface{}) {
 	ptr.Trace.Tracef(ptr.format+format, append(ptr.args, args...)...)
 }
 
-// LazyTracef implements Trace.
+// LazyTracef implements Trace, adding a prefix to the provided format string.
 func (ptr *PrefixedTrace) LazyTracef(format string, args ...interface{}) {
 	ptr.Trace.LazyTracef(ptr.format+format, append(ptr.args, args...)...)
 }
 
-// Errorf implements Trace.
+// Errorf implements Trace, adding a prefix to the provided format string.
 func (ptr *PrefixedTrace) Errorf(format string, args ...interface{}) {
 	ptr.Trace.Errorf(ptr.format+format, append(ptr.args, args...)...)
 }
 
-// LazyErrorf implements Trace.
+// LazyErrorf implements Trace, adding a prefix to the provided format string.
 func (ptr *PrefixedTrace) LazyErrorf(format string, args ...interface{}) {
 	ptr.Trace.LazyErrorf(ptr.format+format, append(ptr.args, args...)...)
 }

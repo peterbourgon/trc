@@ -1,4 +1,4 @@
-package trctrace
+package trc
 
 import (
 	"fmt"

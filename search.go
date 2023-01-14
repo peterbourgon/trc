@@ -1,17 +1,18 @@
-package trctrace
+package trc
 
 import (
 	"context"
 	"fmt"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/peterbourgon/trc"
 )
 
+// Searcher describes the ability to search over a collection of traces. It's
+// implemented by the collector, and used by the HTTP package.
 type Searcher interface {
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
 }
@@ -20,6 +21,8 @@ type Searcher interface {
 //
 //
 
+// SearchRequest collects parameters that can be used to identify a subset of
+// traces. It's meant to be used as part of a trace API or UI.
 type SearchRequest struct {
 	IDs         []string        `json:"ids,omitempty"`
 	Category    string          `json:"category,omitempty"`
@@ -32,6 +35,7 @@ type SearchRequest struct {
 	Limit       int             `json:"limit,omitempty"`
 }
 
+// String returns a debug representation of the request parameters.
 func (req *SearchRequest) String() string {
 	var tokens []string
 
@@ -74,7 +78,8 @@ func (req *SearchRequest) String() string {
 	return strings.Join(tokens, " ")
 }
 
-func (req *SearchRequest) Normalize() error {
+// Normalize ensures the request is valid, returning any problems encountered.
+func (req *SearchRequest) Normalize() (problems []string) {
 	if req.Bucketing == nil {
 		req.Bucketing = DefaultBucketing
 	}
@@ -84,10 +89,12 @@ func (req *SearchRequest) Normalize() error {
 		req.Query = req.Regexp.String()
 	case req.Regexp == nil && req.Query != "":
 		re, err := regexp.Compile(req.Query)
-		if err != nil {
-			return fmt.Errorf("%q: %w", req.Query, err)
+		switch {
+		case err == nil:
+			req.Regexp = re
+		case err != nil:
+			problems = append(problems, err.Error())
 		}
-		req.Regexp = re
 	}
 
 	switch {
@@ -99,18 +106,14 @@ func (req *SearchRequest) Normalize() error {
 		req.Limit = queryLimitMax
 	}
 
-	return nil
+	return problems
 }
 
 // HTTPRequest returns an HTTP request that will query the provided baseurl,
 // according to the parameters defined in the request. The baseurl is assumed to
-// represent a (remote) trctracehttp.Server. The request will query only the
+// represent a (remote) trchttp.Server. The request will query only the
 // local traces of that remote instance.
 func (req *SearchRequest) HTTPRequest(ctx context.Context, baseurl string) (*http.Request, error) {
-	if err := req.Normalize(); err != nil {
-		return nil, fmt.Errorf("normalize query request: %w", err)
-	}
-
 	r, err := http.NewRequestWithContext(ctx, "GET", baseurl, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create HTTP request: %w", err)
@@ -161,7 +164,8 @@ func (req *SearchRequest) HTTPRequest(ctx context.Context, baseurl string) (*htt
 	return r, nil
 }
 
-func (req *SearchRequest) Allow(tr trc.Trace) bool {
+// Allow returns true if the provided trace satisfies the search requirements.
+func (req *SearchRequest) Allow(tr Trace) bool {
 	if len(req.IDs) > 0 {
 		var found bool
 		for _, id := range req.IDs {
@@ -222,11 +226,94 @@ func (req *SearchRequest) Allow(tr trc.Trace) bool {
 //
 //
 
+// SearchResponse is the result of performing a search request.
 type SearchResponse struct {
-	Stats    Stats              `json:"stats"`
-	Total    int                `json:"total"`
-	Matched  int                `json:"matched"`
-	Selected []*trc.StaticTrace `json:"selected"`
-	Problems []string           `json:"problems,omitempty"`
-	Duration time.Duration      `json:"duration"`
+	Stats    Stats          `json:"stats"`
+	Total    int            `json:"total"`
+	Matched  int            `json:"matched"`
+	Selected []*StaticTrace `json:"selected"`
+	Problems []string       `json:"problems,omitempty"`
+	Duration time.Duration  `json:"duration"`
+}
+
+//
+//
+//
+
+// MultiSearcher allows multiple distinct searchers to be queried as one,
+// scattering the search request to each of them, and gathering and merging
+// their responses into a single response.
+type MultiSearcher []Searcher
+
+// Search implements searcher.
+func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
+	tr := FromContext(ctx)
+	begin := time.Now()
+
+	type tuple struct {
+		id  string
+		res *SearchResponse
+		err error
+	}
+
+	// Scatter.
+	tuplec := make(chan tuple, len(ms))
+	for i, s := range ms {
+		go func(id string, s Searcher) {
+			ctx, _ := PrefixTraceContext(ctx, "<%s>", id)
+			res, err := s.Search(ctx, req)
+			tuplec <- tuple{id, res, err}
+		}(strconv.Itoa(i+1), s)
+	}
+
+	tr.Tracef("scattered request count %d", len(ms))
+
+	// Gather.
+	aggregate := &SearchResponse{}
+	for i := 0; i < cap(tuplec); i++ {
+		t := <-tuplec
+		switch {
+		case t.res == nil && t.err == nil: // weird
+			tr.Tracef("%s: weird: no result, no error", t.id)
+			aggregate.Problems = append(aggregate.Problems, "got nil search response with nil error -- weird")
+		case t.res == nil && t.err != nil: // error case
+			tr.Tracef("%s: error: %v", t.id, t.err)
+			aggregate.Problems = append(aggregate.Problems, t.err.Error())
+		case t.res != nil && t.err == nil: // success case
+			aggregate.Stats = CombineStats(aggregate.Stats, t.res.Stats)
+			aggregate.Total += t.res.Total
+			aggregate.Matched += t.res.Matched
+			aggregate.Selected = append(aggregate.Selected, t.res.Selected...) // needs sort+limit
+			aggregate.Problems = append(aggregate.Problems, t.res.Problems...)
+		case t.res != nil && t.err != nil: // weird
+			tr.Tracef("%s: weird: valid result (accepting it) with error: %v", t.id, t.err)
+			aggregate.Stats = CombineStats(aggregate.Stats, t.res.Stats)
+			aggregate.Total += t.res.Total
+			aggregate.Matched += t.res.Matched
+			aggregate.Selected = append(aggregate.Selected, t.res.Selected...) // needs sort+limit
+			aggregate.Problems = append(aggregate.Problems, t.res.Problems...)
+			aggregate.Problems = append(aggregate.Problems, fmt.Sprintf("got valid search response with error (%v) -- weird", t.err))
+		}
+	}
+
+	tr.Tracef("gathered responses")
+
+	// At this point, the aggregate response has all of the raw data it's ever
+	// gonna get. We need to do a little bit of post-processing. First, we need
+	// to sort all of the selected traces by start time, and then limit them by
+	// the requested limit.
+
+	sort.Slice(aggregate.Selected, func(i, j int) bool {
+		return aggregate.Selected[i].Start().After(aggregate.Selected[j].Start())
+	})
+
+	if len(aggregate.Selected) > req.Limit {
+		aggregate.Selected = aggregate.Selected[:req.Limit]
+	}
+
+	// Duration is also defined across all individual requests.
+	aggregate.Duration = time.Since(begin)
+
+	// That should be it.
+	return aggregate, nil
 }

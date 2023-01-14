@@ -1,12 +1,10 @@
-package trctrace
+package trc
 
 import (
 	"fmt"
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/peterbourgon/trc"
 )
 
 // Stats collects summary statistics for a group of traces. It's meant to model
@@ -18,7 +16,7 @@ type Stats struct {
 	Categories []CategoryStats `json:"categories"`
 }
 
-func NewStatsFrom(bucketing []time.Duration, traces []trc.Trace) Stats {
+func NewStatsFrom(bucketing []time.Duration, traces []Trace) Stats {
 	byCategory := map[string]*CategoryStats{}
 	for _, tr := range traces {
 		category := tr.Category()
@@ -95,7 +93,7 @@ func (c *CategoryStats) IsZero() bool {
 	return zeroEverything
 }
 
-func (cs *CategoryStats) Observe(tr trc.Trace, bucketing []time.Duration) {
+func (cs *CategoryStats) Observe(tr Trace, bucketing []time.Duration) {
 	var (
 		start  = tr.Start()
 		active = tr.Active()

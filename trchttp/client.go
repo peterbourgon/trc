@@ -1,4 +1,4 @@
-package trctracehttp
+package trchttp
 
 import (
 	"context"
@@ -11,20 +11,25 @@ import (
 	"strings"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trctrace"
 )
 
+// HTTPClient models a concrete http.Client.
 type HTTPClient interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
+// Client implements the searcher interface by making an HTTP request to a URL
+// assumed to be handled by an instance of the server also defined in this
+// package.
 type Client struct {
 	client  HTTPClient
 	baseurl string
 }
 
-var _ trctrace.Searcher = (*Client)(nil)
+var _ trc.Searcher = (*Client)(nil)
 
+// NewClient returns a client calling the provided URL, which is assumed to be
+// an instance of the server also defined in this package.
 func NewClient(client HTTPClient, baseurl string) *Client {
 	if !strings.HasPrefix(baseurl, "http") {
 		baseurl = "http://" + baseurl
@@ -35,7 +40,8 @@ func NewClient(client HTTPClient, baseurl string) *Client {
 	}
 }
 
-func (c *Client) Search(ctx context.Context, req *trctrace.SearchRequest) (*trctrace.SearchResponse, error) {
+// Search implements the searcher interface.
+func (c *Client) Search(ctx context.Context, req *trc.SearchRequest) (*trc.SearchResponse, error) {
 	tr := trc.FromContext(ctx)
 
 	httpReq, err := req.HTTPRequest(ctx, c.baseurl)

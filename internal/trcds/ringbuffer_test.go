@@ -145,7 +145,6 @@ func TestRingBufferStats(t *testing.T) {
 
 func BenchmarkRingBuffer(b *testing.B) {
 	for _, cap := range []int{100, 1000, 10000, 100000} {
-
 		b.Run(strconv.Itoa(cap), func(b *testing.B) {
 			rb := NewRingBuffer[int](cap)
 			for i := 0; i < cap; i++ {
@@ -211,7 +210,7 @@ func BenchmarkRingBufferParallel(b *testing.B) {
 				b.RunParallel(func(p *testing.PB) {
 					for p.Next() {
 						rb.Add(123)
-						//rb.walk(walkFn)
+						// rb.walk(walkFn)
 					}
 				})
 			})
