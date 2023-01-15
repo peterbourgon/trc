@@ -16,16 +16,16 @@ type Stats struct {
 	Categories []CategoryStats `json:"categories"`
 }
 
-func NewStatsFrom(bucketing []time.Duration, traces []Trace) Stats {
+func newStatsFrom(bucketing []time.Duration, traces []Trace) Stats {
 	byCategory := map[string]*CategoryStats{}
 	for _, tr := range traces {
 		category := tr.Category()
 		cs, ok := byCategory[category]
 		if !ok {
-			cs = NewCategoryStats(category, bucketing)
+			cs = newCategoryStats(category, bucketing)
 			byCategory[category] = cs
 		}
-		cs.Observe(tr, bucketing)
+		cs.observe(tr, bucketing)
 	}
 
 	categories := make([]CategoryStats, 0, len(byCategory))
@@ -43,15 +43,16 @@ func NewStatsFrom(bucketing []time.Duration, traces []Trace) Stats {
 	}
 }
 
-func (s *Stats) IsZero() bool {
+func (s *Stats) isZero() bool {
 	return len(s.Bucketing) == 0 && len(s.Categories) == 0
 }
 
+// Overall returns a composite CategoryStats representing all categories.
 func (s *Stats) Overall() *CategoryStats {
-	overall := NewCategoryStats("overall", s.Bucketing)
+	overall := newCategoryStats("overall", s.Bucketing)
 	rateSum := float64(0.0)
 	for _, c := range s.Categories {
-		overall.Merge(c)
+		overall.merge(c)
 		rateSum += c.Rate
 	}
 	overall.Rate = rateSum
@@ -72,14 +73,14 @@ type CategoryStats struct {
 	Rate      float64   `json:"rate"`
 }
 
-func NewCategoryStats(name string, bucketing []time.Duration) *CategoryStats {
+func newCategoryStats(name string, bucketing []time.Duration) *CategoryStats {
 	return &CategoryStats{
 		Name:      name,
 		NumBucket: make([]uint64, len(bucketing)),
 	}
 }
 
-func (c *CategoryStats) IsZero() bool {
+func (c *CategoryStats) isZero() bool {
 	var (
 		zeroName       = c.Name == ""
 		zeroNumActive  = c.NumActive == 0
@@ -93,7 +94,7 @@ func (c *CategoryStats) IsZero() bool {
 	return zeroEverything
 }
 
-func (cs *CategoryStats) Observe(tr Trace, bucketing []time.Duration) {
+func (cs *CategoryStats) observe(tr Trace, bucketing []time.Duration) {
 	var (
 		start  = tr.Start()
 		active = tr.Active()
@@ -123,12 +124,12 @@ func (cs *CategoryStats) Observe(tr Trace, bucketing []time.Duration) {
 	cs.Rate = calcRate(cs.NumTotal(), cs.Newest.Sub(cs.Oldest))
 }
 
-func (cs *CategoryStats) Merge(other CategoryStats) {
-	if other.IsZero() {
+func (cs *CategoryStats) merge(other CategoryStats) {
+	if other.isZero() {
 		return
 	}
 
-	if cs.IsZero() {
+	if cs.isZero() {
 		*cs = other
 		return
 	}
@@ -152,6 +153,7 @@ func (cs *CategoryStats) Merge(other CategoryStats) {
 	cs.Rate = calcRate(cs.NumTotal(), cs.Newest.Sub(cs.Oldest))
 }
 
+// NumTotal returns the total number of traces represented in the category.
 func (cs *CategoryStats) NumTotal() uint64 {
 	var total uint64
 	total += cs.NumActive
@@ -169,19 +171,15 @@ func calcRate(n uint64, d time.Duration) float64 {
 	return float64(n) / d.Seconds()
 }
 
-//
-//
-//
-
-func CombineStats(a, b Stats) Stats {
+func combineStats(a, b Stats) Stats {
 	switch {
-	case a.IsZero() && b.IsZero():
+	case a.isZero() && b.isZero():
 		return a
 
-	case a.IsZero() && !b.IsZero():
+	case a.isZero() && !b.isZero():
 		return b
 
-	case !a.IsZero() && b.IsZero():
+	case !a.isZero() && b.isZero():
 		return a
 	}
 
@@ -199,7 +197,7 @@ func CombineStats(a, b Stats) Stats {
 	index := map[string]CategoryStats{}            // duplicates not possible
 	for _, c := range slice {
 		target := index[c.Name] // can be zero
-		target.Merge(c)         // TODO: if/when it changes, error checking
+		target.merge(c)         // TODO: if/when it changes, error checking
 		index[c.Name] = target  // TODO: pointers?
 	}
 
@@ -216,4 +214,10 @@ func CombineStats(a, b Stats) Stats {
 		Bucketing:  a.Bucketing,
 		Categories: categories,
 	}
+}
+
+var ErrBadMerge = fmt.Errorf("bad merge")
+
+func badMerge(what string, dst, src any) error {
+	return fmt.Errorf("%w: %s: %v ↯ %v", ErrBadMerge, what, dst, src)
 }

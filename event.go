@@ -45,7 +45,7 @@ var eventPool = sync.Pool{
 
 // MakeEvent creates a new event with the provided format string and args.
 // Arguments are evaluated immediately.
-func NewEvent(format string, args ...interface{}) *Event {
+func NewEvent(format string, args ...any) *Event {
 	ev := eventPool.Get().(*Event)
 	ev.Seq = atomic.AddUint64(&eventSeq, 1)
 	ev.When = time.Now().UTC()
@@ -59,7 +59,7 @@ func NewEvent(format string, args ...interface{}) *Event {
 // Arguments are evaluated lazily upon read. Reads can happen at any point in
 // the future, and from any number of concurrent goroutines, so arguments must
 // be safe for concurrent access.
-func NewLazyEvent(format string, args ...interface{}) *Event {
+func NewLazyEvent(format string, args ...any) *Event {
 	ev := eventPool.Get().(*Event)
 	ev.Seq = atomic.AddUint64(&eventSeq, 1)
 	ev.When = time.Now().UTC()
@@ -70,7 +70,7 @@ func NewLazyEvent(format string, args ...interface{}) *Event {
 }
 
 // MakeErrorEvent is equivalent to MakeEvent, and sets IsError.
-func NewErrorEvent(format string, args ...interface{}) *Event {
+func NewErrorEvent(format string, args ...any) *Event {
 	ev := eventPool.Get().(*Event)
 	ev.Seq = atomic.AddUint64(&eventSeq, 1)
 	ev.When = time.Now().UTC()
@@ -81,7 +81,7 @@ func NewErrorEvent(format string, args ...interface{}) *Event {
 }
 
 // MakeLazyErrorEvent is equivalent to MakeLazyEvent, and sets IsError.
-func NewLazyErrorEvent(format string, args ...interface{}) *Event {
+func NewLazyErrorEvent(format string, args ...any) *Event {
 	ev := eventPool.Get().(*Event)
 	ev.Seq = atomic.AddUint64(&eventSeq, 1)
 	ev.When = time.Now().UTC()
@@ -190,7 +190,7 @@ func (z stringer) String() string {
 
 type lazyStringer struct {
 	fmt  string
-	args []interface{}
+	args []any
 }
 
 func (z *lazyStringer) String() string {

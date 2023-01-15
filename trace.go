@@ -61,22 +61,22 @@ type Trace interface {
 	// Tracef should immediately (synchromously) evaluate the provided
 	// arguments, and add a corresponding event to the trace. If the trace is
 	// finished, this method should have no effect.
-	Tracef(format string, args ...interface{})
+	Tracef(format string, args ...any)
 
 	// LazyTracef should capture the arguments without evaluating them, and add
 	// a corresponding event to the trace. If the trace is finished, this method
 	// should have no effect.
-	LazyTracef(format string, args ...interface{})
+	LazyTracef(format string, args ...any)
 
 	// Errorf should behave like Tracef, but also mark the trace as "errored",
 	// typically with a boolean flag. If the trace is finished, this method
 	// should have no effect.
-	Errorf(format string, args ...interface{})
+	Errorf(format string, args ...any)
 
 	// LazyErrorf should behave like LazyTracef, but also mark the trace as
 	// "errored", typically with a boolean flag. If the trace is finished, this
 	// method should have no effect.
-	LazyErrorf(format string, args ...interface{})
+	LazyErrorf(format string, args ...any)
 
 	// Events should return the events collected by the trace so far.
 	//
@@ -138,7 +138,7 @@ func NewCoreTrace(category string) *CoreTrace {
 }
 
 // Tracef implements Trace.
-func (tr *CoreTrace) Tracef(format string, args ...interface{}) {
+func (tr *CoreTrace) Tracef(format string, args ...any) {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -155,7 +155,7 @@ func (tr *CoreTrace) Tracef(format string, args ...interface{}) {
 }
 
 // LazyTracef implements Trace.
-func (tr *CoreTrace) LazyTracef(format string, args ...interface{}) {
+func (tr *CoreTrace) LazyTracef(format string, args ...any) {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -172,7 +172,7 @@ func (tr *CoreTrace) LazyTracef(format string, args ...interface{}) {
 }
 
 // Errorf implements Trace.
-func (tr *CoreTrace) Errorf(format string, args ...interface{}) {
+func (tr *CoreTrace) Errorf(format string, args ...any) {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -191,7 +191,7 @@ func (tr *CoreTrace) Errorf(format string, args ...interface{}) {
 }
 
 // LazyErrorf implements Trace.
-func (tr *CoreTrace) LazyErrorf(format string, args ...interface{}) {
+func (tr *CoreTrace) LazyErrorf(format string, args ...any) {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -357,7 +357,7 @@ type StaticTrace struct {
 	StaticFinished  bool           `json:"finished"`
 	StaticSucceeded bool           `json:"succeeded"`
 	StaticErrored   bool           `json:"errored"`
-	StaticDuration  DurationString `json:"duration"`
+	StaticDuration  durationString `json:"duration"`
 	StaticEvents    []*Event       `json:"events"`
 }
 
@@ -374,7 +374,7 @@ func NewStaticTrace(tr Trace) *StaticTrace {
 		StaticFinished:  tr.Finished(),
 		StaticSucceeded: tr.Succeeded(),
 		StaticErrored:   tr.Errored(),
-		StaticDuration:  DurationString(tr.Duration()),
+		StaticDuration:  durationString(tr.Duration()),
 		StaticEvents:    tr.Events(),
 	}
 }
@@ -407,32 +407,32 @@ func (tr *StaticTrace) Duration() time.Duration { return time.Duration(tr.Static
 func (tr *StaticTrace) Finish() { /* no-op */ }
 
 // Tracef implements Trace, but does nothing.
-func (tr *StaticTrace) Tracef(format string, args ...interface{}) { /* no-op */ }
+func (tr *StaticTrace) Tracef(format string, args ...any) { /* no-op */ }
 
 // LazyTracef implements Trace, but does nothing.
-func (tr *StaticTrace) LazyTracef(format string, args ...interface{}) { /* no-op */ }
+func (tr *StaticTrace) LazyTracef(format string, args ...any) { /* no-op */ }
 
 // Errorf implements Trace, but does nothing.
-func (tr *StaticTrace) Errorf(format string, args ...interface{}) { /* no-op */ }
+func (tr *StaticTrace) Errorf(format string, args ...any) { /* no-op */ }
 
 // LazyErrorf implements Trace, but does nothing.
-func (tr *StaticTrace) LazyErrorf(format string, args ...interface{}) { /* no-op */ }
+func (tr *StaticTrace) LazyErrorf(format string, args ...any) { /* no-op */ }
 
 // Events implements Trace.
 func (tr *StaticTrace) Events() []*Event { return tr.StaticEvents }
 
-// DurationString is a time.Duration which JSON marshals as a string.
-type DurationString time.Duration
+// durationString is a time.Duration which JSON marshals as a string.
+type durationString time.Duration
 
 // MarshalJSON implements json.Marshaler.
-func (d DurationString) MarshalJSON() ([]byte, error) {
-	return json.Marshal(time.Duration(d).String())
+func (d *durationString) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Duration(*d).String())
 }
 
 // UnmarshalJSON implements json.Marshaler.
-func (d *DurationString) UnmarshalJSON(data []byte) error {
+func (d *durationString) UnmarshalJSON(data []byte) error {
 	if dur, err := time.ParseDuration(strings.Trim(string(data), `"`)); err == nil {
-		*d = DurationString(dur)
+		*d = durationString(dur)
 		return nil
 	}
 	return json.Unmarshal(data, (*time.Duration)(d))
@@ -442,24 +442,24 @@ func (d *DurationString) UnmarshalJSON(data []byte) error {
 //
 //
 
-// PrefixedTrace decorates a trace and adds a user-supplied prefix to each event.
+// prefixedTrace decorates a trace and adds a user-supplied prefix to each event.
 // This can be useful to show important regions of execution without needing to
 // inspect full call stacks.
-type PrefixedTrace struct {
+type prefixedTrace struct {
 	Trace
 	format string
-	args   []interface{}
+	args   []any
 }
 
 // PrefixTrace wraps the trace with the provided prefix.
-func PrefixTrace(tr Trace, format string, args ...interface{}) Trace {
+func PrefixTrace(tr Trace, format string, args ...any) Trace {
 	format = strings.TrimSpace(format)
 
 	if format == "" {
 		return tr
 	}
 
-	return &PrefixedTrace{
+	return &prefixedTrace{
 		Trace:  tr,
 		format: format + " ",
 		args:   args,
@@ -469,28 +469,28 @@ func PrefixTrace(tr Trace, format string, args ...interface{}) Trace {
 // PrefixTraceContext extracts a trace from the context with FromContext, and
 // decorates that trace with PrefixTrace. It returns a new context containing
 // the prefixed trace.
-func PrefixTraceContext(ctx context.Context, format string, args ...interface{}) (context.Context, Trace) {
+func PrefixTraceContext(ctx context.Context, format string, args ...any) (context.Context, Trace) {
 	prefixedTrace := PrefixTrace(FromContext(ctx), format, args...)
 	newContext := ToContext(ctx, prefixedTrace)
 	return newContext, prefixedTrace
 }
 
 // Tracef implements Trace, adding a prefix to the provided format string.
-func (ptr *PrefixedTrace) Tracef(format string, args ...interface{}) {
+func (ptr *prefixedTrace) Tracef(format string, args ...any) {
 	ptr.Trace.Tracef(ptr.format+format, append(ptr.args, args...)...)
 }
 
 // LazyTracef implements Trace, adding a prefix to the provided format string.
-func (ptr *PrefixedTrace) LazyTracef(format string, args ...interface{}) {
+func (ptr *prefixedTrace) LazyTracef(format string, args ...any) {
 	ptr.Trace.LazyTracef(ptr.format+format, append(ptr.args, args...)...)
 }
 
 // Errorf implements Trace, adding a prefix to the provided format string.
-func (ptr *PrefixedTrace) Errorf(format string, args ...interface{}) {
+func (ptr *prefixedTrace) Errorf(format string, args ...any) {
 	ptr.Trace.Errorf(ptr.format+format, append(ptr.args, args...)...)
 }
 
 // LazyErrorf implements Trace, adding a prefix to the provided format string.
-func (ptr *PrefixedTrace) LazyErrorf(format string, args ...interface{}) {
+func (ptr *prefixedTrace) LazyErrorf(format string, args ...any) {
 	ptr.Trace.LazyErrorf(ptr.format+format, append(ptr.args, args...)...)
 }

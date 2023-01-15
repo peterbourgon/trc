@@ -3,7 +3,6 @@ package trc
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"regexp"
 	"sort"
 	"strconv"
@@ -109,63 +108,7 @@ func (req *SearchRequest) Normalize() (problems []string) {
 	return problems
 }
 
-// HTTPRequest returns an HTTP request that will query the provided baseurl,
-// according to the parameters defined in the request. The baseurl is assumed to
-// represent a (remote) trchttp.Server. The request will query only the
-// local traces of that remote instance.
-func (req *SearchRequest) HTTPRequest(ctx context.Context, baseurl string) (*http.Request, error) {
-	r, err := http.NewRequestWithContext(ctx, "GET", baseurl, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create HTTP request: %w", err)
-	}
-
-	urlquery := r.URL.Query()
-
-	if req.Limit > 0 {
-		urlquery.Set("n", strconv.Itoa(req.Limit))
-	}
-
-	for _, id := range req.IDs {
-		urlquery.Add("id", id)
-	}
-
-	if req.Category != "" {
-		urlquery.Set("category", req.Category)
-	}
-
-	if req.IsActive {
-		urlquery.Set("active", "true")
-	}
-
-	if req.Bucketing != nil {
-		for _, b := range req.Bucketing {
-			urlquery.Add("b", b.String())
-		}
-	}
-
-	if req.MinDuration != nil {
-		urlquery.Set("min", req.MinDuration.String())
-	}
-
-	if req.IsFailed {
-		urlquery.Set("failed", "true")
-	}
-
-	if req.Regexp != nil {
-		urlquery.Set("q", req.Regexp.String())
-	}
-
-	urlquery.Set("local", "true")
-
-	r.URL.RawQuery = urlquery.Encode()
-
-	r.Header.Set("accept", "application/json")
-
-	return r, nil
-}
-
-// Allow returns true if the provided trace satisfies the search requirements.
-func (req *SearchRequest) Allow(tr Trace) bool {
+func (req *SearchRequest) allow(tr Trace) bool {
 	if len(req.IDs) > 0 {
 		var found bool
 		for _, id := range req.IDs {
@@ -280,14 +223,14 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 			tr.Tracef("%s: error: %v", t.id, t.err)
 			aggregate.Problems = append(aggregate.Problems, t.err.Error())
 		case t.res != nil && t.err == nil: // success case
-			aggregate.Stats = CombineStats(aggregate.Stats, t.res.Stats)
+			aggregate.Stats = combineStats(aggregate.Stats, t.res.Stats)
 			aggregate.Total += t.res.Total
 			aggregate.Matched += t.res.Matched
 			aggregate.Selected = append(aggregate.Selected, t.res.Selected...) // needs sort+limit
 			aggregate.Problems = append(aggregate.Problems, t.res.Problems...)
 		case t.res != nil && t.err != nil: // weird
 			tr.Tracef("%s: weird: valid result (accepting it) with error: %v", t.id, t.err)
-			aggregate.Stats = CombineStats(aggregate.Stats, t.res.Stats)
+			aggregate.Stats = combineStats(aggregate.Stats, t.res.Stats)
 			aggregate.Total += t.res.Total
 			aggregate.Matched += t.res.Matched
 			aggregate.Selected = append(aggregate.Selected, t.res.Selected...) // needs sort+limit

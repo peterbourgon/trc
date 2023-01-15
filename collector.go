@@ -56,12 +56,12 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 	total := len(overall)
 	tr.Tracef("walked all traces, total count %d", total)
 
-	stats := NewStatsFrom(req.Bucketing, overall)
+	stats := newStatsFrom(req.Bucketing, overall)
 	tr.Tracef("calculated stats")
 
 	var allowed Traces
 	for _, tr := range overall {
-		if req.Allow(tr) {
+		if req.allow(tr) {
 			allowed = append(allowed, tr)
 		}
 	}

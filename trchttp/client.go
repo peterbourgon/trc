@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/peterbourgon/trc"
@@ -44,7 +45,7 @@ func NewClient(client HTTPClient, baseurl string) *Client {
 func (c *Client) Search(ctx context.Context, req *trc.SearchRequest) (*trc.SearchResponse, error) {
 	tr := trc.FromContext(ctx)
 
-	httpReq, err := req.HTTPRequest(ctx, c.baseurl)
+	httpReq, err := httpRequest(ctx, req, c.baseurl)
 	if err != nil {
 		return nil, fmt.Errorf("make HTTP request: %w", err)
 	}
@@ -83,4 +84,55 @@ func redactURL(err error) error {
 		err = fmt.Errorf("%s: %w", urlErr.Op, urlErr.Err)
 	}
 	return err
+}
+
+func httpRequest(ctx context.Context, req *trc.SearchRequest, baseurl string) (*http.Request, error) {
+	r, err := http.NewRequestWithContext(ctx, "GET", baseurl, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create HTTP request: %w", err)
+	}
+
+	urlquery := r.URL.Query()
+
+	if req.Limit > 0 {
+		urlquery.Set("n", strconv.Itoa(req.Limit))
+	}
+
+	for _, id := range req.IDs {
+		urlquery.Add("id", id)
+	}
+
+	if req.Category != "" {
+		urlquery.Set("category", req.Category)
+	}
+
+	if req.IsActive {
+		urlquery.Set("active", "true")
+	}
+
+	if req.Bucketing != nil {
+		for _, b := range req.Bucketing {
+			urlquery.Add("b", b.String())
+		}
+	}
+
+	if req.MinDuration != nil {
+		urlquery.Set("min", req.MinDuration.String())
+	}
+
+	if req.IsFailed {
+		urlquery.Set("failed", "true")
+	}
+
+	if req.Regexp != nil {
+		urlquery.Set("q", req.Regexp.String())
+	}
+
+	urlquery.Set("local", "true")
+
+	r.URL.RawQuery = urlquery.Encode()
+
+	r.Header.Set("accept", "application/json")
+
+	return r, nil
 }

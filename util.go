@@ -1,7 +1,6 @@
 package trc
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -14,12 +13,6 @@ var DefaultBucketing = []time.Duration{
 	50 * time.Millisecond,
 	100 * time.Millisecond,
 	1000 * time.Millisecond,
-}
-
-var ErrBadMerge = fmt.Errorf("bad merge")
-
-func badMerge(what string, dst, src any) error {
-	return fmt.Errorf("%w: %s: %v ↯ %v", ErrBadMerge, what, dst, src)
 }
 
 const (
