@@ -157,7 +157,7 @@ div#traces .trace .events div.event {
 	display: flex;
 	flex-direction: row;
 	justify-content: space-between;
-	align-items: center;
+	/* align-items: center; */
 	flex-wrap: nowrap;
 	border-top: solid 1px #ccc;
 }
