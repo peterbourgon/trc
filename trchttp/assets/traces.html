@@ -378,10 +378,11 @@ function highlightquery() {
 			<div class="stack">
 				<details class="stack-details">
 					<summary>[≡]</summary>
-					<table>
+					<table class="stack-table">
 						{{ range $i, $c := .Stack -}}
 						<tr>
 							<td style="text-align: right;"><span class="searchable">{{$c.FileLine}}</span></td>
+							<td style="width: 1ch;">&nbsp;</td>
 							<td><span class="searchable">{{$c.Function}}</span></td>
 						</tr>
 						{{ else -}}

@@ -216,12 +216,9 @@ div#traces .trace .events div.event div.what.meta {
  */
 
 .stack {
+	font-size: smaller;
 	display: flex;
 	flex-direction: column;
-	color: #666;
-}
-
-.stack>div table {
 	color: #666;
 }
 
