@@ -65,7 +65,7 @@ func (c *Client) Search(ctx context.Context, req *trc.SearchRequest) (*trc.Searc
 		return nil, fmt.Errorf("remote status code %d", httpResp.StatusCode)
 	}
 
-	var d ResponseData
+	var d SearchResponse
 	if err := json.NewDecoder(httpResp.Body).Decode(&d); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}

@@ -15,10 +15,6 @@ type Searcher interface {
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
 }
 
-//
-//
-//
-
 // SearchRequest collects parameters that can be used to identify a subset of
 // traces. It's meant to be used as part of a trace API or UI.
 type SearchRequest struct {
@@ -121,10 +117,6 @@ func (req *SearchRequest) allow(tr Trace) bool {
 	return true
 }
 
-//
-//
-//
-
 // SearchResponse is the result of performing a search request.
 type SearchResponse struct {
 	Stats    Stats          `json:"stats"`
@@ -135,17 +127,14 @@ type SearchResponse struct {
 	Duration time.Duration  `json:"duration"`
 }
 
-//
-//
-//
-
 // MultiSearcher allows multiple distinct searchers to be queried as one,
 // scattering the search request to each of them, and gathering and merging
 // their responses into a single response. It's used by the HTML UI to e.g.
 // query an entire cluster in a single request.
 type MultiSearcher []Searcher
 
-// Search implements searcher.
+// Search implements Searcher, by making concurrent search requests, and
+// gathering results into a single response.
 func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
 	tr := FromContext(ctx)
 	begin := time.Now()

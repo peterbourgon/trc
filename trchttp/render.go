@@ -221,6 +221,7 @@ var templateFuncs = template.FuncMap{
 	"pathescape":         func(s string) string { return url.PathEscape(s) },
 	"htmlescape":         func(s string) string { return template.HTMLEscapeString(s) },
 	"insertbreaks":       func(s string) template.HTML { return template.HTML(breaksReplacer.Replace(s)) },
+	"urlencode":          func(s string) template.URL { return template.URL(url.QueryEscape(s)) },
 	"safeurl":            func(s string) template.URL { return template.URL(s) },
 	"stringsjoinnewline": func(a []string) string { return strings.Join(a, string([]byte{0xa})) },
 	"truncateduration":   truncateduration,

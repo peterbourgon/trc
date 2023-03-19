@@ -11,26 +11,31 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/unixtransport"
 )
 
-// ResponseData is what the server returns to requests.
-type ResponseData struct {
+// SearchResponse is what the server returns to search requests.
+type SearchResponse struct {
 	Remotes  []string            `json:"remotes,omitempty"`
 	Request  *trc.SearchRequest  `json:"request"`
 	Response *trc.SearchResponse `json:"response"`
 }
 
-// Server wraps a searcher and provides a JSON API and HTML UI for queries.
-// The API can be consumed by the client type also in this package, to allow
-// remote searching of traces.
+// Server implements a JSON API and HTML UI for the wrapped searcher.
 type Server struct {
 	searcher trc.Searcher
+	client   HTTPClient
 }
 
 // NewServer returns a server wrapping the given searcher.
 func NewServer(searcher trc.Searcher) *Server {
+	var transport http.Transport
+	unixtransport.Register(&transport)
+	client := &http.Client{Transport: &transport}
+
 	return &Server{
 		searcher: searcher,
+		client:   client,
 	}
 }
 
@@ -52,7 +57,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(remotes) > 0 {
 		var multi trc.MultiSearcher
 		for _, r := range remotes {
-			multi = append(multi, NewClient(http.DefaultClient, r))
+			multi = append(multi, NewClient(s.client, r))
 		}
 		tr.Tracef("searching remotes %v", remotes)
 		searcher = multi
@@ -70,7 +75,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	tr.Tracef("total=%d matched=%d selected=%d duration=%s", res.Total, res.Matched, len(res.Selected), res.Duration)
 
-	renderResponse(ctx, w, r, assets, "traces.html", templateFuncs, &ResponseData{
+	renderResponse(ctx, w, r, assets, "traces.html", templateFuncs, &SearchResponse{
 		Remotes:  remotes,
 		Request:  req,
 		Response: res,
