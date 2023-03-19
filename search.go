@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -32,49 +31,6 @@ type SearchRequest struct {
 	Query       string          `json:"query,omitempty"`
 	Regexp      *regexp.Regexp  `json:"-"`
 	Limit       int             `json:"limit,omitempty"`
-}
-
-// String returns a debug representation of the request parameters.
-func (req *SearchRequest) String() string {
-	var tokens []string
-
-	if len(req.IDs) > 0 {
-		tokens = append(tokens, fmt.Sprintf("ids=%v", req.IDs))
-	}
-
-	if req.Category != "" {
-		tokens = append(tokens, fmt.Sprintf("category=%q", req.Category))
-	}
-
-	if req.IsActive {
-		tokens = append(tokens, "active")
-	}
-
-	if len(req.Bucketing) > 0 {
-		tokens = append(tokens, fmt.Sprintf("bucketing=%v", req.Bucketing))
-	}
-
-	if req.MinDuration != nil {
-		tokens = append(tokens, fmt.Sprintf("min=%s", req.MinDuration))
-	}
-
-	if req.IsFailed {
-		tokens = append(tokens, "failed")
-	}
-
-	if req.Query != "" {
-		tokens = append(tokens, fmt.Sprintf("query=%s", req.Query))
-	}
-
-	if req.Regexp != nil {
-		tokens = append(tokens, fmt.Sprintf("regexp=%s", req.Regexp.String()))
-	}
-
-	if req.Limit != 0 {
-		tokens = append(tokens, fmt.Sprintf("limit=%d", req.Limit))
-	}
-
-	return strings.Join(tokens, " ")
 }
 
 // Normalize ensures the request is valid, returning any problems encountered.
@@ -185,7 +141,8 @@ type SearchResponse struct {
 
 // MultiSearcher allows multiple distinct searchers to be queried as one,
 // scattering the search request to each of them, and gathering and merging
-// their responses into a single response.
+// their responses into a single response. It's used by the HTML UI to e.g.
+// query an entire cluster in a single request.
 type MultiSearcher []Searcher
 
 // Search implements searcher.
@@ -203,7 +160,8 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	tuplec := make(chan tuple, len(ms))
 	for i, s := range ms {
 		go func(id string, s Searcher) {
-			ctx, _ := PrefixTraceContext(ctx, "<%s>", id)
+			ptr := Prefix(FromContext(ctx), "<%s>", id)
+			ctx := ToContext(ctx, ptr)
 			res, err := s.Search(ctx, req)
 			tuplec <- tuple{id, res, err}
 		}(strconv.Itoa(i+1), s)

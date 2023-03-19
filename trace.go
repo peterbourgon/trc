@@ -1,7 +1,6 @@
 package trc
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"sync"
@@ -91,27 +90,21 @@ type Trace interface {
 //
 //
 
-// Traces is a collection of traces ordered by start time, newest-first.
-type Traces []Trace
+type traces []Trace
 
-// Less implements sort.Interface by start time, newest-first.
-func (trs Traces) Less(i, j int) bool { return trs[i].Start().After(trs[j].Start()) }
-
-// Swap implements sort.Interface.
-func (trs Traces) Swap(i, j int) { trs[i], trs[j] = trs[j], trs[i] }
-
-// Len implements sort.Interface.
-func (trs Traces) Len() int { return len(trs) }
+func (trs traces) Less(i, j int) bool { return trs[i].Start().After(trs[j].Start()) }
+func (trs traces) Swap(i, j int)      { trs[i], trs[j] = trs[j], trs[i] }
+func (trs traces) Len() int           { return len(trs) }
 
 //
 //
 //
 
-// CoreTrace is the default, mutable implementation of a trace, used by the
+// coreTrace is the default, mutable implementation of a trace, used by the
 // package and the collector. Trace IDs are ULIDs, using a default monotonic
 // source of entropy. Traces can contain up to a max number of events defined by
 // SetCoreTraceMaxEvents.
-type CoreTrace struct {
+type coreTrace struct {
 	mtx       sync.Mutex
 	uri       string
 	id        string
@@ -124,13 +117,13 @@ type CoreTrace struct {
 	truncated int
 }
 
-var _ Trace = (*CoreTrace)(nil)
+var _ Trace = (*coreTrace)(nil)
 
-// NewCoreTrace creates and starts a new trace with the given category.
-func NewCoreTrace(category string) *CoreTrace {
+// newCoreTrace creates and starts a new trace with the given category.
+func newCoreTrace(category string) *coreTrace {
 	now := time.Now().UTC()
 	id := ulid.MustNew(ulid.Timestamp(now), traceIDEntropy).String()
-	return &CoreTrace{
+	return &coreTrace{
 		id:       id,
 		category: category,
 		start:    now,
@@ -138,7 +131,7 @@ func NewCoreTrace(category string) *CoreTrace {
 }
 
 // Tracef implements Trace.
-func (tr *CoreTrace) Tracef(format string, args ...any) {
+func (tr *coreTrace) Tracef(format string, args ...any) {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -155,7 +148,7 @@ func (tr *CoreTrace) Tracef(format string, args ...any) {
 }
 
 // LazyTracef implements Trace.
-func (tr *CoreTrace) LazyTracef(format string, args ...any) {
+func (tr *coreTrace) LazyTracef(format string, args ...any) {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -172,7 +165,7 @@ func (tr *CoreTrace) LazyTracef(format string, args ...any) {
 }
 
 // Errorf implements Trace.
-func (tr *CoreTrace) Errorf(format string, args ...any) {
+func (tr *coreTrace) Errorf(format string, args ...any) {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -191,7 +184,7 @@ func (tr *CoreTrace) Errorf(format string, args ...any) {
 }
 
 // LazyErrorf implements Trace.
-func (tr *CoreTrace) LazyErrorf(format string, args ...any) {
+func (tr *coreTrace) LazyErrorf(format string, args ...any) {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -210,7 +203,7 @@ func (tr *CoreTrace) LazyErrorf(format string, args ...any) {
 }
 
 // Finish implements Trace.
-func (tr *CoreTrace) Finish() {
+func (tr *coreTrace) Finish() {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -222,32 +215,32 @@ func (tr *CoreTrace) Finish() {
 	tr.duration = time.Since(tr.start)
 }
 
-func (tr *CoreTrace) URI() string {
+func (tr *coreTrace) URI() string {
 	return tr.uri
 }
 
 // ID implements Trace.
-func (tr *CoreTrace) ID() string {
+func (tr *coreTrace) ID() string {
 	return tr.id // immutable
 }
 
 // Start implements Trace.
-func (tr *CoreTrace) Start() time.Time {
+func (tr *coreTrace) Start() time.Time {
 	return tr.start // immutable
 }
 
 // Category implements Trace.
-func (tr *CoreTrace) Category() string {
+func (tr *coreTrace) Category() string {
 	return tr.category // immutable
 }
 
 // Active implements Trace.
-func (tr *CoreTrace) Active() bool {
+func (tr *coreTrace) Active() bool {
 	return !tr.Finished()
 }
 
 // Finished implements Trace.
-func (tr *CoreTrace) Finished() bool {
+func (tr *coreTrace) Finished() bool {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -255,7 +248,7 @@ func (tr *CoreTrace) Finished() bool {
 }
 
 // Succeeded implements Trace.
-func (tr *CoreTrace) Succeeded() bool {
+func (tr *coreTrace) Succeeded() bool {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -263,7 +256,7 @@ func (tr *CoreTrace) Succeeded() bool {
 }
 
 // Errored implements Trace.
-func (tr *CoreTrace) Errored() bool {
+func (tr *coreTrace) Errored() bool {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -271,7 +264,7 @@ func (tr *CoreTrace) Errored() bool {
 }
 
 // Duration implements Trace.
-func (tr *CoreTrace) Duration() time.Duration {
+func (tr *coreTrace) Duration() time.Duration {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -283,7 +276,7 @@ func (tr *CoreTrace) Duration() time.Duration {
 }
 
 // Events implements Trace.
-func (tr *CoreTrace) Events() []*Event {
+func (tr *coreTrace) Events() []*Event {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
@@ -299,21 +292,21 @@ func (tr *CoreTrace) Events() []*Event {
 
 // MarshalJSON implements json.Marshaler for the trace by first converting it to
 // a static trace.
-func (tr *CoreTrace) MarshalJSON() ([]byte, error) {
-	return json.Marshal(NewStaticTrace(tr))
+func (tr *coreTrace) MarshalJSON() ([]byte, error) {
+	return json.Marshal(newStaticTrace(tr))
 }
 
 //
 //
 //
 
-// SetCoreTraceMaxEvents sets the maximum number of events that will be stored
+// SetDefaultMaxEvents sets the maximum number of events that will be stored
 // in a CoreTrace. Once this limit is reached, additional events increment a
 // "truncated" counter in the trace, the value of which is reported in a single,
 // final event.
 //
 // The default value is 1000, the minimum is 1, and the maximum is 10000.
-func SetCoreTraceMaxEvents(n int) {
+func SetDefaultMaxEvents(n int) {
 	switch {
 	case n < coreTraceMaxEventsMin:
 		n = coreTraceMaxEventsMin
@@ -363,9 +356,9 @@ type StaticTrace struct {
 
 var _ Trace = (*StaticTrace)(nil)
 
-// NewStaticTrace constructs a static copy of the provided trace, including a
+// newStaticTrace constructs a static copy of the provided trace, including a
 // copy of all of the current trace events.
-func NewStaticTrace(tr Trace) *StaticTrace {
+func newStaticTrace(tr Trace) *StaticTrace {
 	return &StaticTrace{
 		StaticID:        tr.ID(),
 		StaticCategory:  tr.Category(),
@@ -452,7 +445,7 @@ type prefixedTrace struct {
 }
 
 // PrefixTrace wraps the trace with the provided prefix.
-func PrefixTrace(tr Trace, format string, args ...any) Trace {
+func Prefix(tr Trace, format string, args ...any) Trace {
 	format = strings.TrimSpace(format)
 
 	if format == "" {
@@ -464,15 +457,6 @@ func PrefixTrace(tr Trace, format string, args ...any) Trace {
 		format: format + " ",
 		args:   args,
 	}
-}
-
-// PrefixTraceContext extracts a trace from the context with FromContext, and
-// decorates that trace with PrefixTrace. It returns a new context containing
-// the prefixed trace.
-func PrefixTraceContext(ctx context.Context, format string, args ...any) (context.Context, Trace) {
-	prefixedTrace := PrefixTrace(FromContext(ctx), format, args...)
-	newContext := ToContext(ctx, prefixedTrace)
-	return newContext, prefixedTrace
 }
 
 // Tracef implements Trace, adding a prefix to the provided format string.

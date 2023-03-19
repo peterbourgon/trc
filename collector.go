@@ -13,11 +13,9 @@ type Collector struct {
 	categories *trcds.RingBuffers[Trace]
 }
 
-var _ Searcher = (*Collector)(nil)
-
-func NewCollector(max int) *Collector {
+func NewCollector(maxTracesPerCategory int) *Collector {
 	return &Collector{
-		categories: trcds.NewRingBuffers[Trace](max),
+		categories: trcds.NewRingBuffers[Trace](maxTracesPerCategory),
 	}
 }
 
@@ -32,18 +30,41 @@ func (c *Collector) NewTrace(ctx context.Context, category string) (context.Cont
 	return ctx, tr
 }
 
+func (c *Collector) Select(ctx context.Context, allow func(Trace) error) ([]Trace, error) {
+	var selected []Trace
+
+	for category, rb := range c.categories.GetAll() {
+		if err := rb.Walk(func(tr Trace) error {
+			if allow(tr) == nil {
+				selected = append(selected, tr)
+			}
+			return nil
+		}); err != nil {
+			return nil, fmt.Errorf("category %s: walk traces: %w", category, err)
+		}
+	}
+
+	sort.Slice(selected, func(i, j int) bool {
+		return selected[i].Start().After(selected[j].Start())
+	})
+
+	return selected, nil
+}
+
 func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
 	begin := time.Now()
 
 	_, tr, finish := Region(ctx, "trc.Collector.Search")
 	defer finish()
 
+	_, _, _ = begin, tr, finish
+
 	problems := req.Normalize()
 	for _, problem := range problems {
 		tr.Tracef("normalize search request: %v", problem)
 	}
 
-	var overall Traces // TODO: allocs
+	var overall traces // TODO: allocs
 	for cat, rb := range c.categories.GetAll() {
 		if err := rb.Walk(func(tr Trace) error {
 			overall = append(overall, tr)
@@ -59,7 +80,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 	stats := newStatsFrom(req.Bucketing, overall)
 	tr.Tracef("calculated stats")
 
-	var allowed Traces
+	var allowed traces
 	for _, tr := range overall {
 		if req.allow(tr) {
 			allowed = append(allowed, tr)
@@ -75,7 +96,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 
 	selected := make([]*StaticTrace, len(allowed))
 	for i := range allowed {
-		selected[i] = NewStaticTrace(allowed[i])
+		selected[i] = newStaticTrace(allowed[i])
 	}
 
 	tr.Tracef("matched %d, selected %d", matched, len(selected))

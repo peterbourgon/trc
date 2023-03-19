@@ -2,6 +2,8 @@ package trc
 
 import (
 	"context"
+	"fmt"
+	"runtime/trace"
 	"time"
 )
 
@@ -9,11 +11,11 @@ type traceContextKey struct{}
 
 var traceContextVal traceContextKey
 
-// NewTrace creates a new trace with the given category, and injects it to the
-// given context. If the context already contained a trace, it becomes
+// NewTrace creates a new "core" trace with the given category, and injects it
+// to the given context. If the context already contained a trace, it becomes
 // "shadowed" by the new one.
 func NewTrace(ctx context.Context, category string) (context.Context, Trace) {
-	tr := NewCoreTrace(category)
+	tr := newCoreTrace(category)
 	return ToContext(ctx, tr), tr
 }
 
@@ -27,7 +29,7 @@ func FromContext(ctx context.Context) Trace {
 		return tr
 	}
 
-	return NewCoreTrace("(orphan)")
+	return newCoreTrace("(orphan)")
 }
 
 // MaybeFromContext returns the trace in the context, if it exists.
@@ -71,15 +73,15 @@ func LazyErrorf(ctx context.Context, format string, args ...any) {
 }
 
 // Region is a convenience function for more detailed tracing of regions of
-// code, typically functions. Typical usage is as follows.
+// code, usually functions. Typical usage is as follows.
 //
 //	func foo(ctx context.Context, id int) {
-//		ctx, tr, finish := trc.Region(ctx, "foo %d", id)
-//		defer finish()
-//		...
+//	    ctx, tr, finish := trc.Region(ctx, "foo %d", id)
+//	    defer finish()
+//	    ...
 //	}
 //
-// Region produces hierarchical trace events as follows.
+// From this, you get hierarchical trace events as follows.
 //
 //	→ foo 42
 //	· trace event in foo
@@ -90,19 +92,22 @@ func LazyErrorf(ctx context.Context, format string, args ...any) {
 //	· final event in foo
 //	← foo 42 [2.34ms]
 //
-// Region may incur non-negligable costs to performance, and is meant to be used
-// deliberately and sparingly. It explicitly should not be applied "by default"
-// to code via e.g. code generation.
+// Region also produces a standard library runtime/trace region, which can be
+// useful when e.g. analyzing program execution with `go tool trace`.
+//
+// Region can significantly impact performance, and should be used sparingly.
 func Region(ctx context.Context, format string, args ...any) (context.Context, Trace, func()) {
 	begin := time.Now()
 	inputTrace := FromContext(ctx)
-	outputTrace := PrefixTrace(inputTrace, "· ")
+	outputTrace := Prefix(inputTrace, "· ")
 	outputContext := ToContext(ctx, outputTrace)
+	region := trace.StartRegion(ctx, fmt.Sprintf(format, args...))
 
 	inputTrace.LazyTracef("→ "+format, args...)
 	finish := func() {
 		took := time.Since(begin)
 		inputTrace.LazyTracef("← "+format+" [%s]", append(args, took.String())...)
+		region.End()
 	}
 
 	return outputContext, outputTrace, finish
