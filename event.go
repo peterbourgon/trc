@@ -3,7 +3,6 @@ package trc
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -88,21 +87,6 @@ func NewLazyErrorEvent(format string, args ...any) *Event {
 	ev.Stack = getStack()
 	ev.IsError = true
 	return ev
-}
-
-// MatchRegexp returns true if the regexp matches relevant event metadata.
-func (ev *Event) MatchRegexp(r *regexp.Regexp) bool {
-	if r.MatchString(ev.What.String()) {
-		return true
-	}
-
-	for _, c := range ev.Stack {
-		if r.MatchString(c.Function) || r.MatchString(c.FileLine) {
-			return true
-		}
-	}
-
-	return false
 }
 
 // MarshalJSON implements json.Marshaler for the event.

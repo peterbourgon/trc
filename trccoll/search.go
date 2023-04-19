@@ -1,4 +1,4 @@
-package trc
+package trccoll
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strconv"
 	"time"
+
+	"github.com/peterbourgon/trc"
 )
 
 // Searcher describes the ability to search over a collection of traces. It's
@@ -60,7 +62,7 @@ func (req *SearchRequest) Normalize() (problems []string) {
 	return problems
 }
 
-func (req *SearchRequest) allow(tr Trace) bool {
+func (req *SearchRequest) allow(tr trc.Trace) bool {
 	if len(req.IDs) > 0 {
 		var found bool
 		for _, id := range req.IDs {
@@ -104,8 +106,13 @@ func (req *SearchRequest) allow(tr Trace) bool {
 				return true
 			}
 			for _, ev := range tr.Events() {
-				if ev.MatchRegexp(req.Regexp) {
+				if req.Regexp.MatchString(ev.What.String()) {
 					return true
+				}
+				for _, c := range ev.Stack {
+					if req.Regexp.MatchString(c.Function) || req.Regexp.MatchString(c.FileLine) {
+						return true
+					}
 				}
 			}
 			return false
@@ -136,7 +143,7 @@ type MultiSearcher []Searcher
 // Search implements Searcher, by making concurrent search requests, and
 // gathering results into a single response.
 func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
-	tr := FromContext(ctx)
+	tr := trc.FromContext(ctx)
 	begin := time.Now()
 
 	type tuple struct {
@@ -149,8 +156,8 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	tuplec := make(chan tuple, len(ms))
 	for i, s := range ms {
 		go func(id string, s Searcher) {
-			ptr := Prefix(FromContext(ctx), "<%s>", id)
-			ctx := ToContext(ctx, ptr)
+			ptr := trc.Prefix(trc.FromContext(ctx), "<%s>", id)
+			ctx := trc.ToContext(ctx, ptr)
 			res, err := s.Search(ctx, req)
 			tuplec <- tuple{id, res, err}
 		}(strconv.Itoa(i+1), s)

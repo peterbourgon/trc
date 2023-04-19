@@ -277,6 +277,10 @@ function highlightquery() {
 			{{ if .Request.MinDuration -}}<input type="hidden" name="min"       value="{{.Request.MinDuration}}" />{{ end -}}
 			{{ if .Request.IsFailed    -}}<input type="hidden" name="failed"    value="{{.Request.IsFailed}}"    />{{ end -}}
 
+			{{ range .Remotes -}}
+				<input type="hidden" name="r" value="{{.}}" />
+			{{ end -}}
+
 			<input id="search-button" type="submit" value="search"/>
 		</form>
 	</div>
@@ -324,7 +328,7 @@ function highlightquery() {
 		&middot;
 		<a href="?{{$href}}&json">JSON</a>
 		{{ range .Via }}
-			&middot; via <a href="{{.}}">{{.}}</a>
+			&middot; <span class="via">via <a href="{{.}}">{{.}}</a></span>
 		{{ end }}
 		<span class="right">
 			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">

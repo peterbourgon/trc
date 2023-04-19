@@ -20,9 +20,10 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/trccoll"
 )
 
-//go:embed assets/*
+//go:embed assets/* 
 var assetsRoot embed.FS
 
 var assets = func() fs.FS {
@@ -242,7 +243,7 @@ func category2class(name string) string {
 	return "category-" + sha256hex(name)
 }
 
-func highlightclasses(req *trc.SearchRequest) []string {
+func highlightclasses(req *trccoll.SearchRequest) []string {
 	var classes []string
 	if len(req.IDs) > 0 {
 		return nil

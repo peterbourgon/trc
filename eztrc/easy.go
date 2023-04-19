@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/trccoll"
 	"github.com/peterbourgon/trc/trchttp"
 )
 
@@ -14,23 +15,17 @@ var (
 	Errorf     = trc.Errorf
 	LazyErrorf = trc.LazyErrorf
 	Region     = trc.Region
+	Prefix     = trc.Prefix
 )
 
-var collector = trc.NewCollector(1000)
+var collector = trccoll.NewCollector(1000)
 
-func Collector() *trc.Collector {
-	return collector
-}
-
-func SetCollector(c *trc.Collector) {
-	if c == nil {
-		panic("nil trc.Collector provided to SetCollector")
-	}
-	collector = c
+func ResetCollector(maxTracesPerCategory int) {
+	collector = trccoll.NewCollector(maxTracesPerCategory)
 }
 
 func Handler() http.Handler {
-	return trchttp.NewServer(Collector())
+	return trchttp.NewServer(collector)
 }
 
 func New(ctx context.Context, category string) (context.Context, trc.Trace) {

@@ -115,6 +115,10 @@ div#topline-metadata {
 	padding-top: 1ch;
 }
 
+div#topline-search-remotes {
+	background-color: rgba(255, 165, 0, 0.2);
+}
+
 div#topline-search-problems {
 	font-weight: bold;
 	color: rgb(224, 0, 0);
@@ -139,7 +143,7 @@ div#traces .trace .metadata span.right {
 }
 
 div#traces .trace .metadata .via {
-	font-style: italic;
+	background-color: rgba(255, 165, 0, 0.2);
 }
 
 span.stacks-link a {

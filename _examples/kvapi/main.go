@@ -13,16 +13,16 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
-	"github.com/peterbourgon/trc"
-	trchttp "github.com/peterbourgon/trc/trchttp"
+	"github.com/peterbourgon/trc/trccoll"
+	"github.com/peterbourgon/trc/trchttp"
 )
 
 func main() {
 	ports := []string{"8080", "8081", "8082"}
 
-	collectors := make([]*trc.Collector, len(ports))
+	collectors := make([]*trccoll.Collector, len(ports))
 	for i := range collectors {
-		collectors[i] = trc.NewCollector(1000)
+		collectors[i] = trccoll.NewCollector(1000)
 	}
 
 	kvs := make([]*KV, len(ports))
@@ -54,7 +54,7 @@ func main() {
 		trcClients[i] = trchttp.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/trc", ports[i]))
 	}
 
-	globalSearcher := make(trc.MultiSearcher, len(trcClients))
+	globalSearcher := make(trccoll.MultiSearcher, len(trcClients))
 	for i := range trcClients {
 		globalSearcher[i] = trcClients[i]
 	}

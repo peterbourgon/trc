@@ -1,4 +1,4 @@
-package trc
+package trccoll
 
 import (
 	"context"
@@ -6,35 +6,36 @@ import (
 	"sort"
 	"time"
 
-	"github.com/peterbourgon/trc/internal/trcds"
+	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/internal/trcringbuf"
 )
 
 type Collector struct {
-	categories *trcds.RingBuffers[Trace]
+	categories *trcringbuf.RingBuffers[trc.Trace]
 }
 
 func NewCollector(maxTracesPerCategory int) *Collector {
 	return &Collector{
-		categories: trcds.NewRingBuffers[Trace](maxTracesPerCategory),
+		categories: trcringbuf.NewRingBuffers[trc.Trace](maxTracesPerCategory),
 	}
 }
 
-func (c *Collector) NewTrace(ctx context.Context, category string) (context.Context, Trace) {
-	if tr, ok := MaybeFromContext(ctx); ok {
+func (c *Collector) NewTrace(ctx context.Context, category string) (context.Context, trc.Trace) {
+	if tr, ok := trc.MaybeFromContext(ctx); ok {
 		tr.Tracef("(+ %s)", category)
 		return ctx, tr
 	}
 
-	ctx, tr := NewTrace(ctx, category)
+	ctx, tr := trc.NewTrace(ctx, category)
 	c.categories.GetOrCreate(category).Add(tr)
 	return ctx, tr
 }
 
-func (c *Collector) Select(ctx context.Context, allow func(Trace) error) ([]Trace, error) {
-	var selected []Trace
+func (c *Collector) Select(ctx context.Context, allow func(trc.Trace) error) ([]trc.Trace, error) {
+	var selected []trc.Trace
 
 	for category, rb := range c.categories.GetAll() {
-		if err := rb.Walk(func(tr Trace) error {
+		if err := rb.Walk(func(tr trc.Trace) error {
 			if allow(tr) == nil {
 				selected = append(selected, tr)
 			}
@@ -54,7 +55,7 @@ func (c *Collector) Select(ctx context.Context, allow func(Trace) error) ([]Trac
 func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
 	begin := time.Now()
 
-	_, tr, finish := Region(ctx, "trc.Collector.Search")
+	_, tr, finish := trc.Region(ctx, "trc.Collector.Search")
 	defer finish()
 
 	_, _, _ = begin, tr, finish
@@ -64,9 +65,9 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 		tr.Tracef("normalize search request: %v", problem)
 	}
 
-	var overall traces // TODO: allocs
+	var overall trc.Traces // TODO: allocs
 	for cat, rb := range c.categories.GetAll() {
-		if err := rb.Walk(func(tr Trace) error {
+		if err := rb.Walk(func(tr trc.Trace) error {
 			overall = append(overall, tr)
 			return nil
 		}); err != nil {
@@ -80,7 +81,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 	stats := newStatsFrom(req.Bucketing, overall)
 	tr.Tracef("calculated stats")
 
-	var allowed traces
+	var allowed trc.Traces
 	for _, tr := range overall {
 		if req.allow(tr) {
 			allowed = append(allowed, tr)
@@ -96,7 +97,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 
 	selected := make([]*StaticTrace, len(allowed))
 	for i := range allowed {
-		selected[i] = newStaticTrace(allowed[i])
+		selected[i] = NewStaticTrace(allowed[i])
 	}
 
 	tr.Tracef("matched %d, selected %d", matched, len(selected))
