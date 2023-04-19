@@ -51,7 +51,7 @@ func Tracef(ctx context.Context, format string, args ...any) {
 
 // LazyTracef adds a new event to the trace in the context (via FromContext).
 // Arguments are evaluated lazily, when the event is read by a client. Arguments
-// may be stored for an indeterminste amount of time, and may be evaludated by
+// may be stored for an indeterminste amount of time, and may be evaluated by
 // multiple goroutines, and therefore must be safe for concurrent access.
 func LazyTracef(ctx context.Context, format string, args ...any) {
 	FromContext(ctx).LazyTracef(format, args...)
@@ -66,7 +66,7 @@ func Errorf(ctx context.Context, format string, args ...any) {
 // LazyErrorf adds a new event to the trace in the context (via FromContext),
 // and marks the trace as errored. Arguments are evaluated lazily, when the
 // event is read by a client. Arguments may be stored for an indeterminste
-// amount of time, and may be evaludated by multiple goroutines, and therefore
+// amount of time, and may be evaluated by multiple goroutines, and therefore
 // must be safe for concurrent access.
 func LazyErrorf(ctx context.Context, format string, args ...any) {
 	FromContext(ctx).LazyErrorf(format, args...)
