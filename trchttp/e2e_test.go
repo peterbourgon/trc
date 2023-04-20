@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/peterbourgon/trc/internal/trcstatic"
 	"github.com/peterbourgon/trc/trccoll"
 	"github.com/peterbourgon/trc/trchttp"
 )
@@ -49,7 +50,7 @@ func TestE2E(t *testing.T) {
 		t.Logf("client: total %d, matched %d, selected %d, err %v", res2.Total, res2.Matched, len(res2.Selected), err2)
 		opts := []cmp.Option{
 			cmpopts.IgnoreFields(trccoll.SearchResponse{}, "Duration"),
-			cmpopts.IgnoreFields(trccoll.StaticTrace{}, "Via"),
+			cmpopts.IgnoreFields(trcstatic.StaticTrace{}, "Via"),
 		}
 		if !cmp.Equal(res1, res2, opts...) {
 			t.Fatal(cmp.Diff(res1, res2, opts...))

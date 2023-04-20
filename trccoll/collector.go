@@ -8,6 +8,7 @@ import (
 
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/internal/trcringbuf"
+	"github.com/peterbourgon/trc/internal/trcstatic"
 )
 
 type Collector struct {
@@ -95,9 +96,9 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 		allowed = allowed[:req.Limit]
 	}
 
-	selected := make([]*StaticTrace, len(allowed))
+	selected := make([]*trcstatic.StaticTrace, len(allowed))
 	for i := range allowed {
-		selected[i] = NewStaticTrace(allowed[i])
+		selected[i] = trcstatic.NewStaticTrace(allowed[i])
 	}
 
 	tr.Tracef("matched %d, selected %d", matched, len(selected))

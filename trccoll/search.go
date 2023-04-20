@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/internal/trcstatic"
 )
 
 // Searcher describes the ability to search over a collection of traces. It's
@@ -126,12 +127,12 @@ func (req *SearchRequest) allow(tr trc.Trace) bool {
 
 // SearchResponse is the result of performing a search request.
 type SearchResponse struct {
-	Stats    Stats          `json:"stats"`
-	Total    int            `json:"total"`
-	Matched  int            `json:"matched"`
-	Selected []*StaticTrace `json:"selected"`
-	Problems []string       `json:"problems,omitempty"`
-	Duration time.Duration  `json:"duration"`
+	Stats    Stats                    `json:"stats"`
+	Total    int                      `json:"total"`
+	Matched  int                      `json:"matched"`
+	Selected []*trcstatic.StaticTrace `json:"selected"`
+	Problems []string                 `json:"problems,omitempty"`
+	Duration time.Duration            `json:"duration"`
 }
 
 // MultiSearcher allows multiple distinct searchers to be queried as one,

@@ -1,4 +1,4 @@
-package trccoll
+package trcstatic
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 
 // StaticTrace is an immutable "copy" of a trace and its events, which, unlike
 // a normal trace, can be serialized. Although static trace implements the trace
-// interface, the interfaces which would normally mutate the trace are no-ops.
+// interface, the methods which would normally mutate the trace are no-ops.
 type StaticTrace struct {
 	// Via records the source(s) of the trace, which is useful when aggregating
 	// traces from multiple collectors into a single result.
