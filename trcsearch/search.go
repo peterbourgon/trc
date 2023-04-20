@@ -1,4 +1,4 @@
-package trccoll
+package trcsearch
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/internal/trcstatic"
 )
 
 // Searcher describes the ability to search over a collection of traces. It's
@@ -63,7 +62,7 @@ func (req *SearchRequest) Normalize() (problems []string) {
 	return problems
 }
 
-func (req *SearchRequest) allow(tr trc.Trace) bool {
+func (req *SearchRequest) Allow(tr trc.Trace) bool {
 	if len(req.IDs) > 0 {
 		var found bool
 		for _, id := range req.IDs {
@@ -127,18 +126,27 @@ func (req *SearchRequest) allow(tr trc.Trace) bool {
 
 // SearchResponse is the result of performing a search request.
 type SearchResponse struct {
-	Stats    Stats                    `json:"stats"`
-	Total    int                      `json:"total"`
-	Matched  int                      `json:"matched"`
-	Selected []*trcstatic.StaticTrace `json:"selected"`
-	Problems []string                 `json:"problems,omitempty"`
-	Duration time.Duration            `json:"duration"`
+	Stats    Stats            `json:"stats"`
+	Total    int              `json:"total"`
+	Matched  int              `json:"matched"`
+	Selected []*SelectedTrace `json:"selected"`
+	Problems []string         `json:"problems,omitempty"`
+	Duration time.Duration    `json:"duration"`
 }
+
+//
+//
+//
+
+//
+//
+//
 
 // MultiSearcher allows multiple distinct searchers to be queried as one,
 // scattering the search request to each of them, and gathering and merging
-// their responses into a single response. It's used by the HTML UI to e.g.
-// query an entire cluster in a single request.
+// their responses into a single response.
+//
+// It's used by the HTTP server, in certain circumstances.
 type MultiSearcher []Searcher
 
 // Search implements Searcher, by making concurrent search requests, and

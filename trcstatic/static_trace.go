@@ -8,14 +8,7 @@ import (
 	"github.com/peterbourgon/trc"
 )
 
-// StaticTrace is an immutable "copy" of a trace and its events, which, unlike
-// a normal trace, can be serialized. Although static trace implements the trace
-// interface, the methods which would normally mutate the trace are no-ops.
 type StaticTrace struct {
-	// Via records the source(s) of the trace, which is useful when aggregating
-	// traces from multiple collectors into a single result.
-	Via []string `json:"via,omitempty"`
-
 	StaticID        string         `json:"id"`
 	StaticCategory  string         `json:"category"`
 	StaticStart     time.Time      `json:"start"`
@@ -23,7 +16,7 @@ type StaticTrace struct {
 	StaticFinished  bool           `json:"finished"`
 	StaticSucceeded bool           `json:"succeeded"`
 	StaticErrored   bool           `json:"errored"`
-	StaticDuration  durationString `json:"duration"`
+	StaticDuration  DurationString `json:"duration"`
 	StaticEvents    []*trc.Event   `json:"events"`
 }
 
@@ -40,7 +33,7 @@ func NewStaticTrace(tr trc.Trace) *StaticTrace {
 		StaticFinished:  tr.Finished(),
 		StaticSucceeded: tr.Succeeded(),
 		StaticErrored:   tr.Errored(),
-		StaticDuration:  durationString(tr.Duration()),
+		StaticDuration:  DurationString(tr.Duration()),
 		StaticEvents:    tr.Events(),
 	}
 }
@@ -87,15 +80,19 @@ func (tr *StaticTrace) LazyErrorf(format string, args ...any) { /* no-op */ }
 // Events implements Trace.
 func (tr *StaticTrace) Events() []*trc.Event { return tr.StaticEvents }
 
-type durationString time.Duration
+//
+//
+//
 
-func (d *durationString) MarshalJSON() ([]byte, error) {
+type DurationString time.Duration
+
+func (d *DurationString) MarshalJSON() ([]byte, error) {
 	return json.Marshal(time.Duration(*d).String())
 }
 
-func (d *durationString) UnmarshalJSON(data []byte) error {
+func (d *DurationString) UnmarshalJSON(data []byte) error {
 	if dur, err := time.ParseDuration(strings.Trim(string(data), `"`)); err == nil {
-		*d = durationString(dur)
+		*d = DurationString(dur)
 		return nil
 	}
 	return json.Unmarshal(data, (*time.Duration)(d))

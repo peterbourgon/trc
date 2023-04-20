@@ -1,4 +1,4 @@
-package trccoll
+package trcsearch
 
 import (
 	"fmt"
@@ -18,7 +18,7 @@ type Stats struct {
 	Categories []CategoryStats `json:"categories"`
 }
 
-func newStatsFrom(bucketing []time.Duration, traces []trc.Trace) Stats {
+func NewStatsFrom(bucketing []time.Duration, traces []trc.Trace) Stats {
 	byCategory := map[string]*CategoryStats{}
 	for _, tr := range traces {
 		category := tr.Category()

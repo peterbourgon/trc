@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trccoll"
 	"github.com/peterbourgon/trc/trchttp"
+	"github.com/peterbourgon/trc/trcstore"
 )
 
 var (
@@ -18,18 +18,18 @@ var (
 	Prefix     = trc.Prefix
 )
 
-var collector = trccoll.NewCollector(1000)
-
-func ResetCollector(maxTracesPerCategory int) {
-	collector = trccoll.NewCollector(maxTracesPerCategory)
-}
+var store = trcstore.NewStore()
 
 func Handler() http.Handler {
-	return trchttp.NewServer(collector)
+	return trchttp.NewServer(store)
+}
+
+func Middleware(categorize trchttp.CategorizeFunc) func(http.Handler) http.Handler {
+	return trchttp.Middleware(store.NewTrace, categorize)
 }
 
 func New(ctx context.Context, category string) (context.Context, trc.Trace) {
-	return collector.NewTrace(ctx, category)
+	return store.NewTrace(ctx, category)
 }
 
 func Get(ctx context.Context, category string) (context.Context, trc.Trace) {

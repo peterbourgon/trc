@@ -12,9 +12,9 @@ import (
 // It's implemented by the trace collector.
 type NewTraceFunc func(context.Context, string) (context.Context, trc.Trace)
 
-// GetCategoryFunc is a function that produces a category string from an HTTP
+// CategorizeFunc is a function that produces a category string from an HTTP
 // request. It's meant to be provided by callers.
-type GetCategoryFunc func(*http.Request) string
+type CategorizeFunc func(*http.Request) string
 
 // Middleware creates a trace for each request served by the handler. The trace
 // category is determined by passing the request to the get category function.
@@ -23,10 +23,10 @@ type GetCategoryFunc func(*http.Request) string
 //
 // This is meant as a convenience for simple use cases. Users who want different
 // or more sophisticated behavior should implement their own middlewares.
-func Middleware(create NewTraceFunc, category GetCategoryFunc) func(http.Handler) http.Handler {
+func Middleware(create NewTraceFunc, categorize CategorizeFunc) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx, tr := create(r.Context(), category(r))
+			ctx, tr := create(r.Context(), categorize(r))
 			defer tr.Finish()
 
 			tr.Tracef("%s %s %s", r.RemoteAddr, r.Method, r.URL.String())

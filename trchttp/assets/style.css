@@ -116,7 +116,7 @@ div#topline-metadata {
 }
 
 div#topline-search-remotes {
-	background-color: rgba(255, 165, 0, 0.2);
+	font-weight: bold;
 }
 
 div#topline-search-problems {
@@ -143,7 +143,12 @@ div#traces .trace .metadata span.right {
 }
 
 div#traces .trace .metadata .via {
-	background-color: rgba(255, 165, 0, 0.2);
+	/* background-color: rgba(255, 165, 0, 0.2); */
+	/* opacity: 50%; */
+}
+
+div#traces .trace .metadata .via>a {
+	color: inherit;
 }
 
 span.stacks-link a {
@@ -226,7 +231,7 @@ div#traces .trace .events div.event div.what.meta {
 	color: #666;
 }
 
-details summary::-webkit-details-marker {
+details.stack-details summary::-webkit-details-marker {
 	display: none;
 }
 
@@ -234,22 +239,22 @@ details summary::marker {
 	display: none;
 }
 
-details {
+details.stack-details {
 	text-align: right;
 }
 
-details>summary {
+details.stack-details>summary {
 	float: right;
 	list-style-type: none;
 	cursor: pointer;
 }
 
-details[open] {
+details.stack-details[open] {
 	margin-left: 1rem;
 	padding-left: 1rem;
 }
 
-details[open]>summary {
+details.stack-details[open]>summary {
 	font-weight: bold;
 }
 

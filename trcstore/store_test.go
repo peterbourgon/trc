@@ -1,4 +1,4 @@
-package trccoll_test
+package trcstore_test
 
 import (
 	"context"
@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trccoll"
+	"github.com/peterbourgon/trc/trcsearch"
+	"github.com/peterbourgon/trc/trcstore"
 )
 
 func TestCollector(t *testing.T) {
@@ -27,7 +28,7 @@ func TestCollector(t *testing.T) {
 						categories[i] = fmt.Sprintf("cat%d", i)
 					}
 
-					collector := trccoll.NewCollector(maxPerCategory)
+					collector := trcstore.NewStoreConfig(trcstore.StoreConfig{MaxTracesPerCategory: maxPerCategory})
 					for i := 0; i < traceCount; i++ {
 						category := categories[rng.Intn(len(categories))]
 						_, tr := collector.NewTrace(ctx, category)
@@ -41,7 +42,7 @@ func TestCollector(t *testing.T) {
 					}
 
 					ctx, tr := trc.NewTrace(ctx, "search")
-					res, err := collector.Search(ctx, &trccoll.SearchRequest{Limit: 10, Query: "quux"})
+					res, err := collector.Search(ctx, &trcsearch.SearchRequest{Limit: 10, Query: "quux"})
 					t.Logf("total=%d matched=%d selected=%d err=%v", res.Total, res.Matched, len(res.Selected), err)
 					tr.Finish()
 					t.Logf("\n%s\n", debugTrace(tr))

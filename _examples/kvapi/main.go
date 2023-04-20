@@ -12,16 +12,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/peterbourgon/trc/trccoll"
 	"github.com/peterbourgon/trc/trchttp"
+	"github.com/peterbourgon/trc/trcsearch"
+	"github.com/peterbourgon/trc/trcstore"
 )
 
 func main() {
 	ports := []string{"8081", "8082", "8083"}
 
-	collectors := make([]*trccoll.Collector, len(ports))
-	for i := range collectors {
-		collectors[i] = trccoll.NewCollector(1000)
+	stores := make([]*trcstore.Store, len(ports))
+	for i := range stores {
+		stores[i] = trcstore.NewStore()
 	}
 
 	kvs := make([]*KV, len(ports))
@@ -32,7 +33,7 @@ func main() {
 	apiHandlers := make([]http.Handler, len(ports))
 	for i := range apiHandlers {
 		apiHandlers[i] = kvs[i]
-		apiHandlers[i] = trchttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return r.Method })(apiHandlers[i])
+		apiHandlers[i] = trchttp.Middleware(stores[i].NewTrace, func(r *http.Request) string { return r.Method })(apiHandlers[i])
 	}
 
 	apiWorkers := sync.WaitGroup{}
@@ -48,18 +49,22 @@ func main() {
 	//
 	//
 
-	trcClients := make([]*trchttp.Client, len(ports))
-	for i := range trcClients {
-		trcClients[i] = trchttp.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/trc", ports[i]))
-	}
-
-	trcHandlers := make([]http.Handler, len(collectors))
+	trcHandlers := make([]http.Handler, len(stores))
 	for i := range trcHandlers {
 		categorize := func(r *http.Request) string { return "traces" }
-		server := trchttp.NewServer(collectors[i])
+		server := trchttp.NewServer(stores[i])
 
 		trcHandlers[i] = server
-		trcHandlers[i] = trchttp.Middleware(collectors[i].NewTrace, categorize)(trcHandlers[i])
+		trcHandlers[i] = trchttp.Middleware(stores[i].NewTrace, categorize)(trcHandlers[i])
+	}
+
+	var trcGlobal http.Handler
+	{
+		var ms trcsearch.MultiSearcher
+		for i := range ports {
+			ms = append(ms, trchttp.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/trc", ports[i])))
+		}
+		trcGlobal = trchttp.NewServer(ms)
 	}
 
 	httpServers := make([]*http.Server, len(ports))
@@ -68,14 +73,16 @@ func main() {
 		mux := http.NewServeMux()
 		mux.Handle("/api", http.StripPrefix("/api", apiHandlers[i]))
 		mux.Handle("/trc", http.StripPrefix("/trc", trcHandlers[i]))
+		mux.Handle("/all", http.StripPrefix("/all", trcGlobal))
 		s := &http.Server{Addr: addr, Handler: mux}
 		go func() { log.Fatal(s.ListenAndServe()) }()
 		log.Printf("http://localhost:%s/trc", ports[i])
 	}
 
 	go func() {
-		log.Printf("http://localhost:8079/debug/pprof")
-		log.Fatal(http.ListenAndServe(":8079", nil))
+		http.Handle("/global", trcGlobal)
+		log.Printf("http://localhost:8080/global")
+		log.Fatal(http.ListenAndServe("localhost:8080", nil))
 	}()
 
 	select {}

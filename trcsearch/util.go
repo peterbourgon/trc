@@ -1,4 +1,4 @@
-package trccoll
+package trcsearch
 
 import (
 	"time"

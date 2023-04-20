@@ -11,25 +11,29 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trccoll"
+	"github.com/peterbourgon/trc/trcsearch"
 	"github.com/peterbourgon/unixtransport"
 )
 
 // SearchResponse is what the server returns to search requests.
 type SearchResponse struct {
-	Remotes  []string                `json:"remotes,omitempty"`
-	Request  *trccoll.SearchRequest  `json:"request"`
-	Response *trccoll.SearchResponse `json:"response"`
+	Remotes  []string                  `json:"remotes,omitempty"`
+	Request  *trcsearch.SearchRequest  `json:"request"`
+	Response *trcsearch.SearchResponse `json:"response"`
 }
 
 // Server implements a JSON API and HTML UI for the wrapped searcher.
 type Server struct {
-	searcher trccoll.Searcher
+	searcher Searcher
 	client   HTTPClient
 }
 
+type Searcher interface {
+	Search(context.Context, *trcsearch.SearchRequest) (*trcsearch.SearchResponse, error)
+}
+
 // NewServer returns a server wrapping the given searcher.
-func NewServer(searcher trccoll.Searcher) *Server {
+func NewServer(searcher Searcher) *Server {
 	var transport http.Transport
 	unixtransport.Register(&transport)
 	client := &http.Client{Transport: &transport}
@@ -56,7 +60,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if len(remotes) > 0 {
-		var multi trccoll.MultiSearcher
+		var multi trcsearch.MultiSearcher
 		for _, r := range remotes {
 			multi = append(multi, NewClient(s.client, r))
 		}
@@ -68,7 +72,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		tr.Errorf("search error: %v", err)
 		prs = append(prs, err.Error())
-		res = &trccoll.SearchResponse{} // default
+		res = &trcsearch.SearchResponse{} // default
 	}
 
 	res.Problems = append(prs, res.Problems...)
@@ -87,7 +91,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //
 //
 
-func parseSearchRequest(ctx context.Context, r *http.Request) (*trccoll.SearchRequest, []string) {
+func parseSearchRequest(ctx context.Context, r *http.Request) (*trcsearch.SearchRequest, []string) {
 	var (
 		tr       = trc.FromContext(ctx)
 		isJSON   = strings.Contains(r.Header.Get("content-type"), "application/json")
@@ -96,7 +100,7 @@ func parseSearchRequest(ctx context.Context, r *http.Request) (*trccoll.SearchRe
 		min      = parseDefault(urlquery.Get("min"), parseDurationPointer, nil)
 		bs       = parseBucketing(urlquery["b"]) // can be nil, no problem
 		q        = urlquery.Get("q")
-		req      = &trccoll.SearchRequest{}
+		req      = &trcsearch.SearchRequest{}
 		prs      = []string{}
 	)
 
@@ -111,7 +115,7 @@ func parseSearchRequest(ctx context.Context, r *http.Request) (*trccoll.SearchRe
 
 	default:
 		tr.Tracef("parsing search request from URL %q", urlquery.Encode())
-		req = &trccoll.SearchRequest{
+		req = &trcsearch.SearchRequest{
 			IDs:         urlquery["id"],
 			Category:    urlquery.Get("category"),
 			IsActive:    urlquery.Has("active"),
