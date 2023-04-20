@@ -10,12 +10,8 @@ import (
 )
 
 var (
-	Tracef     = trc.Tracef
-	LazyTracef = trc.LazyTracef
-	Errorf     = trc.Errorf
-	LazyErrorf = trc.LazyErrorf
-	Region     = trc.Region
-	Prefix     = trc.Prefix
+	Region = trc.Region
+	Prefix = trc.Prefix
 )
 
 var store = trcstore.NewStore()
@@ -38,4 +34,33 @@ func Get(ctx context.Context, category string) (context.Context, trc.Trace) {
 		return ctx, tr
 	}
 	return New(ctx, category)
+}
+
+// Tracef adds a new event to the trace in the context (via FromContext).
+// Arguments are evaulated immediately.
+func Tracef(ctx context.Context, format string, args ...any) {
+	trc.FromContext(ctx).Tracef(format, args...)
+}
+
+// LazyTracef adds a new event to the trace in the context (via FromContext).
+// Arguments are evaluated lazily, when the event is read by a client. Arguments
+// may be stored for an indeterminste amount of time, and may be evaluated by
+// multiple goroutines, and therefore must be safe for concurrent access.
+func LazyTracef(ctx context.Context, format string, args ...any) {
+	trc.FromContext(ctx).LazyTracef(format, args...)
+}
+
+// Errorf adds a new event to the trace in the context (via FromContext), and
+// marks the trace as errored. Arguments are evaluted immediately.
+func Errorf(ctx context.Context, format string, args ...any) {
+	trc.FromContext(ctx).Errorf(format, args...)
+}
+
+// LazyErrorf adds a new event to the trace in the context (via FromContext),
+// and marks the trace as errored. Arguments are evaluated lazily, when the
+// event is read by a client. Arguments may be stored for an indeterminste
+// amount of time, and may be evaluated by multiple goroutines, and therefore
+// must be safe for concurrent access.
+func LazyErrorf(ctx context.Context, format string, args ...any) {
+	trc.FromContext(ctx).LazyErrorf(format, args...)
 }

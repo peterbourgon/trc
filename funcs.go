@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime/trace"
+	"strings"
 	"time"
 )
 
@@ -43,34 +44,57 @@ func ToContext(ctx context.Context, tr Trace) context.Context {
 	return context.WithValue(ctx, traceContextVal, tr)
 }
 
-// Tracef adds a new event to the trace in the context (via FromContext).
-// Arguments are evaulated immediately.
-func Tracef(ctx context.Context, format string, args ...any) {
-	FromContext(ctx).Tracef(format, args...)
+//
+//
+//
+
+// Prefix wraps the trace with the provided prefix.
+func Prefix(tr Trace, format string, args ...any) Trace {
+	format = strings.TrimSpace(format)
+
+	if format == "" {
+		return tr
+	}
+
+	return &prefixedTrace{
+		Trace:  tr,
+		format: format + " ",
+		args:   args,
+	}
 }
 
-// LazyTracef adds a new event to the trace in the context (via FromContext).
-// Arguments are evaluated lazily, when the event is read by a client. Arguments
-// may be stored for an indeterminste amount of time, and may be evaluated by
-// multiple goroutines, and therefore must be safe for concurrent access.
-func LazyTracef(ctx context.Context, format string, args ...any) {
-	FromContext(ctx).LazyTracef(format, args...)
+// prefixedTrace decorates a trace and adds a user-supplied prefix to each event.
+// This can be useful to show important regions of execution without needing to
+// inspect full call stacks.
+type prefixedTrace struct {
+	Trace
+	format string
+	args   []any
 }
 
-// Errorf adds a new event to the trace in the context (via FromContext), and
-// marks the trace as errored. Arguments are evaluted immediately.
-func Errorf(ctx context.Context, format string, args ...any) {
-	FromContext(ctx).Errorf(format, args...)
+// Tracef implements Trace, adding a prefix to the provided format string.
+func (ptr *prefixedTrace) Tracef(format string, args ...any) {
+	ptr.Trace.Tracef(ptr.format+format, append(ptr.args, args...)...)
 }
 
-// LazyErrorf adds a new event to the trace in the context (via FromContext),
-// and marks the trace as errored. Arguments are evaluated lazily, when the
-// event is read by a client. Arguments may be stored for an indeterminste
-// amount of time, and may be evaluated by multiple goroutines, and therefore
-// must be safe for concurrent access.
-func LazyErrorf(ctx context.Context, format string, args ...any) {
-	FromContext(ctx).LazyErrorf(format, args...)
+// LazyTracef implements Trace, adding a prefix to the provided format string.
+func (ptr *prefixedTrace) LazyTracef(format string, args ...any) {
+	ptr.Trace.LazyTracef(ptr.format+format, append(ptr.args, args...)...)
 }
+
+// Errorf implements Trace, adding a prefix to the provided format string.
+func (ptr *prefixedTrace) Errorf(format string, args ...any) {
+	ptr.Trace.Errorf(ptr.format+format, append(ptr.args, args...)...)
+}
+
+// LazyErrorf implements Trace, adding a prefix to the provided format string.
+func (ptr *prefixedTrace) LazyErrorf(format string, args ...any) {
+	ptr.Trace.LazyErrorf(ptr.format+format, append(ptr.args, args...)...)
+}
+
+//
+//
+//
 
 // Region is a convenience function that provides more detailed tracing of
 // regions of code, usually functions. It also produces a standard library

@@ -110,7 +110,7 @@ func (req *SearchRequest) Allow(tr trc.Trace) bool {
 					return true
 				}
 				for _, c := range ev.Stack {
-					if req.Regexp.MatchString(c.Function) || req.Regexp.MatchString(c.FileLine) {
+					if req.Regexp.MatchString(c.Function()) || req.Regexp.MatchString(c.FileLine()) {
 						return true
 					}
 				}

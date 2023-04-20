@@ -3,14 +3,7 @@ package trc
 import (
 	"encoding/json"
 	"fmt"
-	"runtime"
-	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
-
-	"github.com/go-stack/stack"
 )
 
 // Event represents a trace statement in user code.
@@ -21,36 +14,28 @@ import (
 // must be safe for concurrent use, including any values it may capture by
 // reference.
 type Event struct {
-	Seq     uint64       // should be unique for each event
 	When    time.Time    // ideally UTC
 	What    fmt.Stringer // must be safe for concurrent use
 	Stack   CallStack    // optional but recommented
 	IsError bool         //
 }
 
-type CallStack []Call
+type CallStackx []Call
 
 type Call struct {
 	Function string
 	FileLine string
 }
 
-var eventSeq uint64
-
-var eventPool = sync.Pool{
-	New: func() any { return &Event{} },
-}
-
 // NewEvent creates a new event with the provided format string and args.
 // Arguments are evaluated immediately.
 func NewEvent(format string, args ...any) *Event {
-	ev := eventPool.Get().(*Event)
-	ev.Seq = atomic.AddUint64(&eventSeq, 1)
-	ev.When = time.Now().UTC()
-	ev.What = stringer(fmt.Sprintf(format, args...))
-	ev.Stack = getStack()
-	ev.IsError = false
-	return ev
+	return &Event{
+		When:    time.Now().UTC(),
+		What:    stringer(fmt.Sprintf(format, args...)),
+		Stack:   getStack2(),
+		IsError: false,
+	}
 }
 
 // NewLazyEvent creates a new event with the provided format string and args.
@@ -58,35 +43,32 @@ func NewEvent(format string, args ...any) *Event {
 // future, and from any number of concurrent goroutines, so arguments must be
 // safe for concurrent access.
 func NewLazyEvent(format string, args ...any) *Event {
-	ev := eventPool.Get().(*Event)
-	ev.Seq = atomic.AddUint64(&eventSeq, 1)
-	ev.When = time.Now().UTC()
-	ev.What = &lazyStringer{fmt: format, args: args}
-	ev.Stack = getStack()
-	ev.IsError = false
-	return ev
+	return &Event{
+		When:    time.Now().UTC(),
+		What:    &lazyStringer{fmt: format, args: args},
+		Stack:   getStack2(),
+		IsError: false,
+	}
 }
 
 // MakeErrorEvent is equivalent to MakeEvent, and sets IsError.
 func NewErrorEvent(format string, args ...any) *Event {
-	ev := eventPool.Get().(*Event)
-	ev.Seq = atomic.AddUint64(&eventSeq, 1)
-	ev.When = time.Now().UTC()
-	ev.What = stringer(fmt.Sprintf(format, args...))
-	ev.Stack = getStack()
-	ev.IsError = true
-	return ev
+	return &Event{
+		When:    time.Now().UTC(),
+		What:    stringer(fmt.Sprintf(format, args...)),
+		Stack:   getStack2(),
+		IsError: true,
+	}
 }
 
 // MakeLazyErrorEvent is equivalent to NewLazyEvent, and sets IsError.
 func NewLazyErrorEvent(format string, args ...any) *Event {
-	ev := eventPool.Get().(*Event)
-	ev.Seq = atomic.AddUint64(&eventSeq, 1)
-	ev.When = time.Now().UTC()
-	ev.What = &lazyStringer{fmt: format, args: args}
-	ev.Stack = getStack()
-	ev.IsError = true
-	return ev
+	return &Event{
+		When:    time.Now().UTC(),
+		What:    &lazyStringer{fmt: format, args: args},
+		Stack:   getStack2(),
+		IsError: true,
+	}
 }
 
 // MarshalJSON implements json.Marshaler for the event.
@@ -104,16 +86,11 @@ func (ev *Event) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (ev *Event) Close() {
-	eventPool.Put(ev)
-}
-
 //
 //
 //
 
 type jsonEvent struct {
-	Seq     uint64        `json:"seq"`
 	When    time.Time     `json:"when"`
 	What    string        `json:"what"`
 	Stack   jsonCallStack `json:"stack"`
@@ -122,7 +99,6 @@ type jsonEvent struct {
 
 func jsonEventFrom(ev *Event) jsonEvent {
 	return jsonEvent{
-		Seq:     ev.Seq,
 		When:    ev.When,
 		What:    ev.What.String(),
 		Stack:   jsonCallStackFrom(ev.Stack),
@@ -131,7 +107,6 @@ func jsonEventFrom(ev *Event) jsonEvent {
 }
 
 func (jev *jsonEvent) writeTo(ev *Event) {
-	ev.Seq = jev.Seq
 	ev.When = jev.When
 	ev.What = stringer(jev.What)
 	ev.Stack = jev.Stack.toCallStack()
@@ -141,14 +116,15 @@ func (jev *jsonEvent) writeTo(ev *Event) {
 type jsonCallStack []*jsonCall
 
 type jsonCall struct {
-	Function string `json:"function"`
-	FileLine string `json:"fileline"`
+	Fn string `json:"function"`
+	FL string `json:"fileline"`
 }
 
 func jsonCallStackFrom(cs CallStack) jsonCallStack {
 	jcs := make(jsonCallStack, len(cs))
 	for i := range cs {
-		jcs[i] = (*jsonCall)(&cs[i]) // pointer avoids copy, and equivalent structs are assignable
+		jcs[i] = &jsonCall{Fn: cs[i].Function(), FL: cs[i].FileLine()}
+		// jcs[i] = (*jsonCall)(&cs[i]) // pointer avoids copy, and equivalent structs are assignable
 	}
 	return jcs
 }
@@ -156,10 +132,14 @@ func jsonCallStackFrom(cs CallStack) jsonCallStack {
 func (jcs *jsonCallStack) toCallStack() CallStack {
 	cs := make(CallStack, len(*jcs))
 	for i, jc := range *jcs {
-		cs[i] = Call(*jc)
+		// cs[i] = Call(*jc)
+		cs[i] = *jc
 	}
 	return cs
 }
+
+func (jc jsonCall) Function() string { return jc.Fn }
+func (jc jsonCall) FileLine() string { return jc.FL }
 
 //
 //
@@ -183,7 +163,7 @@ func (z *lazyStringer) String() string {
 //
 //
 //
-
+/*
 func getStack() CallStack {
 	var cs CallStack
 	for _, c := range stack.Trace().TrimRuntime().TrimBelow(stack.Caller(3)) { // TODO: trim package trc
@@ -234,3 +214,4 @@ func funcNameOnly(name string) string {
 	}
 	return name
 }
+*/

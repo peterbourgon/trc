@@ -1,7 +1,6 @@
 package trc
 
 import (
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -320,52 +319,4 @@ var (
 
 func getCoreTraceMaxEvents() int {
 	return int(atomic.LoadUint64(&coreTraceMaxEvents))
-}
-
-//
-//
-//
-
-// prefixedTrace decorates a trace and adds a user-supplied prefix to each event.
-// This can be useful to show important regions of execution without needing to
-// inspect full call stacks.
-type prefixedTrace struct {
-	Trace
-	format string
-	args   []any
-}
-
-// PrefixTrace wraps the trace with the provided prefix.
-func Prefix(tr Trace, format string, args ...any) Trace {
-	format = strings.TrimSpace(format)
-
-	if format == "" {
-		return tr
-	}
-
-	return &prefixedTrace{
-		Trace:  tr,
-		format: format + " ",
-		args:   args,
-	}
-}
-
-// Tracef implements Trace, adding a prefix to the provided format string.
-func (ptr *prefixedTrace) Tracef(format string, args ...any) {
-	ptr.Trace.Tracef(ptr.format+format, append(ptr.args, args...)...)
-}
-
-// LazyTracef implements Trace, adding a prefix to the provided format string.
-func (ptr *prefixedTrace) LazyTracef(format string, args ...any) {
-	ptr.Trace.LazyTracef(ptr.format+format, append(ptr.args, args...)...)
-}
-
-// Errorf implements Trace, adding a prefix to the provided format string.
-func (ptr *prefixedTrace) Errorf(format string, args ...any) {
-	ptr.Trace.Errorf(ptr.format+format, append(ptr.args, args...)...)
-}
-
-// LazyErrorf implements Trace, adding a prefix to the provided format string.
-func (ptr *prefixedTrace) LazyErrorf(format string, args ...any) {
-	ptr.Trace.LazyErrorf(ptr.format+format, append(ptr.args, args...)...)
 }
