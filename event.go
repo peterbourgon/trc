@@ -3,6 +3,7 @@ package trc
 import (
 	"fmt"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -16,11 +17,9 @@ import (
 type Event interface {
 	When() time.Time
 	What() string
-	Stack() CallStack
+	Stack() []Call
 	IsError() bool
 }
-
-type CallStack []Call
 
 type Call interface {
 	Function() string
@@ -34,14 +33,14 @@ type Call interface {
 type coreEvent struct {
 	when    time.Time    // ideally UTC
 	what    fmt.Stringer // must be safe for concurrent use
-	stack   CallStack    // optional but recommented
+	stack   []Call       //
 	isError bool         //
 }
 
-func (cev *coreEvent) When() time.Time  { return cev.when }
-func (cev *coreEvent) What() string     { return cev.what.String() }
-func (cev *coreEvent) Stack() CallStack { return cev.stack }
-func (cev *coreEvent) IsError() bool    { return cev.isError }
+func (cev *coreEvent) When() time.Time { return cev.when }
+func (cev *coreEvent) What() string    { return cev.what.String() }
+func (cev *coreEvent) Stack() []Call   { return cev.stack }
+func (cev *coreEvent) IsError() bool   { return cev.isError }
 
 func newEvent(format string, args ...any) Event {
 	return &coreEvent{
@@ -87,10 +86,10 @@ type lazyCall struct {
 	pc uintptr
 }
 
-func getLazyCallStack(skip int) CallStack {
+func getLazyCallStack(skip int) []Call {
 	pcs := [512]uintptr{}
 	n := runtime.Callers(skip+1, pcs[:])
-	cs := make(CallStack, n)
+	cs := make([]Call, n)
 	for i := range cs {
 		cs[i] = lazyCall{pcs[i]}
 	}
@@ -132,4 +131,26 @@ type lazyStringer struct {
 
 func (z *lazyStringer) String() string {
 	return fmt.Sprintf(z.fmt, z.args...)
+}
+
+//
+//
+//
+
+func pkgPrefix(funcName string) string {
+	const pathSep = "/"
+	end := strings.LastIndex(funcName, pathSep)
+	if end == -1 {
+		return ""
+	}
+	return funcName[:end]
+}
+
+func pathSuffix(path string) string {
+	const pathSep = "/"
+	lastSep := strings.LastIndex(path, pathSep)
+	if lastSep == -1 {
+		return path
+	}
+	return path[strings.LastIndex(path[:lastSep], pathSep)+1:]
 }

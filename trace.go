@@ -32,8 +32,8 @@ type Trace interface {
 //
 //
 
-// Traces is a slice of Trace elements which implements [sort.Interface] by
-// ordering newer traces (as measued by the start timestamp) first.
+// Traces implements [sort.Interface], ordering traces with more recent start
+// timestamps before traces with older start timestamps.
 type Traces []Trace
 
 // Less implements [sort.Interface].
@@ -49,10 +49,9 @@ func (trs Traces) Len() int { return len(trs) }
 //
 //
 
-// coreTrace is the default, mutable implementation of a trace, used by the
-// package and the collector. Trace IDs are ULIDs, using a default monotonic
-// source of entropy. Traces can contain up to a max number of events defined by
-// SetCoreTraceMaxEvents.
+// coreTrace is the default, mutable implementation of a trace. Trace IDs are
+// ULIDs, using a default monotonic source of entropy. Traces can contain up to
+// a maximum number of events, defined by SetMaxEvents.
 type coreTrace struct {
 	mtx       sync.Mutex
 	id        string
@@ -221,13 +220,14 @@ func (tr *coreTrace) Events() []Event {
 	return events
 }
 
-// SetDefaultMaxEvents sets the maximum number of events that will be stored in
-// a normal trace produced by FromContext, NewTrace, etc. Once this limit is
-// reached, additional events increment a "truncated" counter in the trace, the
-// value of which is reported in a single, final event.
+// SetMaxEvents sets the maximum number of events that will be stored in a
+// default [trc.Trace] as produced by [NewTrace], [FromContext], etc. Once this
+// limit is reached, additional events increment a "truncated" counter in the
+// trace, the value of which is reported in a single, final event.
 //
-// The default value is 1000, the minimum is 1, and the maximum is 10000.
-func SetDefaultMaxEvents(n int) {
+// By default, the maximum number of events per trace is 1000. The minimum value
+// is 1, and the maximum value is 10000.
+func SetMaxEvents(n int) {
 	switch {
 	case n < coreTraceMaxEventsMin:
 		n = coreTraceMaxEventsMin

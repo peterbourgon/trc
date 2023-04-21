@@ -111,7 +111,7 @@ div#topline details[open]>div {
 	position: absolute;
 	float: left;
 	margin-left: 1ch;
-	border: solid 1px #000;
+	border: solid 2px #000;
 	padding: 1ch 2ch;
 	z-index: 10;
 	background-color: white;
@@ -141,13 +141,17 @@ div#topline-metadata {
 	padding-top: 1ch;
 }
 
-div#topline-search-problems {
-	font-weight: bold;
+div#topline-search-problems summary {
 	color: rgb(224, 0, 0);
 }
 
 input#search-box::selection {
 	background-color: yellow;
+}
+
+div#topline-search-problems summary,
+div#topline-search-sources summary {
+	cursor: pointer;
 }
 
 /*

@@ -136,7 +136,7 @@ func parseSearchRequest(ctx context.Context, r *http.Request) (*trcstore.SearchR
 		tr.Tracef("normalize search request: %s", problem)
 	}
 
-	tr.Tracef("parsed search request %#+v", req)
+	tr.Tracef("parsed search request %s", req)
 
 	return req, prs
 }

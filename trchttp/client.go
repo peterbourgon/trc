@@ -43,7 +43,13 @@ func NewClient(client HTTPClient, baseurl string) *Client {
 }
 
 // Search implements the [trcstore.Searcher] interface.
-func (c *Client) Search(ctx context.Context, req *trcstore.SearchRequest) (*trcstore.SearchResponse, error) {
+func (c *Client) Search(ctx context.Context, req *trcstore.SearchRequest) (_ *trcstore.SearchResponse, err error) {
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("%s: %w", c.baseurl, err)
+		}
+	}()
+
 	tr := trc.FromContext(ctx)
 
 	httpReq, err := httpRequest(ctx, req, c.baseurl)

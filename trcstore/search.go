@@ -3,9 +3,11 @@ package trcstore
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/peterbourgon/trc"
@@ -29,6 +31,41 @@ type SearchRequest struct {
 	Query       string          `json:"query,omitempty"`
 	Regexp      *regexp.Regexp  `json:"-"`
 	Limit       int             `json:"limit,omitempty"`
+}
+
+// String returns a representation of the searchr request that elides default
+// values and is suitable for use in a trace event or log statement.
+func (req *SearchRequest) String() string {
+	var elems []string
+	if len(req.IDs) > 0 {
+		elems = append(elems, fmt.Sprintf("ids=%v", req.IDs))
+	}
+	if req.Category != "" {
+		elems = append(elems, fmt.Sprintf("category=%q", req.Category))
+	}
+	if req.IsActive {
+		elems = append(elems, "active")
+	}
+	if !reflect.DeepEqual(req.Bucketing, DefaultBucketing) {
+		strs := make([]string, len(req.Bucketing))
+		for i := range req.Bucketing {
+			strs[i] = req.Bucketing[i].String()
+		}
+		elems = append(elems, fmt.Sprintf("bucketing=%v", strs))
+	}
+	if req.MinDuration != nil {
+		elems = append(elems, fmt.Sprintf("min=%s", req.MinDuration))
+	}
+	if req.IsFailed {
+		elems = append(elems, "failed")
+	}
+	if req.Query != "" {
+		elems = append(elems, fmt.Sprintf("q=%q", req.Query))
+	}
+	if req.Limit > 0 {
+		elems = append(elems, fmt.Sprintf("limit=%d", req.Limit))
+	}
+	return "{" + strings.Join(elems, " ") + "}"
 }
 
 // Normalize ensures the request is valid, returning any problems encountered.
@@ -124,6 +161,10 @@ func (req *SearchRequest) Allow(tr trc.Trace) bool {
 	return true
 }
 
+//
+//
+//
+
 // SearchResponse is the result of performing a search request.
 type SearchResponse struct {
 	Stats    Stats            `json:"stats"`
@@ -156,8 +197,6 @@ func (res *SearchResponse) Sources() []string {
 // MultiSearcher allows multiple distinct searchers to be queried as one,
 // scattering the search request to each of them, and gathering and merging
 // their responses into a single response.
-//
-// It's used by the HTTP server, in certain circumstances.
 type MultiSearcher []Searcher
 
 // Search implements Searcher, by making concurrent search requests, and
@@ -176,8 +215,7 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	tuplec := make(chan tuple, len(ms))
 	for i, s := range ms {
 		go func(id string, s Searcher) {
-			ptr := trc.Prefix(trc.FromContext(ctx), "<%s>", id)
-			ctx := trc.ToContext(ctx, ptr)
+			ctx, _ := trc.Prefix(ctx, "<%s>", id)
 			res, err := s.Search(ctx, req)
 			tuplec <- tuple{id, res, err}
 		}(strconv.Itoa(i+1), s)

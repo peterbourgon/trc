@@ -28,6 +28,9 @@ func New(ctx context.Context, category string) (context.Context, trc.Trace) {
 	return store.NewTrace(ctx, category)
 }
 
+// Get is really GetOrCreate: if a trace exists in the context, Get adds an
+// event reflecting the provided category and returns the context and the trace
+// directly. Otherwise, Get creates a new trace in the context via [New].
 func Get(ctx context.Context, category string) (context.Context, trc.Trace) {
 	if tr, ok := trc.MaybeFromContext(ctx); ok {
 		tr.Tracef("(+ %s)", category)
@@ -36,16 +39,26 @@ func Get(ctx context.Context, category string) (context.Context, trc.Trace) {
 	return New(ctx, category)
 }
 
-// Tracef adds a new event to the trace in the context (via FromContext).
+// Tracef adds a new event to the trace in the context.
 // Arguments are evaulated immediately.
 func Tracef(ctx context.Context, format string, args ...any) {
 	trc.FromContext(ctx).Tracef(format, args...)
 }
 
-// LazyTracef adds a new event to the trace in the context (via FromContext).
-// Arguments are evaluated lazily, when the event is read by a client. Arguments
-// may be stored for an indeterminste amount of time, and may be evaluated by
-// multiple goroutines, and therefore must be safe for concurrent access.
+// LazyTracef adds a new event to the trace in the context.
+// Arguments are evaluated lazily.
 func LazyTracef(ctx context.Context, format string, args ...any) {
 	trc.FromContext(ctx).LazyTracef(format, args...)
+}
+
+// Errorf adds a new event to the trace in the context.
+// Arguments are evaulated immediately.
+func Errorf(ctx context.Context, format string, args ...any) {
+	trc.FromContext(ctx).Errorf(format, args...)
+}
+
+// LazyErrorf adds a new event to the trace in the context.
+// Arguments are evaluated lazily.
+func LazyErrorf(ctx context.Context, format string, args ...any) {
+	trc.FromContext(ctx).LazyErrorf(format, args...)
 }

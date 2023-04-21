@@ -74,9 +74,11 @@ func (s *Store) Search(ctx context.Context, req *SearchRequest) (*SearchResponse
 	}
 
 	total := len(overall)
+
 	tr.Tracef("walked all traces, total count %d", total)
 
 	stats := newStatsFrom(req.Bucketing, overall)
+
 	tr.Tracef("calculated stats")
 
 	var allowed trc.Traces

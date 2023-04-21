@@ -5,7 +5,7 @@ import (
 )
 
 func TestLazyCallStack(t *testing.T) {
-	var stacks []CallStack
+	var stacks [][]Call
 
 	foo := func() {
 		stacks = append(stacks, getLazyCallStack(1))

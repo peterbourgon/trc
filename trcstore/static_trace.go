@@ -86,10 +86,10 @@ type StaticEvent struct {
 
 var _ trc.Event = (*StaticEvent)(nil)
 
-func (sev StaticEvent) When() time.Time      { return sev.StaticWhen }
-func (sev StaticEvent) What() string         { return sev.StaticWhat }
-func (sev StaticEvent) Stack() trc.CallStack { return toTraceCallStack(sev.StaticStack) }
-func (sev StaticEvent) IsError() bool        { return sev.StaticIsError }
+func (sev StaticEvent) When() time.Time   { return sev.StaticWhen }
+func (sev StaticEvent) What() string      { return sev.StaticWhat }
+func (sev StaticEvent) Stack() []trc.Call { return toTraceCallStack(sev.StaticStack) }
+func (sev StaticEvent) IsError() bool     { return sev.StaticIsError }
 
 func toStaticEvents(evs []trc.Event) []StaticEvent {
 	sevs := make([]StaticEvent, len(evs))
@@ -118,15 +118,15 @@ func toTraceEvents(sevs []StaticEvent) []trc.Event {
 
 type StaticCallStack []StaticCall
 
-func toTraceCallStack(scs StaticCallStack) trc.CallStack {
-	cs := make(trc.CallStack, len(scs))
+func toTraceCallStack(scs StaticCallStack) []trc.Call {
+	cs := make([]trc.Call, len(scs))
 	for i := range scs {
 		cs[i] = scs[i]
 	}
 	return cs
 }
 
-func toStaticCallStack(cs trc.CallStack) StaticCallStack {
+func toStaticCallStack(cs []trc.Call) StaticCallStack {
 	scs := make(StaticCallStack, len(cs))
 	for i, c := range cs {
 		scs[i] = StaticCall{

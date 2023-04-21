@@ -8,5 +8,3 @@ require (
 )
 
 require github.com/peterbourgon/unixtransport v0.0.1
-
-require github.com/go-stack/stack v1.8.1 // indirect
