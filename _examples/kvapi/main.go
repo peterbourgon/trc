@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc/trchttp"
-	"github.com/peterbourgon/trc/trcsearch"
 	"github.com/peterbourgon/trc/trcstore"
 )
 
@@ -60,7 +59,7 @@ func main() {
 
 	var trcGlobal http.Handler
 	{
-		var ms trcsearch.MultiSearcher
+		var ms trcstore.MultiSearcher
 		for i := range ports {
 			ms = append(ms, trchttp.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/trc", ports[i])))
 		}

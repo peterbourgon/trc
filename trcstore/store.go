@@ -8,7 +8,6 @@ import (
 
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/internal/trcringbuf"
-	"github.com/peterbourgon/trc/trcsearch"
 )
 
 type Store struct {
@@ -51,7 +50,7 @@ func (s *Store) NewTrace(ctx context.Context, category string) (context.Context,
 	return ctx, tr
 }
 
-func (s *Store) Search(ctx context.Context, req *trcsearch.SearchRequest) (*trcsearch.SearchResponse, error) {
+func (s *Store) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
 	begin := time.Now()
 
 	_, tr, finish := trc.Region(ctx, "Collector.Search")
@@ -77,7 +76,7 @@ func (s *Store) Search(ctx context.Context, req *trcsearch.SearchRequest) (*trcs
 	total := len(overall)
 	tr.Tracef("walked all traces, total count %d", total)
 
-	stats := trcsearch.NewStatsFrom(req.Bucketing, overall)
+	stats := newStatsFrom(req.Bucketing, overall)
 	tr.Tracef("calculated stats")
 
 	var allowed trc.Traces
@@ -94,14 +93,14 @@ func (s *Store) Search(ctx context.Context, req *trcsearch.SearchRequest) (*trcs
 		allowed = allowed[:req.Limit]
 	}
 
-	selected := make([]*trcsearch.SelectedTrace, len(allowed))
+	selected := make([]*SelectedTrace, len(allowed))
 	for i := range allowed {
-		selected[i] = trcsearch.NewSelectedTrace(allowed[i])
+		selected[i] = NewSelectedTrace(allowed[i])
 	}
 
 	tr.Tracef("matched %d, selected %d", matched, len(selected))
 
-	return &trcsearch.SearchResponse{
+	return &SearchResponse{
 		Stats:    stats,
 		Total:    total,
 		Matched:  matched,

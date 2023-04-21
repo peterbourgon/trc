@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trcsearch"
+	"github.com/peterbourgon/trc/trcstore"
 )
 
 // HTTPClient models a concrete http.Client.
@@ -28,7 +28,7 @@ type Client struct {
 	baseurl string
 }
 
-var _ trcsearch.Searcher = (*Client)(nil)
+var _ trcstore.Searcher = (*Client)(nil)
 
 // NewClient returns a client calling the provided URL, which is assumed to be
 // an instance of the server also defined in this package.
@@ -42,8 +42,8 @@ func NewClient(client HTTPClient, baseurl string) *Client {
 	}
 }
 
-// Search implements the searcher interface.
-func (c *Client) Search(ctx context.Context, req *trcsearch.SearchRequest) (*trcsearch.SearchResponse, error) {
+// Search implements the [trcstore.Searcher] interface.
+func (c *Client) Search(ctx context.Context, req *trcstore.SearchRequest) (*trcstore.SearchResponse, error) {
 	tr := trc.FromContext(ctx)
 
 	httpReq, err := httpRequest(ctx, req, c.baseurl)
@@ -87,7 +87,7 @@ func redactURL(err error) error {
 	return err
 }
 
-func httpRequest(ctx context.Context, req *trcsearch.SearchRequest, baseurl string) (*http.Request, error) {
+func httpRequest(ctx context.Context, req *trcstore.SearchRequest, baseurl string) (*http.Request, error) {
 	r, err := http.NewRequestWithContext(ctx, "GET", baseurl, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create HTTP request: %w", err)

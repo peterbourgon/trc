@@ -11,15 +11,17 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trcsearch"
+	"github.com/peterbourgon/trc/trcstore"
 	"github.com/peterbourgon/unixtransport"
 )
 
 // SearchResponse is what the server returns to search requests.
 type SearchResponse struct {
-	Remotes  []string                  `json:"remotes,omitempty"`
-	Request  *trcsearch.SearchRequest  `json:"request"`
-	Response *trcsearch.SearchResponse `json:"response"`
+	Remotes []string `json:"remotes,omitempty"` // actually returned by intermediates
+	Sources []string `json:"-"`                 // calculated just prior to render from selected 'via's
+
+	Request  *trcstore.SearchRequest  `json:"request"`
+	Response *trcstore.SearchResponse `json:"response"`
 }
 
 // Server implements a JSON API and HTML UI for the wrapped searcher.
@@ -29,7 +31,7 @@ type Server struct {
 }
 
 type Searcher interface {
-	Search(context.Context, *trcsearch.SearchRequest) (*trcsearch.SearchResponse, error)
+	Search(context.Context, *trcstore.SearchRequest) (*trcstore.SearchResponse, error)
 }
 
 // NewServer returns a server wrapping the given searcher.
@@ -60,7 +62,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if len(remotes) > 0 {
-		var multi trcsearch.MultiSearcher
+		var multi trcstore.MultiSearcher
 		for _, r := range remotes {
 			multi = append(multi, NewClient(s.client, r))
 		}
@@ -72,16 +74,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		tr.Errorf("search error: %v", err)
 		prs = append(prs, err.Error())
-		res = &trcsearch.SearchResponse{} // default
+		res = &trcstore.SearchResponse{} // default
 	}
 
 	res.Problems = append(prs, res.Problems...)
 	res.Duration = time.Since(begin)
 
+	var sources []string
+	{
+		index := map[string]struct{}{}
+		for _, x := range res.Selected {
+			for _, s := range x.Via {
+				index[s] = struct{}{}
+			}
+		}
+		slice := make([]string, 0, len(index))
+		for s := range index {
+			slice = append(slice, s)
+		}
+		sort.Strings(slice)
+		sources = slice
+	}
+
 	tr.Tracef("total=%d matched=%d selected=%d duration=%s", res.Total, res.Matched, len(res.Selected), res.Duration)
 
 	renderResponse(ctx, w, r, assets, "traces.html", templateFuncs, &SearchResponse{
 		Remotes:  remotes,
+		Sources:  sources,
 		Request:  req,
 		Response: res,
 	})
@@ -91,7 +110,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //
 //
 
-func parseSearchRequest(ctx context.Context, r *http.Request) (*trcsearch.SearchRequest, []string) {
+func parseSearchRequest(ctx context.Context, r *http.Request) (*trcstore.SearchRequest, []string) {
 	var (
 		tr       = trc.FromContext(ctx)
 		isJSON   = strings.Contains(r.Header.Get("content-type"), "application/json")
@@ -100,7 +119,7 @@ func parseSearchRequest(ctx context.Context, r *http.Request) (*trcsearch.Search
 		min      = parseDefault(urlquery.Get("min"), parseDurationPointer, nil)
 		bs       = parseBucketing(urlquery["b"]) // can be nil, no problem
 		q        = urlquery.Get("q")
-		req      = &trcsearch.SearchRequest{}
+		req      = &trcstore.SearchRequest{}
 		prs      = []string{}
 	)
 
@@ -115,7 +134,7 @@ func parseSearchRequest(ctx context.Context, r *http.Request) (*trcsearch.Search
 
 	default:
 		tr.Tracef("parsing search request from URL %q", urlquery.Encode())
-		req = &trcsearch.SearchRequest{
+		req = &trcstore.SearchRequest{
 			IDs:         urlquery["id"],
 			Category:    urlquery.Get("category"),
 			IsActive:    urlquery.Has("active"),

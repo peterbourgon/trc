@@ -302,6 +302,7 @@ function highlightquery() {
 	</script>
 
 	<div id="topline-metadata">
+		{{ if .Sources }}<div id="topline-search-sources" class="topline-search" title="{{stringsjoinnewline .Sources}}">sources={{ len .Sources }}</div>{{ end }}
 		<div id="topline-search-total"    class="topline-search">total={{ .Response.Stats.Overall.NumTotal }}</div>
 		<div id="topline-search-matched"  class="topline-search">matched={{ .Response.Matched }}</div>
 		<div id="topline-search-shown"    class="topline-search">shown={{ len .Response.Selected }}</div>
@@ -332,7 +333,7 @@ function highlightquery() {
 		{{ end }}
 		<span class="right">
 			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">
-				<a href="#" onclick="showstacks({{.ID}});"><strong>[≡]</strong></a>
+				<a href="#" onclick="showstacks({{.ID}});"><strong>≡</strong></a>
 			</span>
 		</span>
 	</div>
@@ -340,7 +341,7 @@ function highlightquery() {
 	<div class="events">
 		<div class="event start">
 			<div class="timestamp">
-				{{timetrunc .Start}}
+				{{timetrunc .Started}}
 			</div>
 
 			<div class="delta">
@@ -349,13 +350,13 @@ function highlightquery() {
 			</div>
 
 			<div class="what meta">
-				start (<span class="time-since" title="{{.Start | timerfc3339 }}"></span> ago)
+				start (<span class="time-since" title="{{.Started | timerfc3339 }}"></span> ago)
 			</div>
 		</div>
 
-		{{ $start      := .Start    -}}
+		{{ $start      := .Started    -}}
 		{{ $duration   := .Duration -}}
-		{{ $prev_ts    := .Start    -}}
+		{{ $prev_ts    := .Started    -}}
 		{{ $zero_depth := 0         -}}
 		{{ if .Events }} {{ $zero_depth = len (index .Events 0).Stack }} {{ end -}}
 
@@ -376,12 +377,12 @@ function highlightquery() {
 			</div>
 
 			<div class="what {{if .IsError}}error{{end}}">
-				<span class="searchable">{{ .What.String | htmlescape | insertbreaks }}</span>
+				<span class="searchable">{{ .What | htmlescape | insertbreaks }}</span>
 			</div>
 
 			<div class="stack">
 				<details class="stack-details">
-					<summary>[≡]</summary>
+					<summary>≡</summary>
 					<table class="stack-table">
 						{{ range $i, $c := .Stack -}}
 						<tr>
@@ -401,11 +402,11 @@ function highlightquery() {
 		{{ end -}}
 
 		<div class="event end">
-			{{ $delta   := timediff (timeadd .Start .Duration) $prev_ts -}}
+			{{ $delta   := timediff (timeadd .Started .Duration) $prev_ts -}}
 			{{ $percent := durationpercent $delta $duration                 -}}
 
-			<div class="timestamp" title="{{timeadd .Start .Duration}}">
-				{{timetrunc (timeadd .Start .Duration)}}
+			<div class="timestamp" title="{{timeadd .Started .Duration}}">
+				{{timetrunc (timeadd .Started .Duration)}}
 			</div>
 
 			<div class="delta" title="+{{ $delta }} = {{.Duration}}">

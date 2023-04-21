@@ -82,16 +82,6 @@ func (ptr *prefixedTrace) LazyTracef(format string, args ...any) {
 	ptr.Trace.LazyTracef(ptr.format+format, append(ptr.args, args...)...)
 }
 
-// Errorf implements Trace, adding a prefix to the provided format string.
-func (ptr *prefixedTrace) Errorf(format string, args ...any) {
-	ptr.Trace.Errorf(ptr.format+format, append(ptr.args, args...)...)
-}
-
-// LazyErrorf implements Trace, adding a prefix to the provided format string.
-func (ptr *prefixedTrace) LazyErrorf(format string, args ...any) {
-	ptr.Trace.LazyErrorf(ptr.format+format, append(ptr.args, args...)...)
-}
-
 //
 //
 //

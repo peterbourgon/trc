@@ -49,18 +49,3 @@ func Tracef(ctx context.Context, format string, args ...any) {
 func LazyTracef(ctx context.Context, format string, args ...any) {
 	trc.FromContext(ctx).LazyTracef(format, args...)
 }
-
-// Errorf adds a new event to the trace in the context (via FromContext), and
-// marks the trace as errored. Arguments are evaluted immediately.
-func Errorf(ctx context.Context, format string, args ...any) {
-	trc.FromContext(ctx).Errorf(format, args...)
-}
-
-// LazyErrorf adds a new event to the trace in the context (via FromContext),
-// and marks the trace as errored. Arguments are evaluated lazily, when the
-// event is read by a client. Arguments may be stored for an indeterminste
-// amount of time, and may be evaluated by multiple goroutines, and therefore
-// must be safe for concurrent access.
-func LazyErrorf(ctx context.Context, format string, args ...any) {
-	trc.FromContext(ctx).LazyErrorf(format, args...)
-}

@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trcsearch"
+	"github.com/peterbourgon/trc/trcstore"
 )
 
 //go:embed assets/*
@@ -243,7 +243,7 @@ func category2class(name string) string {
 	return "category-" + sha256hex(name)
 }
 
-func highlightclasses(req *trcsearch.SearchRequest) []string {
+func highlightclasses(req *trcstore.SearchRequest) []string {
 	var classes []string
 	if len(req.IDs) > 0 {
 		return nil

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trcsearch"
 	"github.com/peterbourgon/trc/trcstore"
 )
 
@@ -42,7 +41,7 @@ func TestCollector(t *testing.T) {
 					}
 
 					ctx, tr := trc.NewTrace(ctx, "search")
-					res, err := collector.Search(ctx, &trcsearch.SearchRequest{Limit: 10, Query: "quux"})
+					res, err := collector.Search(ctx, &trcstore.SearchRequest{Limit: 10, Query: "quux"})
 					t.Logf("total=%d matched=%d selected=%d err=%v", res.Total, res.Matched, len(res.Selected), err)
 					tr.Finish()
 					t.Logf("\n%s\n", debugTrace(tr))
@@ -54,15 +53,14 @@ func TestCollector(t *testing.T) {
 
 func debugTrace(tr trc.Trace) string {
 	var sb strings.Builder
-	start := tr.Start()
+	started := tr.Started()
 	fmt.Fprintf(&sb, "ID=%s\n", tr.ID())
-	fmt.Fprintf(&sb, "Start=%s (%s ago)\n", start.Format(time.RFC3339), time.Since(start))
-	fmt.Fprintf(&sb, "Active=%v\n", tr.Active())
+	fmt.Fprintf(&sb, "Start=%s (%s ago)\n", started.Format(time.RFC3339), time.Since(started))
 	fmt.Fprintf(&sb, "Finished=%v\n", tr.Finished())
 	fmt.Fprintf(&sb, "Errored=%v\n", tr.Errored())
 	fmt.Fprintf(&sb, "Events=%d\n", len(tr.Events()))
 	for _, ev := range tr.Events() {
-		fmt.Fprintf(&sb, "\t+%s\t%s\n", ev.When.Sub(start), ev.What.String())
+		fmt.Fprintf(&sb, "\t+%s\t%s\n", ev.When().Sub(started), ev.What())
 	}
 	fmt.Fprintf(&sb, "Duration=%s\n", tr.Duration())
 	return sb.String()

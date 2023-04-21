@@ -1,4 +1,4 @@
-package trcsearch
+package trcstore
 
 import (
 	"fmt"
@@ -18,7 +18,7 @@ type Stats struct {
 	Categories []CategoryStats `json:"categories"`
 }
 
-func NewStatsFrom(bucketing []time.Duration, traces []trc.Trace) Stats {
+func newStatsFrom(bucketing []time.Duration, traces []trc.Trace) Stats {
 	byCategory := map[string]*CategoryStats{}
 	for _, tr := range traces {
 		category := tr.Category()
@@ -98,10 +98,11 @@ func (c *CategoryStats) isZero() bool {
 
 func (cs *CategoryStats) observe(tr trc.Trace, bucketing []time.Duration) {
 	var (
-		start  = tr.Start()
-		active = tr.Active()
-		bucket = !tr.Active() && tr.Succeeded()
-		failed = !tr.Active() && !tr.Succeeded()
+		start    = tr.Started()
+		finished = tr.Finished()
+		active   = !finished
+		bucket   = finished && !tr.Errored()
+		failed   = finished && tr.Errored()
 	)
 
 	switch {

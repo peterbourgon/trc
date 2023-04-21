@@ -1,4 +1,4 @@
-package trcsearch
+package trcstore
 
 import (
 	"context"
@@ -80,12 +80,12 @@ func (req *SearchRequest) Allow(tr trc.Trace) bool {
 		return false
 	}
 
-	if req.IsActive && !tr.Active() {
+	if req.IsActive && tr.Finished() {
 		return false
 	}
 
 	if req.MinDuration != nil {
-		if tr.Active() || tr.Errored() { // we assert that a min duration excludes active and failed traces
+		if !tr.Finished() || tr.Errored() { // we assert that a min duration excludes active and failed traces
 			return false
 		}
 		if tr.Duration() < *req.MinDuration {
@@ -106,10 +106,10 @@ func (req *SearchRequest) Allow(tr trc.Trace) bool {
 				return true
 			}
 			for _, ev := range tr.Events() {
-				if req.Regexp.MatchString(ev.What.String()) {
+				if req.Regexp.MatchString(ev.What()) {
 					return true
 				}
-				for _, c := range ev.Stack {
+				for _, c := range ev.Stack() {
 					if req.Regexp.MatchString(c.Function()) || req.Regexp.MatchString(c.FileLine()) {
 						return true
 					}
@@ -133,10 +133,6 @@ type SearchResponse struct {
 	Problems []string         `json:"problems,omitempty"`
 	Duration time.Duration    `json:"duration"`
 }
-
-//
-//
-//
 
 //
 //
@@ -210,7 +206,7 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	// the requested limit.
 
 	sort.Slice(aggregate.Selected, func(i, j int) bool {
-		return aggregate.Selected[i].Start().After(aggregate.Selected[j].Start())
+		return aggregate.Selected[i].Started().After(aggregate.Selected[j].Started())
 	})
 
 	if len(aggregate.Selected) > req.Limit {

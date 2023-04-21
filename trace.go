@@ -10,78 +10,22 @@ import (
 
 // Trace is a collection of events and metadata for an operation, typically a
 // request, in a program. Traces should normally represent ephemeral and
-// short-lived events, and should be accessed through a context object.
+// short-lived operations, and should be accessed through a context value.
 //
-// Implementations of Trace are expected to be safe for concurrent use.
+// Implementations are expected to be safe for concurrent use.
 type Trace interface {
-	// ID should return a unique identifier for the trace.
 	ID() string
-
-	// Category should return the user-supplied category of the trace.
 	Category() string
-
-	// Start should return the time the trace was created, preferably UTC.
-	Start() time.Time
-
-	// Finish marks the trace as completed. Once called, the trace should be
-	// "frozen" and immutable. Subsequent calls to Trace- or Error-class methods
-	// should be no-ops.
-	Finish()
-
-	// Active represents whether or not the trace is still ongoing. It should
-	// return true if and only if Finish has not yet been called. Once finished,
-	// a trace should not be re-started.
-	Active() bool
-
-	// Finished represents whether or not the trace is still ongoing. It's
-	// essentially a convenience method opposite to Active. It should return
-	// true if and only if Finish has been called. Once finished, a trace should
-	// not be re-started.
-	Finished() bool
-
-	// Succeeded represents whether a trace has finished without any errors. It
-	// should return true if and only if Finish has been called, without any
-	// calls to Error-class methods having been made beforehand.
-	Succeeded() bool
-
-	// Errored represents whether a trace has finished with one or more errors.
-	// It should return true if and only if Finish has been called, with one or
-	// more calls to Error-class methods having been made beforehand.
-	Errored() bool
-
-	// Duration represents the lifetime of the trace. If the trace is active, it
-	// should return the time since the start time. If the trace is finished, it
-	// should return the difference between the start time and the time Finish
-	// was called.
+	Started() time.Time
 	Duration() time.Duration
-
-	// Tracef should immediately (synchromously) evaluate the provided
-	// arguments, and add a corresponding event to the trace. If the trace is
-	// finished, this method should have no effect.
 	Tracef(format string, args ...any)
-
-	// LazyTracef should capture the arguments without evaluating them, and add
-	// a corresponding event to the trace. If the trace is finished, this method
-	// should have no effect.
 	LazyTracef(format string, args ...any)
-
-	// Errorf should behave like Tracef, but also mark the trace as "errored",
-	// typically with a boolean flag. If the trace is finished, this method
-	// should have no effect.
 	Errorf(format string, args ...any)
-
-	// LazyErrorf should behave like LazyTracef, but also mark the trace as
-	// "errored", typically with a boolean flag. If the trace is finished, this
-	// method should have no effect.
 	LazyErrorf(format string, args ...any)
-
-	// Events should return the events collected by the trace so far.
-	//
-	// Implementations should ensure that the returned slice is safe for
-	// concurrent use. Events themselves are expected to be immutable, so this
-	// typically means that implementations should create and return a new slice
-	// for each caller.
-	Events() []*Event
+	Finish()
+	Finished() bool
+	Errored() bool
+	Events() []Event
 }
 
 //
@@ -93,7 +37,7 @@ type Trace interface {
 type Traces []Trace
 
 // Less implements [sort.Interface].
-func (trs Traces) Less(i, j int) bool { return trs[i].Start().After(trs[j].Start()) }
+func (trs Traces) Less(i, j int) bool { return trs[i].Started().After(trs[j].Started()) }
 
 // Swap implements [sort.Interface].
 func (trs Traces) Swap(i, j int) { trs[i], trs[j] = trs[j], trs[i] }
@@ -117,7 +61,7 @@ type coreTrace struct {
 	errored   bool
 	finished  bool
 	duration  time.Duration
-	events    []*Event
+	events    []Event
 	truncated int
 }
 
@@ -134,6 +78,33 @@ func newCoreTrace(category string) *coreTrace {
 	}
 }
 
+// ID implements Trace.
+func (tr *coreTrace) ID() string {
+	return tr.id // immutable
+}
+
+// Category implements Trace.
+func (tr *coreTrace) Category() string {
+	return tr.category // immutable
+}
+
+// Start implements Trace.
+func (tr *coreTrace) Started() time.Time {
+	return tr.start // immutable
+}
+
+// Duration implements Trace.
+func (tr *coreTrace) Duration() time.Duration {
+	tr.mtx.Lock()
+	defer tr.mtx.Unlock()
+
+	if tr.finished {
+		return tr.duration
+	}
+
+	return time.Since(tr.start)
+}
+
 // Tracef implements Trace.
 func (tr *coreTrace) Tracef(format string, args ...any) {
 	tr.mtx.Lock()
@@ -147,7 +118,7 @@ func (tr *coreTrace) Tracef(format string, args ...any) {
 	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, NewEvent(format, args...))
+		tr.events = append(tr.events, newEvent(format, args...))
 	}
 }
 
@@ -164,7 +135,7 @@ func (tr *coreTrace) LazyTracef(format string, args ...any) {
 	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, NewLazyEvent(format, args...))
+		tr.events = append(tr.events, newLazyEvent(format, args...))
 	}
 }
 
@@ -183,7 +154,7 @@ func (tr *coreTrace) Errorf(format string, args ...any) {
 	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, NewErrorEvent(format, args...))
+		tr.events = append(tr.events, newErrorEvent(format, args...))
 	}
 }
 
@@ -202,7 +173,7 @@ func (tr *coreTrace) LazyErrorf(format string, args ...any) {
 	case len(tr.events) >= getCoreTraceMaxEvents():
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, NewLazyErrorEvent(format, args...))
+		tr.events = append(tr.events, newLazyErrorEvent(format, args...))
 	}
 }
 
@@ -219,26 +190,6 @@ func (tr *coreTrace) Finish() {
 	tr.duration = time.Since(tr.start)
 }
 
-// ID implements Trace.
-func (tr *coreTrace) ID() string {
-	return tr.id // immutable
-}
-
-// Start implements Trace.
-func (tr *coreTrace) Start() time.Time {
-	return tr.start // immutable
-}
-
-// Category implements Trace.
-func (tr *coreTrace) Category() string {
-	return tr.category // immutable
-}
-
-// Active implements Trace.
-func (tr *coreTrace) Active() bool {
-	return !tr.Finished()
-}
-
 // Finished implements Trace.
 func (tr *coreTrace) Finished() bool {
 	tr.mtx.Lock()
@@ -247,44 +198,24 @@ func (tr *coreTrace) Finished() bool {
 	return tr.finished
 }
 
-// Succeeded implements Trace.
-func (tr *coreTrace) Succeeded() bool {
-	tr.mtx.Lock()
-	defer tr.mtx.Unlock()
-
-	return tr.finished && !tr.errored
-}
-
 // Errored implements Trace.
 func (tr *coreTrace) Errored() bool {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
-	return tr.finished && tr.errored
-}
-
-// Duration implements Trace.
-func (tr *coreTrace) Duration() time.Duration {
-	tr.mtx.Lock()
-	defer tr.mtx.Unlock()
-
-	if tr.finished {
-		return tr.duration
-	}
-
-	return time.Since(tr.start)
+	return tr.errored
 }
 
 // Events implements Trace.
-func (tr *coreTrace) Events() []*Event {
+func (tr *coreTrace) Events() []Event {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
-	events := make([]*Event, len(tr.events))
+	events := make([]Event, len(tr.events))
 	copy(events, tr.events)
 
 	if tr.truncated > 0 {
-		events = append(events, NewEvent("(truncated event count %d)", tr.truncated))
+		events = append(events, newEvent("(truncated event count %d)", tr.truncated))
 	}
 
 	return events

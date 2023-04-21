@@ -1,4 +1,4 @@
-package trcsearch
+package trcstore
 
 import (
 	"time"

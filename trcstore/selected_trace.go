@@ -1,8 +1,7 @@
-package trcsearch
+package trcstore
 
 import (
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trcstatic"
 )
 
 type SelectedTrace struct {
@@ -10,13 +9,13 @@ type SelectedTrace struct {
 	// traces from multiple collectors into a single result.
 	Via []string `json:"via,omitempty"`
 
-	*trcstatic.StaticTrace
+	*StaticTrace
 }
 
 var _ trc.Trace = (*SelectedTrace)(nil)
 
 func NewSelectedTrace(tr trc.Trace) *SelectedTrace {
 	return &SelectedTrace{
-		StaticTrace: trcstatic.NewStaticTrace(tr),
+		StaticTrace: NewStaticTrace(tr),
 	}
 }

@@ -124,6 +124,10 @@ div#topline-search-problems {
 	color: rgb(224, 0, 0);
 }
 
+input#search-box::selection {
+	background-color: yellow;
+}
+
 /*
  * traces
  */
@@ -165,9 +169,8 @@ div#traces .trace .events {
 div#traces .trace .events div.event {
 	display: flex;
 	flex-direction: row;
-	justify-content: space-between;
-	/* align-items: center; */
-	flex-wrap: nowrap;
+	justify-content: flex-end;
+	flex-wrap: wrap;
 	border-top: solid 1px #ccc;
 }
 
@@ -235,12 +238,13 @@ details.stack-details summary::-webkit-details-marker {
 	display: none;
 }
 
-details summary::marker {
+details.stack-details summary::marker {
 	display: none;
 }
 
 details.stack-details {
 	text-align: right;
+	margin-right: 0.2ch;
 }
 
 details.stack-details>summary {
