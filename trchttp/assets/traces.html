@@ -302,12 +302,20 @@ function highlightquery() {
 	</script>
 
 	<div id="topline-metadata">
-		{{ if .Sources }}<div id="topline-search-sources" class="topline-search" title="{{stringsjoinnewline .Sources}}">sources={{ len .Sources }}</div>{{ end }}
-		<div id="topline-search-total"    class="topline-search">total={{ .Response.Stats.Overall.NumTotal }}</div>
+		{{ if .Response.Sources }}
+			<div id="topline-search-sources" class="topline-search" style="cursor:pointer;" title="{{stringsjoinnewline .Sources}}">
+				<details>
+					<summary>sources={{ len .Response.Sources }}</summary>
+					<div>
+						{{ range .Response.Sources }}{{ . }}<br/>{{ end }}
+					</div>
+				</details>
+			</div>
+		{{ end }}
+		<div id="topline-search-total"    class="topline-search">traces={{ .Response.Stats.Overall.NumTotal }}</div>
 		<div id="topline-search-matched"  class="topline-search">matched={{ .Response.Matched }}</div>
 		<div id="topline-search-shown"    class="topline-search">shown={{ len .Response.Selected }}</div>
 		<div id="topline-search-took"     class="topline-search">took={{ humanizeduration .Response.Duration }}</div>
-		{{ if .Remotes }}<div id="topline-search-remotes" class="topline-search" title="{{stringsjoinnewline .Remotes}}">remotes={{ len .Remotes }}</div>{{ end }}
 		{{ if .Response.Problems -}}<div id="topline-search-problems" class="topline-search">problems={{ len .Response.Problems -}}</div>{{ end -}}
 	</div>
 

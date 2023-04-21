@@ -70,6 +70,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		searcher = multi
 	}
 
+	tr.Tracef("making search")
+
 	res, err := searcher.Search(ctx, req)
 	if err != nil {
 		tr.Errorf("search error: %v", err)
@@ -80,27 +82,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	res.Problems = append(prs, res.Problems...)
 	res.Duration = time.Since(begin)
 
-	var sources []string
-	{
-		index := map[string]struct{}{}
-		for _, x := range res.Selected {
-			for _, s := range x.Via {
-				index[s] = struct{}{}
-			}
-		}
-		slice := make([]string, 0, len(index))
-		for s := range index {
-			slice = append(slice, s)
-		}
-		sort.Strings(slice)
-		sources = slice
-	}
-
 	tr.Tracef("total=%d matched=%d selected=%d duration=%s", res.Total, res.Matched, len(res.Selected), res.Duration)
 
 	renderResponse(ctx, w, r, assets, "traces.html", templateFuncs, &SearchResponse{
 		Remotes:  remotes,
-		Sources:  sources,
 		Request:  req,
 		Response: res,
 	})

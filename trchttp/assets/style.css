@@ -95,6 +95,32 @@ th.oldest {
  * topline
  */
 
+div#topline details {
+	display: inline;
+}
+
+div#topline details summary {
+	display: inline;
+}
+
+div#topline details[open] summary::marker {
+	display: none;
+}
+
+div#topline details[open]>div {
+	position: absolute;
+	float: left;
+	margin-left: 1ch;
+	border: solid 1px #000;
+	padding: 1ch 2ch;
+	z-index: 10;
+	background-color: white;
+}
+
+div#topline details[open] summary {
+	font-weight: bold;
+}
+
 div#topline {
 	margin: 4ch 2ch;
 	display: flex;
@@ -113,10 +139,6 @@ div#topline>div {
 div#topline-metadata {
 	padding-left: 1ch;
 	padding-top: 1ch;
-}
-
-div#topline-search-remotes {
-	font-weight: bold;
 }
 
 div#topline-search-problems {

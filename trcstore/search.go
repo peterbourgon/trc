@@ -134,6 +134,21 @@ type SearchResponse struct {
 	Duration time.Duration    `json:"duration"`
 }
 
+func (res *SearchResponse) Sources() []string {
+	index := map[string]struct{}{}
+	for _, x := range res.Selected {
+		for _, s := range x.Via {
+			index[s] = struct{}{}
+		}
+	}
+	slice := make([]string, 0, len(index))
+	for s := range index {
+		slice = append(slice, s)
+	}
+	sort.Strings(slice)
+	return slice
+}
+
 //
 //
 //
@@ -204,11 +219,9 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	// gonna get. We need to do a little bit of post-processing. First, we need
 	// to sort all of the selected traces by start time, and then limit them by
 	// the requested limit.
-
 	sort.Slice(aggregate.Selected, func(i, j int) bool {
 		return aggregate.Selected[i].Started().After(aggregate.Selected[j].Started())
 	})
-
 	if len(aggregate.Selected) > req.Limit {
 		aggregate.Selected = aggregate.Selected[:req.Limit]
 	}
