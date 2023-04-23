@@ -76,10 +76,10 @@ func (tr *StaticTrace) Events() []Event { return toTraceEvents(tr.StaticEvents) 
 //
 
 type StaticEvent struct {
-	StaticWhen    time.Time       `json:"when"`
-	StaticWhat    string          `json:"what"`
-	StaticStack   StaticCallStack `json:"stack"`
-	StaticIsError bool            `json:"is_error,omitempty"`
+	StaticWhen    time.Time     `json:"when"`
+	StaticWhat    string        `json:"what"`
+	StaticStack   []StaticFrame `json:"stack"`
+	StaticIsError bool          `json:"is_error,omitempty"`
 }
 
 var _ Event = (*StaticEvent)(nil)
@@ -114,9 +114,7 @@ func toTraceEvents(sevs []StaticEvent) []Event {
 //
 //
 
-type StaticCallStack []StaticCall
-
-func toTraceCallStack(scs StaticCallStack) []Frame {
+func toTraceCallStack(scs []StaticFrame) []Frame {
 	cs := make([]Frame, len(scs))
 	for i := range scs {
 		cs[i] = scs[i]
@@ -124,10 +122,10 @@ func toTraceCallStack(scs StaticCallStack) []Frame {
 	return cs
 }
 
-func toStaticCallStack(cs []Frame) StaticCallStack {
-	scs := make(StaticCallStack, len(cs))
+func toStaticCallStack(cs []Frame) []StaticFrame {
+	scs := make([]StaticFrame, len(cs))
 	for i, c := range cs {
-		scs[i] = StaticCall{
+		scs[i] = StaticFrame{
 			StaticFunction: c.Function(),
 			StaticFileLine: c.FileLine(),
 		}
@@ -139,15 +137,15 @@ func toStaticCallStack(cs []Frame) StaticCallStack {
 //
 //
 
-var _ Frame = (*StaticCall)(nil)
+var _ Frame = (*StaticFrame)(nil)
 
-type StaticCall struct {
+type StaticFrame struct {
 	StaticFunction string `json:"function"`
 	StaticFileLine string `json:"fileline"`
 }
 
-func (c StaticCall) Function() string { return c.StaticFunction }
-func (c StaticCall) FileLine() string { return c.StaticFileLine }
+func (c StaticFrame) Function() string { return c.StaticFunction }
+func (c StaticFrame) FileLine() string { return c.StaticFileLine }
 
 //
 //
