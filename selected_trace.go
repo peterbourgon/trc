@@ -1,8 +1,4 @@
-package trcstore
-
-import (
-	"github.com/peterbourgon/trc"
-)
+package trc
 
 type SelectedTrace struct {
 	// Via records the source(s) of the trace, which is useful when aggregating
@@ -12,9 +8,9 @@ type SelectedTrace struct {
 	*StaticTrace
 }
 
-var _ trc.Trace = (*SelectedTrace)(nil)
+var _ Trace = (*SelectedTrace)(nil)
 
-func NewSelectedTrace(tr trc.Trace) *SelectedTrace {
+func NewSelectedTrace(tr Trace) *SelectedTrace {
 	return &SelectedTrace{
 		StaticTrace: NewStaticTrace(tr),
 	}

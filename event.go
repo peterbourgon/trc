@@ -17,11 +17,12 @@ import (
 type Event interface {
 	When() time.Time
 	What() string
-	Stack() []Call
+	Stack() []Frame
 	IsError() bool
 }
 
-type Call interface {
+// Frame represents a single call in a call stack.
+type Frame interface {
 	Function() string
 	FileLine() string
 }
@@ -33,13 +34,13 @@ type Call interface {
 type coreEvent struct {
 	when    time.Time    // ideally UTC
 	what    fmt.Stringer // must be safe for concurrent use
-	stack   []Call       //
+	stack   []Frame      //
 	isError bool         //
 }
 
 func (cev *coreEvent) When() time.Time { return cev.when }
 func (cev *coreEvent) What() string    { return cev.what.String() }
-func (cev *coreEvent) Stack() []Call   { return cev.stack }
+func (cev *coreEvent) Stack() []Frame  { return cev.stack }
 func (cev *coreEvent) IsError() bool   { return cev.isError }
 
 func newEvent(format string, args ...any) Event {
@@ -82,28 +83,28 @@ func newLazyErrorEvent(format string, args ...any) Event {
 //
 //
 
-type lazyCall struct {
+type lazyFrame struct {
 	pc uintptr
 }
 
-func getLazyCallStack(skip int) []Call {
+func getLazyCallStack(skip int) []Frame {
 	pcs := [512]uintptr{}
 	n := runtime.Callers(skip+1, pcs[:])
-	cs := make([]Call, n)
+	cs := make([]Frame, n)
 	for i := range cs {
-		cs[i] = lazyCall{pcs[i]}
+		cs[i] = lazyFrame{pcs[i]}
 	}
 	return cs
 }
 
-func (c lazyCall) Function() string {
-	return runtime.FuncForPC(c.pc).Name()
+func (f lazyFrame) Function() string {
+	return runtime.FuncForPC(f.pc).Name()
 }
 
-func (c lazyCall) FileLine() string {
-	file, line := runtime.FuncForPC(c.pc).FileLine(c.pc)
+func (f lazyFrame) FileLine() string {
+	file, line := runtime.FuncForPC(f.pc).FileLine(f.pc)
 	{
-		pre := pkgPrefix(c.Function())
+		pre := pkgPrefix(f.Function())
 		post := pathSuffix(file)
 		if pre == "" {
 			file = post

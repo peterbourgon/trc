@@ -1,4 +1,4 @@
-package trcstore
+package trc
 
 import (
 	"context"
@@ -6,41 +6,40 @@ import (
 	"sort"
 	"time"
 
-	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/internal/trcringbuf"
 )
 
-type Store struct {
-	categories *trcringbuf.RingBuffers[trc.Trace]
-	newTrace   func(ctx context.Context, category string) (context.Context, trc.Trace)
+type Collector struct {
+	categories *trcringbuf.RingBuffers[Trace]
+	newTrace   func(ctx context.Context, category string) (context.Context, Trace)
 }
 
-type StoreConfig struct {
-	NewTraceFunc         func(ctx context.Context, category string) (context.Context, trc.Trace)
+type CollectorConfig struct {
+	NewTraceFunc         func(ctx context.Context, category string) (context.Context, Trace)
 	MaxTracesPerCategory int
 }
 
 const DefaultMaxTracesPerCategory = 1000
 
-func NewStore() *Store {
-	return NewStoreConfig(StoreConfig{})
+func NewCollector() *Collector {
+	return NewCollectorConfig(CollectorConfig{})
 }
 
-func NewStoreConfig(cfg StoreConfig) *Store {
+func NewCollectorConfig(cfg CollectorConfig) *Collector {
 	if cfg.NewTraceFunc == nil {
-		cfg.NewTraceFunc = trc.NewTrace
+		cfg.NewTraceFunc = NewTrace
 	}
 	if cfg.MaxTracesPerCategory <= 0 {
 		cfg.MaxTracesPerCategory = DefaultMaxTracesPerCategory
 	}
-	return &Store{
-		categories: trcringbuf.NewRingBuffers[trc.Trace](cfg.MaxTracesPerCategory),
+	return &Collector{
+		categories: trcringbuf.NewRingBuffers[Trace](cfg.MaxTracesPerCategory),
 		newTrace:   cfg.NewTraceFunc,
 	}
 }
 
-func (s *Store) NewTrace(ctx context.Context, category string) (context.Context, trc.Trace) {
-	if tr, ok := trc.MaybeFromContext(ctx); ok {
+func (s *Collector) NewTrace(ctx context.Context, category string) (context.Context, Trace) {
+	if tr, ok := MaybeFromContext(ctx); ok {
 		tr.Tracef("(+ %s)", category)
 		return ctx, tr
 	}
@@ -50,10 +49,10 @@ func (s *Store) NewTrace(ctx context.Context, category string) (context.Context,
 	return ctx, tr
 }
 
-func (s *Store) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
+func (s *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
 	begin := time.Now()
 
-	_, tr, finish := trc.Region(ctx, "Collector.Search")
+	_, tr, finish := Region(ctx, "Collector.Search")
 	defer finish()
 
 	_, _, _ = begin, tr, finish
@@ -63,9 +62,9 @@ func (s *Store) Search(ctx context.Context, req *SearchRequest) (*SearchResponse
 		tr.Tracef("normalize search request: %v", problem)
 	}
 
-	var overall trc.Traces // TODO: allocs
+	var overall Traces // TODO: allocs
 	for cat, rb := range s.categories.GetAll() {
-		if err := rb.Walk(func(tr trc.Trace) error {
+		if err := rb.Walk(func(tr Trace) error {
 			overall = append(overall, tr)
 			return nil
 		}); err != nil {
@@ -77,11 +76,11 @@ func (s *Store) Search(ctx context.Context, req *SearchRequest) (*SearchResponse
 
 	tr.Tracef("walked all traces, total count %d", total)
 
-	stats := newStatsFrom(req.Bucketing, overall)
+	stats := newSearchStatsFrom(req.Bucketing, overall)
 
 	tr.Tracef("calculated stats")
 
-	var allowed trc.Traces
+	var allowed Traces
 	for _, tr := range overall {
 		if req.Allow(tr) {
 			allowed = append(allowed, tr)

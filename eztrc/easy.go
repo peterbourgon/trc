@@ -6,7 +6,6 @@ import (
 
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/trchttp"
-	"github.com/peterbourgon/trc/trcstore"
 )
 
 var (
@@ -14,18 +13,18 @@ var (
 	Prefix = trc.Prefix
 )
 
-var store = trcstore.NewStore()
+var collector = trc.NewCollector()
 
 func Handler() http.Handler {
-	return trchttp.NewServer(store)
+	return trchttp.NewServer(collector)
 }
 
 func Middleware(categorize trchttp.CategorizeFunc) func(http.Handler) http.Handler {
-	return trchttp.Middleware(store.NewTrace, categorize)
+	return trchttp.Middleware(collector.NewTrace, categorize)
 }
 
 func New(ctx context.Context, category string) (context.Context, trc.Trace) {
-	return store.NewTrace(ctx, category)
+	return collector.NewTrace(ctx, category)
 }
 
 // Get is really GetOrCreate: if a trace exists in the context, Get adds an

@@ -1,11 +1,9 @@
-package trcstore
+package trc
 
 import (
 	"encoding/json"
 	"strings"
 	"time"
-
-	"github.com/peterbourgon/trc"
 )
 
 type StaticTrace struct {
@@ -18,11 +16,11 @@ type StaticTrace struct {
 	StaticEvents   []StaticEvent  `json:"events"`
 }
 
-var _ trc.Trace = (*StaticTrace)(nil)
+var _ Trace = (*StaticTrace)(nil)
 
 // NewStaticTrace constructs a static copy of the provided trace, including a
 // copy of all of the current trace events.
-func NewStaticTrace(tr trc.Trace) *StaticTrace {
+func NewStaticTrace(tr Trace) *StaticTrace {
 	return &StaticTrace{
 		StaticID:       tr.ID(),
 		StaticCategory: tr.Category(),
@@ -71,7 +69,7 @@ func (tr *StaticTrace) Errorf(format string, args ...any) { /* no-op */ }
 func (tr *StaticTrace) LazyErrorf(format string, args ...any) { /* no-op */ }
 
 // Events implements Trace.
-func (tr *StaticTrace) Events() []trc.Event { return toTraceEvents(tr.StaticEvents) }
+func (tr *StaticTrace) Events() []Event { return toTraceEvents(tr.StaticEvents) }
 
 //
 //
@@ -84,14 +82,14 @@ type StaticEvent struct {
 	StaticIsError bool            `json:"is_error,omitempty"`
 }
 
-var _ trc.Event = (*StaticEvent)(nil)
+var _ Event = (*StaticEvent)(nil)
 
-func (sev StaticEvent) When() time.Time   { return sev.StaticWhen }
-func (sev StaticEvent) What() string      { return sev.StaticWhat }
-func (sev StaticEvent) Stack() []trc.Call { return toTraceCallStack(sev.StaticStack) }
-func (sev StaticEvent) IsError() bool     { return sev.StaticIsError }
+func (sev StaticEvent) When() time.Time { return sev.StaticWhen }
+func (sev StaticEvent) What() string    { return sev.StaticWhat }
+func (sev StaticEvent) Stack() []Frame  { return toTraceCallStack(sev.StaticStack) }
+func (sev StaticEvent) IsError() bool   { return sev.StaticIsError }
 
-func toStaticEvents(evs []trc.Event) []StaticEvent {
+func toStaticEvents(evs []Event) []StaticEvent {
 	sevs := make([]StaticEvent, len(evs))
 	for i, ev := range evs {
 		sevs[i] = StaticEvent{
@@ -104,8 +102,8 @@ func toStaticEvents(evs []trc.Event) []StaticEvent {
 	return sevs
 }
 
-func toTraceEvents(sevs []StaticEvent) []trc.Event {
-	evs := make([]trc.Event, len(sevs))
+func toTraceEvents(sevs []StaticEvent) []Event {
+	evs := make([]Event, len(sevs))
 	for i := range sevs {
 		evs[i] = sevs[i]
 	}
@@ -118,15 +116,15 @@ func toTraceEvents(sevs []StaticEvent) []trc.Event {
 
 type StaticCallStack []StaticCall
 
-func toTraceCallStack(scs StaticCallStack) []trc.Call {
-	cs := make([]trc.Call, len(scs))
+func toTraceCallStack(scs StaticCallStack) []Frame {
+	cs := make([]Frame, len(scs))
 	for i := range scs {
 		cs[i] = scs[i]
 	}
 	return cs
 }
 
-func toStaticCallStack(cs []trc.Call) StaticCallStack {
+func toStaticCallStack(cs []Frame) StaticCallStack {
 	scs := make(StaticCallStack, len(cs))
 	for i, c := range cs {
 		scs[i] = StaticCall{
@@ -141,7 +139,7 @@ func toStaticCallStack(cs []trc.Call) StaticCallStack {
 //
 //
 
-var _ trc.Call = (*StaticCall)(nil)
+var _ Frame = (*StaticCall)(nil)
 
 type StaticCall struct {
 	StaticFunction string `json:"function"`

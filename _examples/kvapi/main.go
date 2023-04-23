@@ -12,16 +12,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/trchttp"
-	"github.com/peterbourgon/trc/trcstore"
 )
 
 func main() {
 	ports := []string{"8081", "8082", "8083"}
 
-	stores := make([]*trcstore.Store, len(ports))
-	for i := range stores {
-		stores[i] = trcstore.NewStore()
+	collectors := make([]*trc.Collector, len(ports))
+	for i := range collectors {
+		collectors[i] = trc.NewCollector()
 	}
 
 	kvs := make([]*KV, len(ports))
@@ -32,7 +32,7 @@ func main() {
 	apiHandlers := make([]http.Handler, len(ports))
 	for i := range apiHandlers {
 		apiHandlers[i] = kvs[i]
-		apiHandlers[i] = trchttp.Middleware(stores[i].NewTrace, func(r *http.Request) string { return r.Method })(apiHandlers[i])
+		apiHandlers[i] = trchttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return r.Method })(apiHandlers[i])
 	}
 
 	apiWorkers := sync.WaitGroup{}
@@ -48,18 +48,18 @@ func main() {
 	//
 	//
 
-	trcHandlers := make([]http.Handler, len(stores))
+	trcHandlers := make([]http.Handler, len(collectors))
 	for i := range trcHandlers {
 		categorize := func(r *http.Request) string { return "traces" }
-		server := trchttp.NewServer(stores[i])
+		server := trchttp.NewServer(collectors[i])
 
 		trcHandlers[i] = server
-		trcHandlers[i] = trchttp.Middleware(stores[i].NewTrace, categorize)(trcHandlers[i])
+		trcHandlers[i] = trchttp.Middleware(collectors[i].NewTrace, categorize)(trcHandlers[i])
 	}
 
 	var trcGlobal http.Handler
 	{
-		var ms trcstore.MultiSearcher
+		var ms trc.MultiSearcher
 		for i := range ports {
 			ms = append(ms, trchttp.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/trc", ports[i])))
 		}

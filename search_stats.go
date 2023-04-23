@@ -1,36 +1,33 @@
-package trcstore
+package trc
 
 import (
 	"fmt"
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/peterbourgon/trc"
 )
 
-// Stats collects summary statistics for a group of traces. It's meant to model
-// the summary table at the top of the HTML user interface. Stats are typically
-// produced from a single collector, and can be merged together to support
-// distributed searching.
-type Stats struct {
-	Bucketing  []time.Duration `json:"bucketing"`
-	Categories []CategoryStats `json:"categories"`
+// SearchStats collects summary statistics for traces returned by a search.
+// Stats are typically produced from a single collector, but can be merged
+// together to support distributed searching.
+type SearchStats struct {
+	Bucketing  []time.Duration       `json:"bucketing"`
+	Categories []SearchStatsCategory `json:"categories"`
 }
 
-func newStatsFrom(bucketing []time.Duration, traces []trc.Trace) Stats {
-	byCategory := map[string]*CategoryStats{}
+func newSearchStatsFrom(bucketing []time.Duration, traces []Trace) SearchStats {
+	byCategory := map[string]*SearchStatsCategory{}
 	for _, tr := range traces {
 		category := tr.Category()
 		cs, ok := byCategory[category]
 		if !ok {
-			cs = newCategoryStats(category, bucketing)
+			cs = newSearchStatsCategory(category, bucketing)
 			byCategory[category] = cs
 		}
 		cs.observe(tr, bucketing)
 	}
 
-	categories := make([]CategoryStats, 0, len(byCategory))
+	categories := make([]SearchStatsCategory, 0, len(byCategory))
 	for _, cs := range byCategory {
 		categories = append(categories, *cs)
 	}
@@ -39,19 +36,19 @@ func newStatsFrom(bucketing []time.Duration, traces []trc.Trace) Stats {
 		return strings.Compare(categories[i].Name, categories[j].Name) < 0
 	})
 
-	return Stats{
+	return SearchStats{
 		Bucketing:  bucketing,
 		Categories: categories,
 	}
 }
 
-func (s *Stats) isZero() bool {
+func (s *SearchStats) isZero() bool {
 	return len(s.Bucketing) == 0 && len(s.Categories) == 0
 }
 
-// Overall returns a composite CategoryStats representing all categories.
-func (s *Stats) Overall() *CategoryStats {
-	overall := newCategoryStats("overall", s.Bucketing)
+// Overall returns a composite SearchStatsCategory representing all categories.
+func (s *SearchStats) Overall() *SearchStatsCategory {
+	overall := newSearchStatsCategory("overall", s.Bucketing)
 	rateSum := float64(0.0)
 	for _, c := range s.Categories {
 		overall.merge(c)
@@ -61,11 +58,14 @@ func (s *Stats) Overall() *CategoryStats {
 	return overall
 }
 
-// CategoryStats are summary statistics for a group of traces in a single
-// category. It's meant to model a single row in the summary table at the top of
-// the HTML user interface. Category stats are always part of a parent summary
-// stats struct, and can also be merged.
-type CategoryStats struct {
+//
+//
+//
+
+// SearchStatsCategory are summary statistics for a group of traces in a single
+// category. Category stats are always part of a parent summary stats, and can
+// also be merged.
+type SearchStatsCategory struct {
 	Name      string    `json:"name"`
 	NumActive uint64    `json:"num_active"` // active
 	NumBucket []uint64  `json:"num_bucket"` // not active and not errored, by minimum duration
@@ -75,14 +75,14 @@ type CategoryStats struct {
 	Rate      float64   `json:"rate"`
 }
 
-func newCategoryStats(name string, bucketing []time.Duration) *CategoryStats {
-	return &CategoryStats{
+func newSearchStatsCategory(name string, bucketing []time.Duration) *SearchStatsCategory {
+	return &SearchStatsCategory{
 		Name:      name,
 		NumBucket: make([]uint64, len(bucketing)),
 	}
 }
 
-func (c *CategoryStats) isZero() bool {
+func (c *SearchStatsCategory) isZero() bool {
 	var (
 		zeroName       = c.Name == ""
 		zeroNumActive  = c.NumActive == 0
@@ -96,7 +96,7 @@ func (c *CategoryStats) isZero() bool {
 	return zeroEverything
 }
 
-func (cs *CategoryStats) observe(tr trc.Trace, bucketing []time.Duration) {
+func (cs *SearchStatsCategory) observe(tr Trace, bucketing []time.Duration) {
 	var (
 		start    = tr.Started()
 		finished = tr.Finished()
@@ -127,7 +127,7 @@ func (cs *CategoryStats) observe(tr trc.Trace, bucketing []time.Duration) {
 	cs.Rate = calcRate(cs.NumTotal(), cs.Newest.Sub(cs.Oldest))
 }
 
-func (cs *CategoryStats) merge(other CategoryStats) {
+func (cs *SearchStatsCategory) merge(other SearchStatsCategory) {
 	if other.isZero() {
 		return
 	}
@@ -157,7 +157,7 @@ func (cs *CategoryStats) merge(other CategoryStats) {
 }
 
 // NumTotal returns the total number of traces represented in the category.
-func (cs *CategoryStats) NumTotal() uint64 {
+func (cs *SearchStatsCategory) NumTotal() uint64 {
 	var total uint64
 	total += cs.NumActive
 	if len(cs.NumBucket) > 0 {
@@ -167,6 +167,10 @@ func (cs *CategoryStats) NumTotal() uint64 {
 	return total
 }
 
+//
+//
+//
+
 func calcRate(n uint64, d time.Duration) float64 {
 	if d <= 0 {
 		return 0
@@ -174,7 +178,7 @@ func calcRate(n uint64, d time.Duration) float64 {
 	return float64(n) / d.Seconds()
 }
 
-func combineStats(a, b Stats) Stats {
+func combineStats(a, b SearchStats) SearchStats {
 	switch {
 	case a.isZero() && b.isZero():
 		return a
@@ -197,14 +201,14 @@ func combineStats(a, b Stats) Stats {
 	}
 
 	slice := append(a.Categories, b.Categories...) // duplicates are possible
-	index := map[string]CategoryStats{}            // duplicates not possible
+	index := map[string]SearchStatsCategory{}      // duplicates not possible
 	for _, c := range slice {
 		target := index[c.Name] // can be zero
 		target.merge(c)         // TODO: if/when it changes, error checking
 		index[c.Name] = target  // TODO: pointers?
 	}
 
-	categories := make([]CategoryStats, 0, len(index))
+	categories := make([]SearchStatsCategory, 0, len(index))
 	for _, c := range index {
 		categories = append(categories, c) // TODO: allocs
 	}
@@ -213,7 +217,7 @@ func combineStats(a, b Stats) Stats {
 		return categories[i].Name < categories[j].Name
 	})
 
-	return Stats{
+	return SearchStats{
 		Bucketing:  a.Bucketing,
 		Categories: categories,
 	}
@@ -223,4 +227,57 @@ var ErrBadMerge = fmt.Errorf("bad merge")
 
 func badMerge(what string, dst, src any) error {
 	return fmt.Errorf("%w: %s: %v ↯ %v", ErrBadMerge, what, dst, src)
+}
+
+var DefaultBucketing = []time.Duration{
+	0 * time.Millisecond,
+	1 * time.Millisecond,
+	5 * time.Millisecond,
+	10 * time.Millisecond,
+	25 * time.Millisecond,
+	50 * time.Millisecond,
+	100 * time.Millisecond,
+	1000 * time.Millisecond,
+}
+
+const (
+	searchLimitMin = 1
+	searchLimitDef = 10
+	searchLimitMax = 1000
+)
+
+func olderOf(a, b time.Time) time.Time {
+	switch {
+	case !a.IsZero() && !b.IsZero():
+		if a.Before(b) {
+			return a
+		}
+		return b
+	case !a.IsZero() && b.IsZero():
+		return a
+	case a.IsZero() && !b.IsZero():
+		return b
+	case a.IsZero() && b.IsZero():
+		return time.Time{}
+	default:
+		panic("unreachable")
+	}
+}
+
+func newerOf(a, b time.Time) time.Time {
+	switch {
+	case !a.IsZero() && !b.IsZero():
+		if a.After(b) {
+			return a
+		}
+		return b
+	case !a.IsZero() && b.IsZero():
+		return a
+	case a.IsZero() && !b.IsZero():
+		return b
+	case a.IsZero() && b.IsZero():
+		return time.Time{}
+	default:
+		panic("unreachable")
+	}
 }

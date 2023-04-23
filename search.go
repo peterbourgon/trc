@@ -1,4 +1,4 @@
-package trcstore
+package trc
 
 import (
 	"context"
@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/peterbourgon/trc"
 )
 
 // Searcher describes the ability to search over a collection of traces. It's
@@ -89,17 +87,17 @@ func (req *SearchRequest) Normalize() (problems []string) {
 
 	switch {
 	case req.Limit <= 0:
-		req.Limit = queryLimitDef
-	case req.Limit < queryLimitMin:
-		req.Limit = queryLimitMin
-	case req.Limit > queryLimitMax:
-		req.Limit = queryLimitMax
+		req.Limit = searchLimitDef
+	case req.Limit < searchLimitMin:
+		req.Limit = searchLimitMin
+	case req.Limit > searchLimitMax:
+		req.Limit = searchLimitMax
 	}
 
 	return problems
 }
 
-func (req *SearchRequest) Allow(tr trc.Trace) bool {
+func (req *SearchRequest) Allow(tr Trace) bool {
 	if len(req.IDs) > 0 {
 		var found bool
 		for _, id := range req.IDs {
@@ -167,7 +165,7 @@ func (req *SearchRequest) Allow(tr trc.Trace) bool {
 
 // SearchResponse is the result of performing a search request.
 type SearchResponse struct {
-	Stats    Stats            `json:"stats"`
+	Stats    SearchStats      `json:"stats"`
 	Total    int              `json:"total"`
 	Matched  int              `json:"matched"`
 	Selected []*SelectedTrace `json:"selected"`
@@ -202,7 +200,7 @@ type MultiSearcher []Searcher
 // Search implements Searcher, by making concurrent search requests, and
 // gathering results into a single response.
 func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
-	tr := trc.FromContext(ctx)
+	tr := FromContext(ctx)
 	begin := time.Now()
 
 	type tuple struct {
@@ -215,7 +213,7 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	tuplec := make(chan tuple, len(ms))
 	for i, s := range ms {
 		go func(id string, s Searcher) {
-			ctx, _ := trc.Prefix(ctx, "<%s>", id)
+			ctx, _ := Prefix(ctx, "<%s>", id)
 			res, err := s.Search(ctx, req)
 			tuplec <- tuple{id, res, err}
 		}(strconv.Itoa(i+1), s)
