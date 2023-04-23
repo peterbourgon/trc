@@ -20,16 +20,15 @@ type Searcher interface {
 // SearchRequest collects parameters that can be used to identify a subset of
 // traces. It's meant to be used as part of a trace API or UI.
 type SearchRequest struct {
-	IDs          []string        `json:"ids,omitempty"`
-	Category     string          `json:"category,omitempty"`
-	IsActive     bool            `json:"is_active,omitempty"`
-	Bucketing    []time.Duration `json:"bucketing,omitempty"`
-	MinDuration  *time.Duration  `json:"min_duration,omitempty"`
-	IsFailed     bool            `json:"is_failed,omitempty"`
-	Query        string          `json:"query,omitempty"`
-	Regexp       *regexp.Regexp  `json:"-"`
-	SearchStacks bool            `json:"search_stacks,omitempty"`
-	Limit        int             `json:"limit,omitempty"`
+	IDs         []string        `json:"ids,omitempty"`
+	Category    string          `json:"category,omitempty"`
+	IsActive    bool            `json:"is_active,omitempty"`
+	Bucketing   []time.Duration `json:"bucketing,omitempty"`
+	MinDuration *time.Duration  `json:"min_duration,omitempty"`
+	IsFailed    bool            `json:"is_failed,omitempty"`
+	Query       string          `json:"query,omitempty"`
+	Regexp      *regexp.Regexp  `json:"-"`
+	Limit       int             `json:"limit,omitempty"`
 }
 
 // String returns a representation of the searchr request that elides default
@@ -145,14 +144,12 @@ func (req *SearchRequest) Allow(ctx context.Context, tr Trace) bool {
 				if req.Regexp.MatchString(ev.What()) {
 					return true
 				}
-				if req.SearchStacks {
-					for _, c := range ev.Stack() {
-						if req.Regexp.MatchString(c.Function()) {
-							return true
-						}
-						if req.Regexp.MatchString(c.FileLine()) {
-							return true
-						}
+				for _, c := range ev.Stack() {
+					if req.Regexp.MatchString(c.Function()) {
+						return true
+					}
+					if req.Regexp.MatchString(c.FileLine()) {
+						return true
 					}
 				}
 			}
