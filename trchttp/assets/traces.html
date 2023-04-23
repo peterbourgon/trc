@@ -118,8 +118,8 @@ function highlightquery() {
 	</th>
 	{{ end -}}
 
-	<th class="failed count">
-		<a href="?{{$query_params}}&failed">Failed</a>
+	<th class="errored count">
+		<a href="?{{$query_params}}&errored">Error</a>
 	</th>
 
 	<th class="total count">
@@ -145,13 +145,13 @@ function highlightquery() {
 
 {{ range .Response.Stats.Categories -}}
 <tr class="category">
-	{{ $category_name       := .Name                              -}}
-	{{ $category_class_name := category2class .Name               -}}
-	{{ $num_active          := .NumActive                         -}}
-	{{ $num_failed          := .NumFailed                         -}}
-	{{ $num_total           := .NumTotal                          -}}
-	{{ $pct_active          := uint64percent $num_active $num_total -}}
-	{{ $pct_failed          := uint64percent $num_failed $num_total -}}
+	{{ $category_name       := .Name                                 -}}
+	{{ $category_class_name := category2class .Name                  -}}
+	{{ $num_active          := .NumActive                            -}}
+	{{ $num_errored         := .NumErrored                           -}}
+	{{ $num_total           := .NumTotal                             -}}
+	{{ $pct_active          := uint64percent $num_active $num_total  -}}
+	{{ $pct_errored         := uint64percent $num_errored $num_total -}}
 
 	<td class="category text {{$category_class_name}}">
 		<a href="?{{$query_params}}&category={{$category_name}}">{{$category_name}}</a>
@@ -171,9 +171,9 @@ function highlightquery() {
 	</td>
 	{{ end -}}
 
-	<td class="failed count progress {{$category_class_name}}" title="{{$num_failed}} of {{$num_total}}, {{$pct_failed}}%">
-		<div class="progress-bar" style="width:{{$pct_failed}}%;"></div>
-		<a href="?{{$query_params}}&category={{$category_name}}&failed">{{$num_failed}}</a>
+	<td class="errored count progress {{$category_class_name}}" title="{{$num_errored}} of {{$num_total}}, {{$pct_errored}}%">
+		<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
+		<a href="?{{$query_params}}&category={{$category_name}}&errored">{{$num_errored}}</a>
 	</td>
 
 	<td class="total count {{$category_class_name}}" title="{{$num_total}} total traces">
@@ -200,13 +200,13 @@ function highlightquery() {
 
 {{ with .Response.Stats.Overall -}}
 <tr class="category">
-	{{ $category_name       := .Name                              -}}
-	{{ $category_class_name := category2class .Name               -}}
-	{{ $num_active          := .NumActive                         -}}
-	{{ $num_failed          := .NumFailed                         -}}
-	{{ $num_total           := .NumTotal                          -}}
-	{{ $pct_active          := uint64percent $num_active $num_total -}}
-	{{ $pct_failed          := uint64percent $num_failed $num_total -}}
+	{{ $category_name       := .Name                                 -}}
+	{{ $category_class_name := category2class .Name                  -}}
+	{{ $num_active          := .NumActive                            -}}
+	{{ $num_errored         := .NumErrored                           -}}
+	{{ $num_total           := .NumTotal                             -}}
+	{{ $pct_active          := uint64percent $num_active $num_total  -}}
+	{{ $pct_errored         := uint64percent $num_errored $num_total -}}
 
 	<td class="category text {{$category_class_name}}">
 		<a href="?{{$query_params}}">{{$category_name}}</a>
@@ -226,9 +226,9 @@ function highlightquery() {
 	</td>
 	{{ end -}}
 
-	<td class="failed count progress {{$category_class_name}}" title="{{$num_failed}} of {{$num_total}}, {{$pct_failed}}%">
-		<div class="progress-bar" style="width:{{$pct_failed}}%;"></div>
-		{{$num_failed}}
+	<td class="errored count progress {{$category_class_name}}" title="{{$num_errored}} of {{$num_total}}, {{$pct_errored}}%">
+		<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
+		{{$num_errored}}
 	</td>
 
 	<td class="total count {{$category_class_name}}" title="{{$num_total}} total traces">
@@ -275,7 +275,7 @@ function highlightquery() {
 			{{ if .Request.Category    -}}<input type="hidden" name="category"  value="{{.Request.Category}}"    />{{ end -}}
 			{{ if .Request.IsActive    -}}<input type="hidden" name="active"    value="{{.Request.IsActive}}"    />{{ end -}}
 			{{ if .Request.MinDuration -}}<input type="hidden" name="min"       value="{{.Request.MinDuration}}" />{{ end -}}
-			{{ if .Request.IsFailed    -}}<input type="hidden" name="failed"    value="{{.Request.IsFailed}}"    />{{ end -}}
+			{{ if .Request.IsFailed    -}}<input type="hidden" name="errored"    value="{{.Request.IsFailed}}"    />{{ end -}}
 
 			{{ range .Remotes -}}
 				<input type="hidden" name="r" value="{{.}}" />

@@ -66,13 +66,13 @@ func (s *SearchStats) Overall() *SearchStatsCategory {
 // category. Category stats are always part of a parent summary stats, and can
 // also be merged.
 type SearchStatsCategory struct {
-	Name      string    `json:"name"`
-	NumActive uint64    `json:"num_active"` // active
-	NumBucket []uint64  `json:"num_bucket"` // not active and not errored, by minimum duration
-	NumFailed uint64    `json:"num_failed"` // not active and errored
-	Oldest    time.Time `json:"oldest"`
-	Newest    time.Time `json:"newest"`
-	Rate      float64   `json:"rate"`
+	Name       string    `json:"name"`
+	NumActive  uint64    `json:"num_active"`  // active
+	NumBucket  []uint64  `json:"num_bucket"`  // not active and not errored, by minimum duration
+	NumErrored uint64    `json:"num_errored"` // not active and errored
+	Oldest     time.Time `json:"oldest"`
+	Newest     time.Time `json:"newest"`
+	Rate       float64   `json:"rate"`
 }
 
 func newSearchStatsCategory(name string, bucketing []time.Duration) *SearchStatsCategory {
@@ -87,7 +87,7 @@ func (c *SearchStatsCategory) isZero() bool {
 		zeroName       = c.Name == ""
 		zeroNumActive  = c.NumActive == 0
 		zeroNumBucket  = len(c.NumBucket) == 0
-		zeroNumFailed  = c.NumFailed == 0
+		zeroNumFailed  = c.NumErrored == 0
 		zeroOldest     = c.Oldest.IsZero()
 		zeroNewest     = c.Newest.IsZero()
 		zeroRate       = c.Rate == 0
@@ -102,7 +102,7 @@ func (cs *SearchStatsCategory) observe(tr Trace, bucketing []time.Duration) {
 		finished = tr.Finished()
 		active   = !finished
 		bucket   = finished && !tr.Errored()
-		failed   = finished && tr.Errored()
+		errored  = finished && tr.Errored()
 	)
 
 	switch {
@@ -118,8 +118,8 @@ func (cs *SearchStatsCategory) observe(tr Trace, bucketing []time.Duration) {
 			cs.NumBucket[i]++
 		}
 
-	case failed:
-		cs.NumFailed++
+	case errored:
+		cs.NumErrored++
 	}
 
 	cs.Oldest = olderOf(cs.Oldest, start)
@@ -149,7 +149,7 @@ func (cs *SearchStatsCategory) merge(other SearchStatsCategory) {
 		cs.NumBucket[i] += other.NumBucket[i]
 	}
 
-	cs.NumFailed += other.NumFailed
+	cs.NumErrored += other.NumErrored
 
 	cs.Oldest = olderOf(cs.Oldest, other.Oldest)
 	cs.Newest = newerOf(cs.Newest, other.Newest)
@@ -163,7 +163,7 @@ func (cs *SearchStatsCategory) NumTotal() uint64 {
 	if len(cs.NumBucket) > 0 {
 		total += cs.NumBucket[0] // always 0s
 	}
-	total += cs.NumFailed
+	total += cs.NumErrored
 	return total
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -83,38 +84,6 @@ func newLazyErrorEvent(format string, args ...any) Event {
 //
 //
 
-type lazyFrame struct {
-	pc uintptr
-}
-
-func getLazyCallStack(skip int) []Frame {
-	pcs := [512]uintptr{}
-	n := runtime.Callers(skip+1, pcs[:])
-	cs := make([]Frame, n)
-	for i := range cs {
-		cs[i] = lazyFrame{pcs[i]}
-	}
-	return cs
-}
-
-func (f lazyFrame) Function() string {
-	return runtime.FuncForPC(f.pc).Name()
-}
-
-func (f lazyFrame) FileLine() string {
-	file, line := runtime.FuncForPC(f.pc).FileLine(f.pc)
-	{
-		pre := pkgPrefix(f.Function())
-		post := pathSuffix(file)
-		if pre == "" {
-			file = post
-		} else {
-			file = pre + "/" + post
-		}
-	}
-	return fmt.Sprintf("%s:%d", file, line)
-}
-
 //
 //
 //
@@ -137,6 +106,51 @@ func (z *lazyStringer) String() string {
 //
 //
 //
+
+type lazyFrame struct {
+	pc uintptr
+
+	once     sync.Once
+	function string
+	fileline string
+}
+
+func getLazyCallStack(skip int) []Frame {
+	pcs := [512]uintptr{}
+	n := runtime.Callers(skip+1, pcs[:])
+	cs := make([]Frame, n)
+	for i := range cs {
+		cs[i] = &lazyFrame{pc: pcs[i]}
+	}
+	return cs
+}
+
+func (f *lazyFrame) init() {
+	f.once.Do(func() {
+		f.function = runtime.FuncForPC(f.pc).Name()
+		file, line := runtime.FuncForPC(f.pc).FileLine(f.pc)
+		{
+			pre := pkgPrefix(f.function)
+			post := pathSuffix(file)
+			if pre == "" {
+				file = post
+			} else {
+				file = pre + "/" + post
+			}
+		}
+		f.fileline = fmt.Sprintf("%s:%d", file, line)
+	})
+}
+
+func (f *lazyFrame) Function() string {
+	f.init()
+	return f.function
+}
+
+func (f *lazyFrame) FileLine() string {
+	f.init()
+	return f.fileline
+}
 
 func pkgPrefix(funcName string) string {
 	const pathSep = "/"

@@ -80,19 +80,29 @@ func (s *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 
 	tr.Tracef("calculated stats")
 
+	tr.Tracef("selecting traces...")
+
 	var allowed Traces
-	for _, tr := range overall {
-		if req.Allow(tr) {
-			allowed = append(allowed, tr)
+	{
+		_, _, finish := Region(ctx, "Collector.Search:Allow")
+		for _, tr := range overall {
+			if req.Allow(ctx, tr) {
+				allowed = append(allowed, tr)
+			}
 		}
+		finish()
 	}
 
 	matched := len(allowed)
+
+	tr.Tracef("sorting traces...")
 
 	sort.Sort(allowed)
 	if len(allowed) > req.Limit {
 		allowed = allowed[:req.Limit]
 	}
+
+	tr.Tracef("limiting traces...")
 
 	selected := make([]*SelectedTrace, len(allowed))
 	for i := range allowed {

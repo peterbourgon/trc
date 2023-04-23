@@ -81,7 +81,7 @@ table#summary td.progress div.progress-bar {
 }
 
 /* error cells show percent from the the right side */
-table#summary td.failed div.progress-bar {
+table#summary td.errored div.progress-bar {
 	right: 0;
 	background-color: rgba(224, 0, 0, 0.10);
 }
@@ -295,54 +295,6 @@ div.stack div.frame {
 div.stack table td {
 	text-align: left;
 	color: #666;
-}
-
-/*
- * problems
- */
-
-div#problems {
-	position: fixed;
-	bottom: 1em;
-	right: 1em;
-	display: flex;
-	flex-direction: column;
-	max-width: 66%;
-	font-size: smaller;
-
-	/* animation: problems 2s 1; */
-	/* animation-delay: 4s; */
-	/* animation-fill-mode: forwards; */
-	/* -webkit-animation: problems 2s 1; */
-	/* -webkit-animation-delay: 4s; */
-	/* -webkit-animation-fill-mode: forwards; */
-}
-
-@keyframes problems {
-	from {
-		opacity: 1;
-	}
-
-	to {
-		opacity: 0.5;
-	}
-}
-
-@-webkit-keyframes problems {
-	from {
-		opacity: 1;
-	}
-
-	to {
-		opacity: 0.5;
-	}
-}
-
-div#problems .problem {
-	margin: 0.1em;
-	padding: 0.1em 1em;
-	background-color: pink;
-	border: solid 1px red;
 }
 
 /*
