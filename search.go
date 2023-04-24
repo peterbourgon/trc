@@ -11,14 +11,12 @@ import (
 	"time"
 )
 
-// Searcher describes the ability to search over a collection of traces. It's
-// implemented by the collector, and used by the HTTP package.
+// Searcher describes the ability to search over a collection of traces.
 type Searcher interface {
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
 }
 
-// SearchRequest collects parameters that can be used to identify a subset of
-// traces. It's meant to be used as part of a trace API or UI.
+// SearchRequest specifies parameters that identify a subset of traces.
 type SearchRequest struct {
 	IDs         []string        `json:"ids,omitempty"`
 	Category    string          `json:"category,omitempty"`
@@ -31,7 +29,38 @@ type SearchRequest struct {
 	Limit       int             `json:"limit,omitempty"`
 }
 
-// String returns a representation of the searchr request that elides default
+// Normalize ensures the request is valid, returning any problems encountered.
+func (req *SearchRequest) Normalize() (problems []string) {
+	if req.Bucketing == nil {
+		req.Bucketing = DefaultBucketing
+	}
+
+	switch {
+	case req.Regexp != nil && req.Query == "":
+		req.Query = req.Regexp.String()
+	case req.Regexp == nil && req.Query != "":
+		re, err := regexp.Compile(req.Query)
+		switch {
+		case err == nil:
+			req.Regexp = re
+		case err != nil:
+			problems = append(problems, err.Error())
+		}
+	}
+
+	switch {
+	case req.Limit <= 0:
+		req.Limit = searchLimitDef
+	case req.Limit < searchLimitMin:
+		req.Limit = searchLimitMin
+	case req.Limit > searchLimitMax:
+		req.Limit = searchLimitMax
+	}
+
+	return problems
+}
+
+// String returns a representation of the search request that elides default
 // values and is suitable for use in a trace event or log statement.
 func (req *SearchRequest) String() string {
 	var elems []string
@@ -66,37 +95,7 @@ func (req *SearchRequest) String() string {
 	return "{" + strings.Join(elems, " ") + "}"
 }
 
-// Normalize ensures the request is valid, returning any problems encountered.
-func (req *SearchRequest) Normalize() (problems []string) {
-	if req.Bucketing == nil {
-		req.Bucketing = DefaultBucketing
-	}
-
-	switch {
-	case req.Regexp != nil && req.Query == "":
-		req.Query = req.Regexp.String()
-	case req.Regexp == nil && req.Query != "":
-		re, err := regexp.Compile(req.Query)
-		switch {
-		case err == nil:
-			req.Regexp = re
-		case err != nil:
-			problems = append(problems, err.Error())
-		}
-	}
-
-	switch {
-	case req.Limit <= 0:
-		req.Limit = searchLimitDef
-	case req.Limit < searchLimitMin:
-		req.Limit = searchLimitMin
-	case req.Limit > searchLimitMax:
-		req.Limit = searchLimitMax
-	}
-
-	return problems
-}
-
+// Allow returns true if the search request matches the provided trace.
 func (req *SearchRequest) Allow(ctx context.Context, tr Trace) bool {
 	if len(req.IDs) > 0 {
 		var found bool
@@ -133,30 +132,20 @@ func (req *SearchRequest) Allow(ctx context.Context, tr Trace) bool {
 	}
 
 	if req.Regexp != nil {
-		if matchedSomething := func() bool {
-			if req.Regexp.MatchString(tr.ID()) {
+		for _, ev := range tr.Events() {
+			if req.Regexp.MatchString(ev.What()) {
 				return true
 			}
-			if req.Regexp.MatchString(tr.Category()) {
-				return true
-			}
-			for _, ev := range tr.Events() {
-				if req.Regexp.MatchString(ev.What()) {
+			for _, c := range ev.Stack() {
+				if req.Regexp.MatchString(c.Function()) {
 					return true
 				}
-				for _, c := range ev.Stack() {
-					if req.Regexp.MatchString(c.Function()) {
-						return true
-					}
-					if req.Regexp.MatchString(c.FileLine()) {
-						return true
-					}
+				if req.Regexp.MatchString(c.FileLine()) {
+					return true
 				}
 			}
-			return false
-		}(); !matchedSomething {
-			return false
 		}
+		return false
 	}
 
 	return true
@@ -176,6 +165,8 @@ type SearchResponse struct {
 	Duration time.Duration    `json:"duration"`
 }
 
+// Sources returns all of the unique "Via" sources among all of the selected
+// traces in the response.
 func (res *SearchResponse) Sources() []string {
 	index := map[string]struct{}{}
 	for _, x := range res.Selected {
@@ -225,7 +216,11 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	tr.Tracef("scattered request count %d", len(ms))
 
 	// Gather.
-	aggregate := &SearchResponse{}
+	aggregate := &SearchResponse{
+		Stats: SearchStats{
+			Bucketing: req.Bucketing,
+		},
+	}
 	for i := 0; i < cap(tuplec); i++ {
 		t := <-tuplec
 		switch {

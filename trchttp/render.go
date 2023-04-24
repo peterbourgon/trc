@@ -307,6 +307,8 @@ func humanizefloat(f float64) string {
 		return fmt.Sprintf("%.1fK", f/1000) // 5142 -> 5.1K
 	case f > 1:
 		return fmt.Sprintf("%.0f", f) // 812.3 -> 821
+	case f == 0:
+		return "0"
 	default:
 		return fmt.Sprintf("%0.01f", f) // 0.15845 -> 0.1
 	}

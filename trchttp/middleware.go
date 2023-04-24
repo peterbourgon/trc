@@ -9,7 +9,7 @@ import (
 )
 
 // NewTraceFunc is a function that produces a new trace in a provided context.
-// It's implemented by the trace collector.
+// Typically, callers should use the NewTrace method of a collector.
 type NewTraceFunc func(context.Context, string) (context.Context, trc.Trace)
 
 // CategorizeFunc is a function that produces a category string from an HTTP

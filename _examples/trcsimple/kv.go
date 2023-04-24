@@ -161,7 +161,7 @@ func NewStore() *Store {
 }
 
 func (s *Store) Set(ctx context.Context, key, val string) {
-	_, _, finish := eztrc.Region(ctx, "Set %s", key)
+	_, _, finish := eztrc.Region(ctx, "Store.Set", key)
 	defer finish()
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
@@ -170,7 +170,7 @@ func (s *Store) Set(ctx context.Context, key, val string) {
 }
 
 func (s *Store) Get(ctx context.Context, key string) (string, bool) {
-	_, _, finish := eztrc.Region(ctx, "Get %s", key)
+	_, _, finish := eztrc.Region(ctx, "Store.Get", key)
 	defer finish()
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
@@ -180,7 +180,7 @@ func (s *Store) Get(ctx context.Context, key string) (string, bool) {
 }
 
 func (s *Store) Del(ctx context.Context, key string) bool {
-	_, _, finish := eztrc.Region(ctx, "Del %s", key)
+	_, _, finish := eztrc.Region(ctx, "Store.Del", key)
 	defer finish()
 	s.mtx.Lock()
 	defer s.mtx.Unlock()

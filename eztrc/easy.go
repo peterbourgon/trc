@@ -8,21 +8,29 @@ import (
 	"github.com/peterbourgon/trc/trchttp"
 )
 
-var (
-	Region = trc.Region
-	Prefix = trc.Prefix
-)
+// Region is an alias for [trc.Region].
+var Region = trc.Region
+
+// Prefix is an alias for [trc.Prefix].
+var Prefix = trc.Prefix
 
 var collector = trc.NewCollector()
 
+// Handler returns an HTTP handler serving the package global trace collector.
 func Handler() http.Handler {
 	return trchttp.NewServer(collector)
 }
 
+// Middleware returns an HTTP middleware that adds a trace to the package global
+// trace collector for each received request. The category is determined by the
+// categorize function.
 func Middleware(categorize trchttp.CategorizeFunc) func(http.Handler) http.Handler {
 	return trchttp.Middleware(collector.NewTrace, categorize)
 }
 
+// New creates a new trace in the package global trace collector, injects it
+// into the given context, and returns a new derived context containing the
+// trace, and the trace itself.
 func New(ctx context.Context, category string) (context.Context, trc.Trace) {
 	return collector.NewTrace(ctx, category)
 }

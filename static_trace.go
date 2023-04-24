@@ -151,12 +151,16 @@ func (c StaticFrame) FileLine() string { return c.StaticFileLine }
 //
 //
 
+// DurationString is a [time.Duration] that JSON marshals as a string rather
+// than int64 nanoseconds.
 type DurationString time.Duration
 
+// MarshalJSON implements [json.Marshaler].
 func (d *DurationString) MarshalJSON() ([]byte, error) {
 	return json.Marshal(time.Duration(*d).String())
 }
 
+// UnmarshalJSON implements [json.Marshaler].
 func (d *DurationString) UnmarshalJSON(data []byte) error {
 	if dur, err := time.ParseDuration(strings.Trim(string(data), `"`)); err == nil {
 		*d = DurationString(dur)

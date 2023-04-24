@@ -8,13 +8,11 @@ import (
 	"time"
 )
 
-// Event represents a trace statement in user code.
+// Event is a traced event, similar to a log event, stored as part of a trace.
 //
 // Events may be retained for an indeterminate length of time, and accessed
 // concurrently by multiple goroutines. Once created, an event is expected to be
-// immutable. In particular, the fmt.Stringer implementation of the What field
-// must be safe for concurrent use, including any values it may capture by
-// reference.
+// immutable.
 type Event interface {
 	When() time.Time
 	What() string
@@ -84,10 +82,6 @@ func newLazyErrorEvent(format string, args ...any) Event {
 //
 //
 
-//
-//
-//
-
 type stringer string
 
 func (z stringer) String() string {
@@ -97,10 +91,17 @@ func (z stringer) String() string {
 type lazyStringer struct {
 	fmt  string
 	args []any
+
+	once sync.Once
+	str  string
 }
 
 func (z *lazyStringer) String() string {
-	return fmt.Sprintf(z.fmt, z.args...)
+	z.once.Do(func() {
+		z.str = fmt.Sprintf(z.fmt, z.args...)
+	})
+
+	return z.str
 }
 
 //

@@ -185,11 +185,19 @@ function highlightquery() {
 	</td>
 
 	<td class="oldest {{$category_class_name}}" title="{{.Oldest}}">
+		{{ if not .Oldest.IsZero }}
 		{{humanizeduration (timesince .Oldest)}}
+		{{ else }}
+		n/a
+		{{ end }}
 	</td>
 
 	<td class="newest {{$category_class_name}}" title="{{.Newest}}">
+		{{ if not .Newest.IsZero }}
 		{{humanizeduration (timesince .Newest)}}
+		{{ else }}
+		n/a
+		{{ end }}
 	</td>
 
 	<td class="rate numeric {{$category_class_name}}">
@@ -240,11 +248,19 @@ function highlightquery() {
 	</td>
 
 	<td class="oldest {{$category_class_name}}" title="{{.Oldest}}">
+		{{ if not .Oldest.IsZero }}
 		{{humanizeduration (timesince .Oldest)}}
+		{{ else }}
+		n/a
+		{{ end }}
 	</td>
 
 	<td class="newest {{$category_class_name}}" title="{{.Newest}}">
+		{{ if not .Newest.IsZero }}
 		{{humanizeduration (timesince .Newest)}}
+		{{ else }}
+		n/a
+		{{ end }}
 	</td>
 
 	<td class="rate numeric {{$category_class_name}}">
