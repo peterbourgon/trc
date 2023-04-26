@@ -37,9 +37,11 @@ func main() {
 
 	eztrc.Collector().Resize(context.Background(), 500)
 
+	prefix := trcexp.LoggerTracePrefixDefault
+	logger := log.New(log.Writer(), "", log.LstdFlags|log.Lmicroseconds|log.LUTC)
 	eztrc.Collector().SetNewTrace(context.Background(), func(ctx context.Context, category string) (context.Context, trc.Trace) {
 		ctx, tr := trc.NewTrace(ctx, category)
-		tr = &trcexp.LoggerTrace{Trace: tr, Logger: log.New(log.Writer(), "", log.LstdFlags|log.Lmicroseconds|log.LUTC)}
+		tr = &trcexp.LoggerTrace{Trace: tr, Prefix: prefix, Logger: logger}
 		ctx = trc.ToContext(ctx, tr)
 		return ctx, tr
 	})

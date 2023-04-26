@@ -79,8 +79,8 @@ func main() {
 	}
 
 	go func() {
-		http.Handle("/global", trcGlobal)
-		log.Printf("http://localhost:8080/global")
+		http.Handle("/trc", trcGlobal)
+		log.Printf("http://localhost:8080/trc")
 		log.Fatal(http.ListenAndServe("localhost:8080", nil))
 	}()
 

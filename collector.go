@@ -98,7 +98,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 		}
 	}
 
-	tr.Tracef("gathered traces")
+	tr.Tracef("trace count %d, category count %d, matched count %d", total, len(stats.Categories), len(allowed))
 
 	matched := len(allowed)
 	sort.Sort(allowed)
