@@ -13,15 +13,15 @@ import (
 // Each unique category observed by NewTrace creates a persistent ring buffer of traces
 // with a fixed size.
 type Collector struct {
-	categories *trcringbuf.RingBuffers[Trace]
-	newTrace   func(ctx context.Context, category string) (context.Context, Trace)
+	constructor func(ctx context.Context, category string) (context.Context, Trace)
+	categories  *trcringbuf.RingBuffers[Trace]
 }
 
 // CollectorConfig defines the configuration parameters for a collector.
 type CollectorConfig struct {
-	// NewTrace is called by the collector to create a new trace for a given
-	// category. If nil, the default constructor is NewTrace.
-	NewTrace func(ctx context.Context, category string) (context.Context, Trace)
+	// Constructor is called by the collector to create a new trace for a given
+	// category. If nil, the default constructor is [NewTrace].
+	Constructor func(ctx context.Context, category string) (context.Context, Trace)
 
 	// MaxTracesPerCategory specifies how many recent traces are maintained in
 	// the collector for each unique category. The default value is 1000, the
@@ -37,9 +37,10 @@ const (
 
 // NewCollector returns a trace collector based on the provided config.
 func NewCollector(cfg CollectorConfig) *Collector {
-	if cfg.NewTrace == nil {
-		cfg.NewTrace = NewTrace
+	if cfg.Constructor == nil {
+		cfg.Constructor = NewTrace
 	}
+
 	switch {
 	case cfg.MaxTracesPerCategory <= 0:
 		cfg.MaxTracesPerCategory = tracesPerCategoryDef
@@ -48,9 +49,10 @@ func NewCollector(cfg CollectorConfig) *Collector {
 	case cfg.MaxTracesPerCategory > tracesPerCategoryMax:
 		cfg.MaxTracesPerCategory = tracesPerCategoryMax
 	}
+
 	return &Collector{
-		categories: trcringbuf.NewRingBuffers[Trace](cfg.MaxTracesPerCategory),
-		newTrace:   cfg.NewTrace,
+		constructor: cfg.Constructor,
+		categories:  trcringbuf.NewRingBuffers[Trace](cfg.MaxTracesPerCategory),
 	}
 }
 
@@ -69,7 +71,7 @@ func (c *Collector) NewTrace(ctx context.Context, category string) (context.Cont
 		return ctx, tr
 	}
 
-	ctx, tr := c.newTrace(ctx, category)
+	ctx, tr := c.constructor(ctx, category)
 	c.categories.GetOrCreate(category).Add(tr)
 	return ctx, tr
 }
@@ -126,6 +128,7 @@ func (c *Collector) Resize(ctx context.Context, maxTracesPerCategory int) {
 	c.categories.Resize(maxTracesPerCategory)
 }
 
-func (c *Collector) SetNewTrace(ctx context.Context, newTrace func(ctx context.Context, category string) (context.Context, Trace)) {
-	c.newTrace = newTrace
+// SetConstructorEXPERIMENTAL changes the constructor used to produce new traces.
+func (c *Collector) SetConstructorEXPERIMENTAL(ctx context.Context, newTrace func(ctx context.Context, category string) (context.Context, Trace)) {
+	c.constructor = newTrace
 }

@@ -35,16 +35,22 @@ func main() {
 		trcHandler = eztrc.Middleware(func(r *http.Request) string { return "traces" })(trcHandler)
 	}
 
-	eztrc.Collector().Resize(context.Background(), 500)
+	{
+		var (
+			ctx         = context.Background()
+			prefix      = trcexp.LoggerTracePrefixDefault
+			logger      = log.New(log.Writer(), "", log.LstdFlags|log.Lmicroseconds|log.LUTC)
+			constructor = func(ctx context.Context, category string) (context.Context, trc.Trace) {
+				ctx, tr := trc.NewTrace(ctx, category)
+				tr = &trcexp.LoggerTrace{Trace: tr, Prefix: prefix, Logger: logger}
+				ctx = trc.ToContext(ctx, tr)
+				return ctx, tr
+			}
+		)
 
-	prefix := trcexp.LoggerTracePrefixDefault
-	logger := log.New(log.Writer(), "", log.LstdFlags|log.Lmicroseconds|log.LUTC)
-	eztrc.Collector().SetNewTrace(context.Background(), func(ctx context.Context, category string) (context.Context, trc.Trace) {
-		ctx, tr := trc.NewTrace(ctx, category)
-		tr = &trcexp.LoggerTrace{Trace: tr, Prefix: prefix, Logger: logger}
-		ctx = trc.ToContext(ctx, tr)
-		return ctx, tr
-	})
+		eztrc.Collector().Resize(ctx, 500)
+		eztrc.Collector().SetConstructorEXPERIMENTAL(ctx, constructor)
+	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/api", http.StripPrefix("/api", apiHandler))
