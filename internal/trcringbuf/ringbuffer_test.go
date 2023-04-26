@@ -143,6 +143,37 @@ func TestRingBufferStats(t *testing.T) {
 	}
 }
 
+func TestRingBufferResize(t *testing.T) {
+	rb := NewRingBuffer[int](3)
+
+	top := func(k int) []int {
+		res := []int{}
+		rb.Walk(func(i int) error {
+			if k >= 0 && len(res) >= k {
+				return errors.New("done")
+			}
+			res = append(res, i)
+			return nil
+		})
+		return res
+	}
+
+	rb.Add(1)
+	rb.Add(2)
+	rb.Add(3)
+	assertEqual(t, top(3), []int{3, 2, 1})
+	rb.Resize(2)
+	assertEqual(t, top(3), []int{3, 2})
+	rb.Resize(4)
+	assertEqual(t, top(3), []int{3, 2})
+	rb.Add(4)
+	rb.Add(5)
+	rb.Add(6)
+	rb.Add(7)
+	assertEqual(t, top(3), []int{7, 6, 5})
+	assertEqual(t, top(10), []int{7, 6, 5, 4})
+}
+
 func BenchmarkRingBuffer(b *testing.B) {
 	for _, cap := range []int{100, 1000, 10000, 100000} {
 		b.Run(strconv.Itoa(cap), func(b *testing.B) {

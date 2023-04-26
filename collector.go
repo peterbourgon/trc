@@ -2,7 +2,6 @@ package trc
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"time"
 
@@ -10,6 +9,9 @@ import (
 )
 
 // Collector maintains recent traces, in memory, grouped by category.
+//
+// Each unique category observed by NewTrace creates a persistent ring buffer of traces
+// with a fixed size.
 type Collector struct {
 	categories *trcringbuf.RingBuffers[Trace]
 	newTrace   func(ctx context.Context, category string) (context.Context, Trace)
@@ -17,115 +19,109 @@ type Collector struct {
 
 // CollectorConfig defines the configuration parameters for a collector.
 type CollectorConfig struct {
-	// NewTraceFunc is called by the collector to create a new trace for a given
-	// category. If nil, the default constructor is [NewTrace].
-	NewTraceFunc func(ctx context.Context, category string) (context.Context, Trace)
+	// NewTrace is called by the collector to create a new trace for a given
+	// category. If nil, the default constructor is NewTrace.
+	NewTrace func(ctx context.Context, category string) (context.Context, Trace)
 
-	// MaxTracesPerCategory specifies how many traces are maintained in the
-	// collector for each unique category. If zero, the default value is 1000.
+	// MaxTracesPerCategory specifies how many recent traces are maintained in
+	// the collector for each unique category. The default value is 1000, the
+	// minimum value is 10, and the maximum value is 10000.
 	MaxTracesPerCategory int
 }
 
-const defaultMaxTracesPerCategory = 1000
+const (
+	tracesPerCategoryMin = 10
+	tracesPerCategoryDef = 1000
+	tracesPerCategoryMax = 10000
+)
 
-// NewCollector is a convenience function that calls NewCollectorConfig with a
-// zero value config, yielding a collector with default config parameters.
-func NewCollector() *Collector {
-	return NewCollectorConfig(CollectorConfig{})
-}
-
-// NewCollectorConfig returns a trace collector based on the provided config.
-func NewCollectorConfig(cfg CollectorConfig) *Collector {
-	if cfg.NewTraceFunc == nil {
-		cfg.NewTraceFunc = NewTrace
+// NewCollector returns a trace collector based on the provided config.
+func NewCollector(cfg CollectorConfig) *Collector {
+	if cfg.NewTrace == nil {
+		cfg.NewTrace = NewTrace
 	}
-	if cfg.MaxTracesPerCategory <= 0 {
-		cfg.MaxTracesPerCategory = defaultMaxTracesPerCategory
+	switch {
+	case cfg.MaxTracesPerCategory <= 0:
+		cfg.MaxTracesPerCategory = tracesPerCategoryDef
+	case cfg.MaxTracesPerCategory < tracesPerCategoryMin:
+		cfg.MaxTracesPerCategory = tracesPerCategoryMin
+	case cfg.MaxTracesPerCategory > tracesPerCategoryMax:
+		cfg.MaxTracesPerCategory = tracesPerCategoryMax
 	}
 	return &Collector{
 		categories: trcringbuf.NewRingBuffers[Trace](cfg.MaxTracesPerCategory),
-		newTrace:   cfg.NewTraceFunc,
+		newTrace:   cfg.NewTrace,
 	}
 }
 
+// NewDefaultCollector is a convenience function that calls NewCollector with a
+// zero value config, yielding a collector with default config parameters.
+func NewDefaultCollector() *Collector {
+	return NewCollector(CollectorConfig{})
+}
+
 // NewTrace creates and returns a new trace in the given context, with the given
-// category, via the NewTraceFunc provided in the config. The trace is saved in
-// the collector by its category.
-func (s *Collector) NewTrace(ctx context.Context, category string) (context.Context, Trace) {
+// category, via the NewTrace function provided in the config. The trace is
+// saved in the collector according to its category.
+func (c *Collector) NewTrace(ctx context.Context, category string) (context.Context, Trace) {
 	if tr, ok := MaybeFromContext(ctx); ok {
 		tr.Tracef("(+ %s)", category)
 		return ctx, tr
 	}
 
-	ctx, tr := s.newTrace(ctx, category)
-	s.categories.GetOrCreate(category).Add(tr)
+	ctx, tr := c.newTrace(ctx, category)
+	c.categories.GetOrCreate(category).Add(tr)
 	return ctx, tr
 }
 
 // Search all of the traces in the collector.
-func (s *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
+func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
 	begin := time.Now()
-	_, tr, finish := Region(ctx, "Collector.Search")
+	ctx, tr, finish := Region(ctx, "trc.Collector.Search")
 	defer finish()
 
-	problems := req.Normalize()
-	for _, problem := range problems {
-		tr.Tracef("normalize search request: %v", problem)
-	}
+	req.Normalize(ctx)
 
-	tr.Tracef("walking traces...")
-
-	var overall Traces // TODO: allocs
-	for cat, rb := range s.categories.GetAll() {
-		if err := rb.Walk(func(tr Trace) error {
-			overall = append(overall, tr)
-			return nil
-		}); err != nil {
-			return nil, fmt.Errorf("gathering traces (%s): %w", cat, err)
-		}
-	}
-
-	total := len(overall)
-
-	tr.Tracef("walked %d, calculating stats...", total)
-
-	stats := newSearchStatsFrom(req.Bucketing, overall)
-
-	tr.Tracef("category count %d, finding matching traces...", len(stats.Categories))
-
-	var allowed Traces
-	{
-		_, _, finish := Region(ctx, "Collector.Search:Allow")
-		for _, tr := range overall {
+	var (
+		stats   = newSearchStats(req.Bucketing)
+		total   int
+		allowed Traces
+	)
+	for _, rb := range c.categories.GetAll() {
+		trs := rb.Get()
+		stats.observe(trs)
+		total += len(trs)
+		for _, tr := range trs {
 			if req.Allow(ctx, tr) {
 				allowed = append(allowed, tr)
 			}
 		}
-		finish()
 	}
 
+	tr.Tracef("gathered traces")
+
 	matched := len(allowed)
-
-	tr.Tracef("matched %d, sorting and limiting...", matched)
-
 	sort.Sort(allowed)
 	if len(allowed) > req.Limit {
 		allowed = allowed[:req.Limit]
 	}
 
 	selected := make([]*SelectedTrace, len(allowed))
-	for i := range allowed {
-		selected[i] = NewSelectedTrace(allowed[i])
+	for i, tr := range allowed {
+		selected[i] = NewSelectedTrace(tr)
 	}
-
-	tr.Tracef("selected %d", len(selected))
 
 	return &SearchResponse{
 		Stats:    stats,
 		Total:    total,
 		Matched:  matched,
 		Selected: selected,
-		Problems: problems,
 		Duration: time.Since(begin),
 	}, nil
+}
+
+// Resize all of the per-category ring buffers to the provided capacity,
+// truncating older traces when necessary.
+func (c *Collector) Resize(ctx context.Context, maxTracesPerCategory int) {
+	c.categories.Resize(maxTracesPerCategory)
 }

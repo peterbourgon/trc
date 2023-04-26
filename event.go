@@ -170,3 +170,43 @@ func pathSuffix(path string) string {
 	}
 	return path[strings.LastIndex(path[:lastSep], pathSep)+1:]
 }
+
+//
+//
+//
+
+type memoizedFrames struct {
+	mtx sync.Mutex
+	set map[uintptr]*lazyFrame
+}
+
+func (f *memoizedFrames) get(pc uintptr) *lazyFrame {
+	f.mtx.Lock()
+	defer f.mtx.Unlock()
+
+	if f.set == nil {
+		f.set = map[uintptr]*lazyFrame{}
+	}
+
+	ff, ok := f.set[pc]
+	if ok {
+		return ff
+	}
+
+	ff = &lazyFrame{pc: pc}
+	f.set[pc] = ff
+
+	return ff
+}
+
+var memoizedFramesVar memoizedFrames
+
+func getMemoizedCallStack(skip int) []Frame {
+	pcs := [512]uintptr{}
+	n := runtime.Callers(skip+1, pcs[:])
+	cs := make([]Frame, n)
+	for i := range cs {
+		cs[i] = memoizedFramesVar.get(pcs[i])
+	}
+	return cs
+}

@@ -63,7 +63,6 @@ table#summary tr:nth-last-child(2) {
 
 table#summary tr:last-child {
 	border-bottom: 0;
-	background: none;
 }
 
 table#summary td.progress {
@@ -83,11 +82,12 @@ table#summary td.progress div.progress-bar {
 /* error cells show percent from the the right side */
 table#summary td.errored div.progress-bar {
 	right: 0;
-	background-color: rgba(224, 0, 0, 0.10);
+	background-color: rgba(224, 0, 0, 0.2);
 }
 
 table#summary th.newest,
 th.oldest {
+	width: 8ch;
 	min-width: 8ch;
 }
 
@@ -95,38 +95,11 @@ th.oldest {
  * topline
  */
 
-div#topline details {
-	display: inline;
-}
-
-div#topline details summary {
-	display: inline;
-}
-
-div#topline details[open] summary::marker {
-	display: none;
-}
-
-div#topline details[open]>div {
-	position: absolute;
-	float: left;
-	margin-left: 1ch;
-	border: solid 2px #000;
-	padding: 1ch 2ch;
-	z-index: 10;
-	background-color: white;
-}
-
-div#topline details[open] summary {
-	font-weight: bold;
-}
-
 div#topline {
 	margin: 4ch 2ch;
 	display: flex;
 	align-items: baseline;
 	flex-direction: column;
-	/* justify-content: space-between; */
 }
 
 div#topline>div {
@@ -136,23 +109,60 @@ div#topline>div {
 	gap: 1ch;
 }
 
+div#topline input#search-box::selection {
+	background-color: yellow;
+}
+
+div#topline input#search-box.invalid::selection {
+	background-color: rgba(224, 0, 0, 0.2);
+}
+
 div#topline-metadata {
 	padding-left: 1ch;
 	padding-top: 1ch;
 }
 
-div#topline-search-problems summary {
-	color: rgb(224, 0, 0);
+div#topline-metadata details summary::-webkit-details-marker {
+	display: none;
 }
 
-input#search-box::selection {
-	background-color: yellow;
+div#topline-metadata details summary::marker {
+	display: none;
+}
+
+div#topline-metadata details {
+	display: inline;
+	cursor: pointer;
+}
+
+div#topline-metadata details summary {
+	display: inline;
+}
+
+div#topline-metadata details[open]>div {
+	position: absolute;
+	float: left;
+	border: solid 1px #000;
+	padding: 1ch 2ch;
+	z-index: 10;
+	background-color: white;
+	cursor: text;
+}
+
+div#topline-metadata details[open] summary {
+	font-weight: bold;
+}
+
+div#topline-search-problems summary {
+	color: red;
+}
+
+div#topline-search-problems details[open]>div {
+	border: solid 1px red;
 }
 
 div#topline-search-problems summary,
-div#topline-search-sources summary {
-	cursor: pointer;
-}
+div#topline-search-sources summary {}
 
 /*
  * traces
@@ -164,8 +174,9 @@ div#traces .trace {
 	margin: 1em;
 }
 
+/* first line of a trace is a metadata header */
 div#traces .trace .metadata {
-	/* first line of a trace is a metadata header */
+	/* */
 }
 
 div#traces .trace .metadata span.right {
@@ -173,15 +184,14 @@ div#traces .trace .metadata span.right {
 }
 
 div#traces .trace .metadata .via {
-	/* background-color: rgba(255, 165, 0, 0.2); */
-	/* opacity: 50%; */
+	/* */
 }
 
 div#traces .trace .metadata .via>a {
 	color: inherit;
 }
 
-span.stacks-link a {
+div#traces .trace .metadata span.stacks-link a {
 	color: #000;
 	text-decoration: none;
 }
@@ -232,7 +242,7 @@ div#traces .trace .events div.event div.delta .progress-bar {
 	z-index: -1;
 }
 
-/* last cell is what, should fill the rest of the page */
+/* last cell is the text, should fill the rest of the page */
 div#traces .trace .events div.event div.what {
 	flex: 10 0px;
 	min-width: 25%;

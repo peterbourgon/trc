@@ -126,8 +126,8 @@ func httpRequest(ctx context.Context, req *trc.SearchRequest, baseurl string) (*
 		urlquery.Set("min", req.MinDuration.String())
 	}
 
-	if req.IsFailed {
-		urlquery.Set("failed", "true")
+	if req.IsErrored {
+		urlquery.Set("errored", "true")
 	}
 
 	if req.Regexp != nil {

@@ -21,7 +21,7 @@ table#summary
 		{{ end -}}
 	}
 {{ else if not .Request.IDs -}}
-table#summary tr:last-child td:first-child {
+table#summary tr:last-child td {
 	font-weight: bold;
 }
 {{ end -}}
@@ -145,21 +145,22 @@ function highlightquery() {
 
 {{ range .Response.Stats.Categories -}}
 <tr class="category">
-	{{ $category_name       := .Name                                 -}}
-	{{ $category_class_name := category2class .Name                  -}}
-	{{ $num_active          := .NumActive                            -}}
-	{{ $num_errored         := .NumErrored                           -}}
-	{{ $num_total           := .NumTotal                             -}}
-	{{ $pct_active          := uint64percent $num_active $num_total  -}}
-	{{ $pct_errored         := uint64percent $num_errored $num_total -}}
+	{{ $category_name         := .Name                                                          -}}
+	{{ $category_class_name   := category2class .Name                                           -}}
+	{{ $category_query_params := printf "%s&category=%s" $query_params $category_name | safeurl -}}
+	{{ $num_active            := .NumActive                                                     -}}
+	{{ $num_errored           := .NumErrored                                                    -}}
+	{{ $num_total             := .NumTotal                                                      -}}
+	{{ $pct_active            := uint64percent $num_active  $num_total                          -}}
+	{{ $pct_errored           := uint64percent $num_errored $num_total                          -}}
 
 	<td class="category text {{$category_class_name}}">
-		<a href="?{{$query_params}}&category={{$category_name}}">{{$category_name}}</a>
+		<a href="?{{$category_query_params}}">{{$category_name}}</a>
 	</td>
 
 	<td class="active count progress active {{$category_class_name}}" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
 		<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
-		<a href="?{{$query_params}}&category={{$category_name}}&active">{{$num_active}}</a>
+		<a href="?{{$category_query_params}}&active">{{$num_active}}</a>
 	</td>
 
 	{{ range $i, $n := .NumBucket -}}
@@ -167,13 +168,13 @@ function highlightquery() {
 	{{ $pct := uint64percent $n $num_total -}}
 	<td class="bucket count progress min-{{$min}} {{$category_class_name}}" title="{{$n}} of {{$num_total}}, {{$pct}}%">
 		<div class="progress-bar" style="width:{{$pct}}%;"></div>
-		<a href="?{{$query_params}}&category={{$category_name}}&min={{$min.String}}">{{$n}}</a>
+		<a href="?{{$category_query_params}}&min={{$min.String}}">{{$n}}</a>
 	</td>
 	{{ end -}}
 
 	<td class="errored count progress {{$category_class_name}}" title="{{$num_errored}} of {{$num_total}}, {{$pct_errored}}%">
 		<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
-		<a href="?{{$query_params}}&category={{$category_name}}&errored">{{$num_errored}}</a>
+		<a href="?{{$category_query_params}}&errored">{{$num_errored}}</a>
 	</td>
 
 	<td class="total count {{$category_class_name}}" title="{{$num_total}} total traces">
@@ -185,19 +186,19 @@ function highlightquery() {
 	</td>
 
 	<td class="oldest {{$category_class_name}}" title="{{.Oldest}}">
-		{{ if not .Oldest.IsZero }}
-		{{humanizeduration (timesince .Oldest)}}
-		{{ else }}
-		n/a
-		{{ end }}
+		{{ if not .Oldest.IsZero -}}
+			{{humanizeduration (timesince .Oldest)}}
+		{{ else -}}
+			n/a
+		{{ end -}}
 	</td>
 
 	<td class="newest {{$category_class_name}}" title="{{.Newest}}">
-		{{ if not .Newest.IsZero }}
-		{{humanizeduration (timesince .Newest)}}
-		{{ else }}
-		n/a
-		{{ end }}
+		{{ if not .Newest.IsZero -}}
+			{{humanizeduration (timesince .Newest)}}
+		{{ else -}}
+			n/a
+		{{ end -}}
 	</td>
 
 	<td class="rate numeric {{$category_class_name}}">
@@ -207,7 +208,7 @@ function highlightquery() {
 {{ end -}}
 
 {{ with .Response.Stats.Overall -}}
-<tr class="category">
+<tr class="category overall">
 	{{ $category_name       := .Name                                 -}}
 	{{ $category_class_name := category2class .Name                  -}}
 	{{ $num_active          := .NumActive                            -}}
@@ -269,6 +270,7 @@ function highlightquery() {
 </tr>
 {{ end -}}
 
+
 </table>
 
 <!-- --------------------------------- -->
@@ -277,7 +279,10 @@ function highlightquery() {
 
 	<div id="topline-form">
 		<form id="search-form" method="GET" target="">
-			<input id="search-box" type="text" name="q" placeholder="regex" {{if .Request.Regexp}}value="{{.Request.Regexp.String}}"{{end}} size="32" autofocus />
+			{{ $q_value := .Request.Query }}
+			{{ $q_class := "" }}
+			{{ if and ( .Request.Query ) (not .Request.Regexp) }} {{ $q_class = "invalid" }} {{ end }}
+			<input id="search-box" type="text" name="q" placeholder="regex" value="{{.Request.Query}}" class="{{$q_class}}" size="32" autofocus />
 
 			<select id="search-limit" name="n">
 				<option name="10"   {{ if eq .Request.Limit 10   -}}selected{{ end -}}>10  </option>
@@ -291,7 +296,7 @@ function highlightquery() {
 			{{ if .Request.Category    -}}<input type="hidden" name="category"  value="{{.Request.Category}}"    />{{ end -}}
 			{{ if .Request.IsActive    -}}<input type="hidden" name="active"    value="{{.Request.IsActive}}"    />{{ end -}}
 			{{ if .Request.MinDuration -}}<input type="hidden" name="min"       value="{{.Request.MinDuration}}" />{{ end -}}
-			{{ if .Request.IsFailed    -}}<input type="hidden" name="errored"    value="{{.Request.IsFailed}}"    />{{ end -}}
+			{{ if .Request.IsErrored   -}}<input type="hidden" name="errored"    value="{{.Request.IsErrored}}"  />{{ end -}}
 
 			{{ range .Remotes -}}
 				<input type="hidden" name="r" value="{{.}}" />
@@ -319,7 +324,7 @@ function highlightquery() {
 
 	<div id="topline-metadata">
 		{{ if .Response.Sources }}
-			<div id="topline-search-sources" class="topline-search" title="{{stringsjoinnewline .Sources}}">
+			<div id="topline-search-sources" class="topline-search" title="{{stringsjoinnewline .Response.Sources}}">
 				<details>
 					<summary>sources={{ len .Response.Sources }}</summary>
 					<div>
@@ -332,12 +337,13 @@ function highlightquery() {
 		<div id="topline-search-matched"  class="topline-search">matched={{ .Response.Matched }}</div>
 		<div id="topline-search-shown"    class="topline-search">shown={{ len .Response.Selected }}</div>
 		<div id="topline-search-took"     class="topline-search">took={{ humanizeduration .Response.Duration }}</div>
-		{{ if .Response.Problems -}}
+		{{ $problems := .Problems }}
+		{{ if $problems -}}
 			<div id="topline-search-problems" class="topline-search">
 				<details>
-					<summary>problems={{ len .Response.Problems -}}</summary>
+					<summary>problems={{ len $problems -}}</summary>
 					<div>
-						{{ range .Response.Problems -}}<div>{{.}}</div>{{ end -}}
+						{{ range $problems -}}<div>{{.}}</div>{{ end -}}
 					</div>
 				</details>
 			</div>
@@ -355,10 +361,11 @@ function highlightquery() {
 
 {{ range .Response.Selected -}}
 <div id="{{.ID}}" class="trace">
+	<a name="{{.ID}}">
 
 	<div class="metadata">
 		{{ $href := printf "%s&id=%s" $query_params .ID | safeurl }}
-		<strong class="searchable"><a href="?{{$href}}">{{ .ID }}</a></strong>
+		<strong><a href="?{{$href}}">{{ .ID }}</a></strong>
 		&middot;
 		<a href="?{{$href}}&json">JSON</a>
 		{{ range .Via }}
@@ -366,7 +373,7 @@ function highlightquery() {
 		{{ end }}
 		<span class="right">
 			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">
-				<a href="#" onclick="showstacks({{.ID}});"><strong>≡</strong></a>
+				<a href="#{{.ID}}" onclick="showstacks({{.ID}});"><strong>≡</strong></a>
 			</span>
 		</span>
 	</div>
@@ -421,7 +428,7 @@ function highlightquery() {
 						<tr>
 							<td style="text-align: right;"><span class="searchable">{{$c.FileLine}}</span></td>
 							<td style="width: 1ch;">&nbsp;</td>
-							<td><span class="searchable">{{$c.Function}}</span></td>
+							<td style="text-align: left;"><span class="searchable">{{$c.Function}}</span></td>
 						</tr>
 						{{ else -}}
 						<tr>
@@ -436,25 +443,25 @@ function highlightquery() {
 
 		<div class="event end">
 			{{ $delta   := timediff (timeadd .Started .Duration) $prev_ts -}}
-			{{ $percent := durationpercent $delta $duration                 -}}
+			{{ $percent := durationpercent $delta $duration               -}}
 
 			<div class="timestamp" title="{{timeadd .Started .Duration}}">
 				{{timetrunc (timeadd .Started .Duration)}}
 			</div>
 
 			<div class="delta" title="+{{ $delta }} = {{.Duration}}">
-				{{ if .Finished }}<div class="progress-bar" style="width:{{$percent}}%;"></div>{{ end -}}
+				{{ if .Finished }}<div class="progress-bar" style="width:{{$percent}}%;"></div>{{ end }}
 				+{{ humanizeduration $delta }}
 			</div>
 
 			<div class="what meta">
-				{{ if .Finished }} end {{ else }} active... {{ end -}}
+				{{ if .Finished }}end{{ else }}active...{{ end -}}
 			</div>
 		</div>
 
 		<div class="event summary">
 			<div class="timestamp"></div>
-			<div class="duration" title="{{ .Duration }}">&nbsp;{{ if .Finished }}<strong>{{ humanizeduration .Duration }}</strong>{{ else }}<em>{{ humanizeduration .Duration }}</em>{{ end -}}</div>
+			<div class="duration" title="{{.Duration}}">&nbsp;{{ if .Finished }}<strong>{{ humanizeduration .Duration }}</strong>{{ else }}<em>{{ humanizeduration .Duration }}</em>{{ end -}}</div>
 			<div class="what"></div>
 		</div>
 	</div>
@@ -464,13 +471,15 @@ function highlightquery() {
 </div>
 
 <!-- -------------------- -->
-<script>
+
+<script type="text/javascript">
 	calcdates();
 	highlightquery();
 	let input = document.getElementById("search-box");
 	input.focus();
 	input.select();
 </script>
+
 <!-- -------------------- -->
 
 </body>

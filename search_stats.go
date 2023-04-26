@@ -3,7 +3,6 @@ package trc
 import (
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -15,8 +14,43 @@ type SearchStats struct {
 	Categories []SearchStatsCategory `json:"categories"`
 }
 
+func newSearchStats(bucketing []time.Duration) *SearchStats {
+	return &SearchStats{
+		Bucketing: bucketing,
+	}
+}
+
+func (s *SearchStats) observe(traces []Trace) {
+	byCategory := make(map[string]SearchStatsCategory, len(s.Categories))
+	for _, c := range s.Categories {
+		byCategory[c.Name] = c
+	}
+
+	for _, tr := range traces {
+		cat := tr.Category()
+		c, ok := byCategory[cat]
+		if !ok {
+			c = newSearchStatsCategory(cat, s.Bucketing)
+			byCategory[cat] = c
+		}
+		c.observe(tr, s.Bucketing)
+		byCategory[cat] = c
+	}
+
+	slice := make([]SearchStatsCategory, 0, len(byCategory))
+	for _, c := range byCategory {
+		slice = append(slice, c)
+	}
+
+	sort.Slice(slice, func(i, j int) bool {
+		return slice[i].Name < slice[j].Name
+	})
+
+	s.Categories = slice
+}
+
 func newSearchStatsFrom(bucketing []time.Duration, traces []Trace) SearchStats {
-	byCategory := map[string]*SearchStatsCategory{}
+	byCategory := map[string]SearchStatsCategory{}
 	for _, tr := range traces {
 		category := tr.Category()
 		cs, ok := byCategory[category]
@@ -29,11 +63,11 @@ func newSearchStatsFrom(bucketing []time.Duration, traces []Trace) SearchStats {
 
 	categories := make([]SearchStatsCategory, 0, len(byCategory))
 	for _, cs := range byCategory {
-		categories = append(categories, *cs)
+		categories = append(categories, cs)
 	}
 
 	sort.Slice(categories, func(i, j int) bool {
-		return strings.Compare(categories[i].Name, categories[j].Name) < 0
+		return categories[i].Name < categories[j].Name
 	})
 
 	return SearchStats{
@@ -47,7 +81,7 @@ func (s *SearchStats) isZero() bool {
 }
 
 // Overall returns a composite SearchStatsCategory representing all categories.
-func (s *SearchStats) Overall() *SearchStatsCategory {
+func (s *SearchStats) Overall() SearchStatsCategory {
 	overall := newSearchStatsCategory("overall", s.Bucketing)
 	rateSum := float64(0.0)
 	for _, c := range s.Categories {
@@ -75,23 +109,28 @@ type SearchStatsCategory struct {
 	Rate       float64   `json:"rate"`
 }
 
-func newSearchStatsCategory(name string, bucketing []time.Duration) *SearchStatsCategory {
-	return &SearchStatsCategory{
+func newSearchStatsCategory(name string, bucketing []time.Duration) SearchStatsCategory {
+	return SearchStatsCategory{
+
 		Name:      name,
 		NumBucket: make([]uint64, len(bucketing)),
 	}
 }
 
 func (c *SearchStatsCategory) isZero() bool {
+	if c == nil {
+		return true
+	}
+
 	var (
 		zeroName       = c.Name == ""
 		zeroNumActive  = c.NumActive == 0
 		zeroNumBucket  = len(c.NumBucket) == 0
-		zeroNumFailed  = c.NumErrored == 0
+		zeroNumErrored = c.NumErrored == 0
 		zeroOldest     = c.Oldest.IsZero()
 		zeroNewest     = c.Newest.IsZero()
 		zeroRate       = c.Rate == 0
-		zeroEverything = zeroName && zeroNumActive && zeroNumBucket && zeroNumFailed && zeroOldest && zeroNewest && zeroRate
+		zeroEverything = zeroName && zeroNumActive && zeroNumBucket && zeroNumErrored && zeroOldest && zeroNewest && zeroRate
 	)
 	return zeroEverything
 }
@@ -157,7 +196,7 @@ func (cs *SearchStatsCategory) merge(other SearchStatsCategory) {
 }
 
 // NumTotal returns the total number of traces represented in the category.
-func (cs *SearchStatsCategory) NumTotal() uint64 {
+func (cs SearchStatsCategory) NumTotal() uint64 {
 	var total uint64
 	total += cs.NumActive
 	if len(cs.NumBucket) > 0 {
@@ -178,7 +217,7 @@ func calcRate(n uint64, d time.Duration) float64 {
 	return float64(n) / d.Seconds()
 }
 
-func combineStats(a, b SearchStats) SearchStats {
+func combineStats(a, b *SearchStats) *SearchStats {
 	switch {
 	case a.isZero() && b.isZero():
 		return a
@@ -217,7 +256,7 @@ func combineStats(a, b SearchStats) SearchStats {
 		return categories[i].Name < categories[j].Name
 	})
 
-	return SearchStats{
+	return &SearchStats{
 		Bucketing:  a.Bucketing,
 		Categories: categories,
 	}

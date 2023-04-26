@@ -17,6 +17,49 @@ func NewRingBuffer[T any](cap int) *RingBuffer[T] {
 	}
 }
 
+func (rb *RingBuffer[T]) Resize(cap int) {
+	if cap <= 0 {
+		return
+	}
+
+	rb.mtx.Lock()
+	defer rb.mtx.Unlock()
+
+	fill := rb.len
+	if fill > cap {
+		fill = cap
+	}
+
+	rcur := rb.cur - 1
+	if rcur < 0 {
+		rcur += rb.len
+	}
+
+	wcur := fill - 1
+
+	buf := make([]T, cap)
+
+	for wcur >= 0 {
+		buf[wcur] = rb.buf[rcur]
+
+		rcur = rcur - 1
+		if rcur < 0 {
+			rcur += rb.len
+		}
+
+		wcur = wcur - 1
+	}
+
+	cur := fill
+	if cur >= cap {
+		cur -= cap
+	}
+
+	rb.buf = buf
+	rb.cur = cur
+	rb.len = fill
+}
+
 func (rb *RingBuffer[T]) Add(val T) {
 	rb.mtx.Lock()
 	defer rb.mtx.Unlock()
@@ -39,6 +82,15 @@ func (rb *RingBuffer[T]) Add(val T) {
 	if rb.cur >= len(rb.buf) {
 		rb.cur -= len(rb.buf)
 	}
+}
+
+func (rb *RingBuffer[T]) Get() []T {
+	var values []T
+	rb.Walk(func(t T) error {
+		values = append(values, t)
+		return nil
+	})
+	return values
 }
 
 func (rb *RingBuffer[T]) Walk(fn func(T) error) error {
@@ -96,13 +148,13 @@ func (rb *RingBuffer[T]) Stats() (newest, oldest T, count int) {
 
 type RingBuffers[T any] struct {
 	mtx  sync.Mutex
-	max  int
+	cap  int
 	bufs map[string]*RingBuffer[T]
 }
 
-func NewRingBuffers[T any](maxPerBuf int) *RingBuffers[T] {
+func NewRingBuffers[T any](cap int) *RingBuffers[T] {
 	return &RingBuffers[T]{
-		max:  maxPerBuf,
+		cap:  cap,
 		bufs: map[string]*RingBuffer[T]{},
 	}
 }
@@ -113,7 +165,7 @@ func (rbs *RingBuffers[T]) GetOrCreate(category string) *RingBuffer[T] {
 
 	rb, ok := rbs.bufs[category]
 	if !ok {
-		rb = NewRingBuffer[T](rbs.max)
+		rb = NewRingBuffer[T](rbs.cap)
 		rbs.bufs[category] = rb
 	}
 
@@ -130,4 +182,19 @@ func (rbs *RingBuffers[T]) GetAll() map[string]*RingBuffer[T] {
 	}
 
 	return all
+}
+
+func (rbs *RingBuffers[T]) Resize(cap int) {
+	if cap <= 0 {
+		return
+	}
+
+	rbs.mtx.Lock()
+	defer rbs.mtx.Unlock()
+
+	rbs.cap = cap
+
+	for _, rb := range rbs.bufs {
+		rb.Resize(cap)
+	}
 }

@@ -45,6 +45,8 @@ func (a *KV) handleSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tr.Tracef("key %q", key)
+
 	valbuf, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "couldn't read body", http.StatusBadRequest)
@@ -74,6 +76,8 @@ func (a *KV) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tr.Tracef("key %q", key)
+
 	val, ok := a.s.Get(ctx, key)
 	if !ok {
 		tr.Errorf("key not found")
@@ -96,6 +100,8 @@ func (a *KV) handleDel(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "key required", http.StatusBadRequest)
 		return
 	}
+
+	tr.Tracef("key %q", key)
 
 	ok := a.s.Del(ctx, key)
 
@@ -161,7 +167,7 @@ func NewStore() *Store {
 }
 
 func (s *Store) Set(ctx context.Context, key, val string) {
-	_, _, finish := eztrc.Region(ctx, "Store.Set", key)
+	_, _, finish := eztrc.Region(ctx, "Store.Set")
 	defer finish()
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
@@ -170,7 +176,7 @@ func (s *Store) Set(ctx context.Context, key, val string) {
 }
 
 func (s *Store) Get(ctx context.Context, key string) (string, bool) {
-	_, _, finish := eztrc.Region(ctx, "Store.Get", key)
+	_, _, finish := eztrc.Region(ctx, "Store.Get")
 	defer finish()
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
@@ -180,7 +186,7 @@ func (s *Store) Get(ctx context.Context, key string) (string, bool) {
 }
 
 func (s *Store) Del(ctx context.Context, key string) bool {
-	_, _, finish := eztrc.Region(ctx, "Store.Del", key)
+	_, _, finish := eztrc.Region(ctx, "Store.Del")
 	defer finish()
 	s.mtx.Lock()
 	defer s.mtx.Unlock()

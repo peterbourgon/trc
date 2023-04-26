@@ -14,7 +14,7 @@ import (
 
 func TestE2E(t *testing.T) {
 	ctx := context.Background()
-	collector := trc.NewCollector()
+	collector := trc.NewDefaultCollector()
 	traceServer := trchttp.NewServer(collector)
 	httpServer := httptest.NewServer(traceServer)
 	defer httpServer.Close()
@@ -54,6 +54,7 @@ func TestE2E(t *testing.T) {
 		}
 		t.Logf("client: total %d, matched %d, selected %d, err %v", res2.Total, res2.Matched, len(res2.Selected), err2)
 		opts := []cmp.Option{
+			// cmp.AllowUnexported(trc.SearchStatsCategory{}),
 			cmpopts.IgnoreFields(trc.SearchResponse{}, "Duration"),
 			cmpopts.IgnoreFields(trc.SelectedTrace{}, "Via"),
 		}
@@ -65,7 +66,7 @@ func TestE2E(t *testing.T) {
 	t.Run("default", func(t *testing.T) { testSearch(t, &trc.SearchRequest{}) })
 	t.Run("Limit=1", func(t *testing.T) { testSearch(t, &trc.SearchRequest{Limit: 1}) })
 	t.Run("Query=beta", func(t *testing.T) { testSearch(t, &trc.SearchRequest{Query: "beta"}) })
-	t.Run("IsFailed=true", func(t *testing.T) { testSearch(t, &trc.SearchRequest{IsFailed: true}) })
+	t.Run("IsErrored=true", func(t *testing.T) { testSearch(t, &trc.SearchRequest{IsErrored: true}) })
 	t.Run("Query=doesnotexist", func(t *testing.T) { testSearch(t, &trc.SearchRequest{Query: "doesnotexist"}) })
 	t.Run("Query=X1 Limit=2", func(t *testing.T) { testSearch(t, &trc.SearchRequest{Query: "X1", Limit: 2}) })
 	t.Run("Query=(B1|Z1) Limit=2", func(t *testing.T) { testSearch(t, &trc.SearchRequest{Query: "(B1|Z1)", Limit: 2}) })

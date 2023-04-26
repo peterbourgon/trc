@@ -23,17 +23,23 @@ type SearchRequest struct {
 	IsActive    bool            `json:"is_active,omitempty"`
 	Bucketing   []time.Duration `json:"bucketing,omitempty"`
 	MinDuration *time.Duration  `json:"min_duration,omitempty"`
-	IsFailed    bool            `json:"is_failed,omitempty"`
+	IsErrored   bool            `json:"is_errored,omitempty"`
 	Query       string          `json:"query,omitempty"`
-	Regexp      *regexp.Regexp  `json:"-"`
 	Limit       int             `json:"limit,omitempty"`
+
+	Regexp   *regexp.Regexp `json:"-"`
+	Problems []string       `json:"-"`
 }
 
-// Normalize ensures the request is valid, returning any problems encountered.
-func (req *SearchRequest) Normalize() (problems []string) {
+// Normalize ensures the request is valid, by enforcing limits, and ensuring the
+// query (if provided) is a valid regexp.
+func (req *SearchRequest) Normalize(ctx context.Context) {
 	if req.Bucketing == nil {
 		req.Bucketing = DefaultBucketing
 	}
+	sort.Slice(req.Bucketing, func(i, j int) bool {
+		return req.Bucketing[i] < req.Bucketing[j]
+	})
 
 	switch {
 	case req.Regexp != nil && req.Query == "":
@@ -44,7 +50,7 @@ func (req *SearchRequest) Normalize() (problems []string) {
 		case err == nil:
 			req.Regexp = re
 		case err != nil:
-			problems = append(problems, err.Error())
+			req.Problems = append(req.Problems, err.Error())
 		}
 	}
 
@@ -56,13 +62,11 @@ func (req *SearchRequest) Normalize() (problems []string) {
 	case req.Limit > searchLimitMax:
 		req.Limit = searchLimitMax
 	}
-
-	return problems
 }
 
 // String returns a representation of the search request that elides default
 // values and is suitable for use in a trace event or log statement.
-func (req *SearchRequest) String() string {
+func (req SearchRequest) String() string {
 	var elems []string
 	if len(req.IDs) > 0 {
 		elems = append(elems, fmt.Sprintf("ids=%v", req.IDs))
@@ -83,8 +87,8 @@ func (req *SearchRequest) String() string {
 	if req.MinDuration != nil {
 		elems = append(elems, fmt.Sprintf("min=%s", req.MinDuration))
 	}
-	if req.IsFailed {
-		elems = append(elems, "failed")
+	if req.IsErrored {
+		elems = append(elems, "errored")
 	}
 	if req.Query != "" {
 		elems = append(elems, fmt.Sprintf("q=%q", req.Query))
@@ -127,7 +131,7 @@ func (req *SearchRequest) Allow(ctx context.Context, tr Trace) bool {
 		}
 	}
 
-	if req.IsFailed && !(tr.Finished() && tr.Errored()) {
+	if req.IsErrored && !(tr.Finished() && tr.Errored()) {
 		return false
 	}
 
@@ -157,7 +161,7 @@ func (req *SearchRequest) Allow(ctx context.Context, tr Trace) bool {
 
 // SearchResponse is the result of performing a search request.
 type SearchResponse struct {
-	Stats    SearchStats      `json:"stats"`
+	Stats    *SearchStats     `json:"stats"`
 	Total    int              `json:"total"`
 	Matched  int              `json:"matched"`
 	Selected []*SelectedTrace `json:"selected"`
@@ -217,7 +221,7 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 
 	// Gather.
 	aggregate := &SearchResponse{
-		Stats: SearchStats{
+		Stats: &SearchStats{
 			Bucketing: req.Bucketing,
 		},
 	}

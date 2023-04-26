@@ -21,7 +21,7 @@ func main() {
 
 	collectors := make([]*trc.Collector, len(ports))
 	for i := range collectors {
-		collectors[i] = trc.NewCollector()
+		collectors[i] = trc.NewDefaultCollector()
 	}
 
 	kvs := make([]*KV, len(ports))

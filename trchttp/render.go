@@ -15,7 +15,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime/trace"
 	"strings"
 	"time"
 
@@ -63,35 +62,33 @@ func renderHTML(ctx context.Context, w http.ResponseWriter, fs fs.FS, templateNa
 	body, err := renderTemplate(ctx, fs, templateName, funcs, data)
 	if err != nil {
 		code = http.StatusInternalServerError
+		tr.Errorf("render template: %v", err)
 		body = []byte(fmt.Sprintf(`<html><body><h1>Error</h1><p>%v</p>`, err))
 	}
 
-	tr.Tracef("template OK, body size %dB", len(body))
+	tr.Tracef("rendered template size %s", humanizebytes(len(body)))
 
-	{
-		_, _, finish := trc.Region(ctx, "write HTML response")
-		w.Header().Set("content-type", "text/html; charset=utf-8")
-		w.WriteHeader(code)
-		w.Write(body)
-		finish()
-	}
-
-	tr.Tracef("write OK")
+	w.Header().Set("content-type", "text/html; charset=utf-8")
+	w.WriteHeader(code)
+	w.Write(body)
 }
 
 func renderJSON(ctx context.Context, w http.ResponseWriter, data any) {
 	_, tr, finish := trc.Region(ctx, "render JSON")
 	defer finish()
 
+	code := http.StatusOK
 	buf, err := json.Marshal(data)
 	if err != nil {
-		tr.Errorf("marshal response: %v", err)
+		code = http.StatusInternalServerError
+		tr.Errorf("marshal JSON: %v", err)
 		buf = []byte(`{"error":"failed to marshal response"}`)
 	}
 
-	tr.Tracef("JSON response size %dB", len(buf))
+	tr.Tracef("JSON response size %s", humanizebytes(len(buf)))
 
 	w.Header().Set("content-type", "application/json; charset=utf-8")
+	w.WriteHeader(code)
 	w.Write(buf)
 }
 
@@ -122,12 +119,6 @@ func parseAcceptMediaTypes(r *http.Request) map[string]map[string]string {
 //
 
 func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFuncs template.FuncMap, data any) (_ []byte, err error) {
-	ctx, task := trace.NewTask(ctx, "renderTemplate task")
-	defer task.End()
-
-	stdregion := trace.StartRegion(ctx, "renderTemplate region")
-	defer stdregion.End()
-
 	_, tr, finish := trc.Region(ctx, "renderTemplate")
 	defer finish()
 
@@ -142,14 +133,13 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 		return nil, fmt.Errorf("parse assets: %w", err)
 	}
 
-	tr.Tracef("ParseFS OK")
+	tr.Tracef("template ParseFS OK")
 
 	{
 		var (
 			localPath  = filepath.Clean(os.Getenv("TRC_ASSETS_DIR")) // pwd by default
 			localFiles []string
 		)
-		tr.Tracef("check local assets path TRC_ASSETS_DIR %s", localPath)
 		for _, tp := range templateRoot.Templates() {
 			templateName := tp.Name()
 			if templateName == "" {
@@ -167,8 +157,8 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 				return nil, fmt.Errorf("parse local files: %w", err)
 			}
 			templateRoot = tt
+			tr.Tracef("TRC_ASSETS_DIR assets count %d", len(localFiles))
 		}
-		tr.Tracef("check local assets OK, count %d", len(localFiles))
 	}
 
 	templateFile := templateRoot.Lookup(templateName)
@@ -176,20 +166,14 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 		return nil, fmt.Errorf("template (%s) not found", templateName)
 	}
 
-	tr.Tracef("Lookup OK")
+	tr.Tracef("template Lookup OK")
 
-	var (
-		templateBuf bytes.Buffer
-		executeErr  error
-	)
-	trace.WithRegion(ctx, "execute template", func() {
-		executeErr = templateFile.Execute(&templateBuf, data)
-	})
-	if err := executeErr; err != nil {
+	var templateBuf bytes.Buffer
+	if err := templateFile.Execute(&templateBuf, data); err != nil {
 		return nil, fmt.Errorf("execute template: %w", err)
 	}
 
-	tr.Tracef("Execute OK, %dB, %.1fKB, %.2fMB", templateBuf.Len(), float64(templateBuf.Len())/1024, float64(templateBuf.Len())/1024/1024)
+	tr.Tracef("template Execute OK (%s)", humanizebytes(templateBuf.Len()))
 
 	return templateBuf.Bytes(), nil
 }
@@ -226,6 +210,7 @@ var templateFuncs = template.FuncMap{
 	"stringsjoinnewline": func(a []string) string { return strings.Join(a, string([]byte{0xa})) },
 	"truncateduration":   truncateduration,
 	"humanizeduration":   humanizeduration,
+	"humanizebytes":      humanizebytes,
 	"humanizefloat":      humanizefloat,
 	"ratecalc":           ratecalc,
 	"category2class":     category2class,
@@ -256,8 +241,8 @@ func highlightclasses(req *trc.SearchRequest) []string {
 	if req.MinDuration != nil {
 		classes = append(classes, "min-"+req.MinDuration.String())
 	}
-	if req.IsFailed {
-		classes = append(classes, "failed")
+	if req.IsErrored {
+		classes = append(classes, "errored")
 	}
 	return classes
 }
@@ -311,6 +296,26 @@ func humanizefloat(f float64) string {
 		return "0"
 	default:
 		return fmt.Sprintf("%0.01f", f) // 0.15845 -> 0.1
+	}
+}
+
+func humanizebytes(n int) string {
+	var (
+		kib = float64(1024)
+		mib = float64(1024 * kib)
+		fn  = float64(n)
+	)
+	switch {
+	case fn < 1*kib:
+		return fmt.Sprintf("%0.1fB", fn)
+	case fn < 100*kib:
+		return fmt.Sprintf("%.1fKB", fn/kib)
+	case fn < 1*mib:
+		return fmt.Sprintf("%.0fKB", fn/kib)
+	case fn < 100*mib:
+		return fmt.Sprintf("%.1fMB", fn/mib)
+	default:
+		return fmt.Sprintf("%.0fMB", fn/mib)
 	}
 }
 

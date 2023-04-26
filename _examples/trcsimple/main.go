@@ -23,13 +23,17 @@ func main() {
 		apiHandler = eztrc.Middleware(func(r *http.Request) string { return r.Method })(apiHandler)
 	}
 
-	go func() { load(context.Background(), apiHandler) }()
+	go func() {
+		load(context.Background(), apiHandler)
+	}()
 
 	var trcHandler http.Handler
 	{
 		trcHandler = eztrc.Handler()
 		trcHandler = eztrc.Middleware(func(r *http.Request) string { return "traces" })(trcHandler)
 	}
+
+	eztrc.Collector().Resize(context.Background(), 500)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api", http.StripPrefix("/api", apiHandler))

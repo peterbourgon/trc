@@ -3,7 +3,6 @@ package trchttp
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -17,18 +16,31 @@ import (
 // SearchResponse is what the server returns to search requests.
 type SearchResponse struct {
 	Remotes []string `json:"remotes,omitempty"` // actually returned by intermediates
-	Sources []string `json:"-"`                 // calculated just prior to render from selected 'via's
 
 	Request  *trc.SearchRequest  `json:"request"`
 	Response *trc.SearchResponse `json:"response"`
 }
 
-// Server implements a JSON API and HTML UI for the wrapped searcher.
+func (res *SearchResponse) Problems() []string {
+	var s []string
+	if p := res.Request.Problems; len(p) > 0 {
+		s = append(s, p...)
+	}
+	if p := res.Response.Problems; len(p) > 0 {
+		s = append(s, p...)
+	}
+	return s
+}
+
+// Server implements a JSON API and HTML UI over a [trc.Searcher].
 type Server struct {
 	searcher Searcher
 	client   HTTPClient
 }
 
+// Searcher describes anything that can serve trace search requests. It's a
+// consumer contract for the server. The typical implementation is
+// [trc.Collector].
 type Searcher interface {
 	Search(context.Context, *trc.SearchRequest) (*trc.SearchResponse, error)
 }
@@ -54,7 +66,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var (
 		begin    = time.Now()
-		req, prs = parseSearchRequest(ctx, r)
+		req      = parseSearchRequest(ctx, r)
 		urlquery = r.URL.Query()
 		remotes  = urlquery["r"]
 		searcher = s.searcher
@@ -74,11 +86,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	res, err := searcher.Search(ctx, req)
 	if err != nil {
 		tr.Errorf("search error: %v", err)
-		prs = append(prs, err.Error())
 		res = &trc.SearchResponse{} // default
+		res.Problems = append(res.Problems, err.Error())
 	}
 
-	res.Problems = append(prs, res.Problems...)
 	res.Duration = time.Since(begin)
 
 	tr.Tracef("total=%d matched=%d selected=%d duration=%s", res.Total, res.Matched, len(res.Selected), res.Duration)
@@ -94,7 +105,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //
 //
 
-func parseSearchRequest(ctx context.Context, r *http.Request) (*trc.SearchRequest, []string) {
+func parseSearchRequest(ctx context.Context, r *http.Request) *trc.SearchRequest {
 	var (
 		tr       = trc.FromContext(ctx)
 		isJSON   = strings.Contains(r.Header.Get("content-type"), "application/json")
@@ -103,41 +114,36 @@ func parseSearchRequest(ctx context.Context, r *http.Request) (*trc.SearchReques
 		min      = parseDefault(urlquery.Get("min"), parseDurationPointer, nil)
 		bs       = parseBucketing(urlquery["b"]) // can be nil, no problem
 		q        = urlquery.Get("q")
-		req      = &trc.SearchRequest{}
-		prs      = []string{}
 	)
 
+	var req trc.SearchRequest
 	switch {
 	case isJSON:
 		tr.Tracef("parsing search request from JSON request body")
-		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-			err = fmt.Errorf("parse JSON request body: %w", err)
-			prs = append(prs, err.Error())
-			tr.Errorf(err.Error())
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			req.Problems = append(req.Problems, err.Error())
+			tr.Errorf("parse JSON request body: %v", err)
 		}
 
 	default:
 		tr.Tracef("parsing search request from URL %q", urlquery.Encode())
-		req = &trc.SearchRequest{
+		req = trc.SearchRequest{
 			IDs:         urlquery["id"],
 			Category:    urlquery.Get("category"),
 			IsActive:    urlquery.Has("active"),
 			Bucketing:   bs,
 			MinDuration: min,
-			IsFailed:    urlquery.Has("failed"),
+			IsErrored:   urlquery.Has("errored"),
 			Query:       q,
 			Limit:       n,
 		}
 	}
 
-	for _, problem := range req.Normalize() {
-		prs = append(prs, problem)
-		tr.Tracef("normalize search request: %s", problem)
-	}
+	req.Normalize(ctx)
 
 	tr.Tracef("parsed search request %s", req)
 
-	return req, prs
+	return &req
 }
 
 func parseBucketing(bs []string) []time.Duration {
