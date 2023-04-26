@@ -9,8 +9,9 @@ import (
 )
 
 // Region provides more detailed tracing of regions of code, usually functions.
-// It prefixes trace events with the provided format and args, and produces a
-// standard library [runtime/trace.Region].
+// It decorates the trace in the context by prefixing events with the provided
+// format and args via [Prefix], and it produces a standard library
+// [runtime/trace.Region].
 //
 // Typical usage is as follows.
 //

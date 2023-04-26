@@ -16,12 +16,12 @@ var Prefix = trc.Prefix
 
 var collector = trc.NewDefaultCollector()
 
-// Collector returns the singleton trace collector used by the package.
+// Collector returns the singleton trace collector in the package.
 func Collector() *trc.Collector {
 	return collector
 }
 
-// Handler returns an HTTP handler serving from the singleton trace collector.
+// Handler returns an HTTP handler serving the singleton trace collector.
 func Handler() http.Handler {
 	return trchttp.NewServer(collector)
 }
@@ -33,9 +33,9 @@ func Middleware(categorize trchttp.CategorizeFunc) func(http.Handler) http.Handl
 	return trchttp.Middleware(collector.NewTrace, categorize)
 }
 
-// New creates a new trace in the package global trace collector, injects it
+// New creates a new trace in the singleton trace collector, injects that trace
 // into the given context, and returns a new derived context containing the
-// trace, and the trace itself.
+// trace, as well as the trace itself.
 func New(ctx context.Context, category string) (context.Context, trc.Trace) {
 	return collector.NewTrace(ctx, category)
 }

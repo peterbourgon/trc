@@ -31,8 +31,8 @@ type SearchRequest struct {
 	Problems []string       `json:"-"`
 }
 
-// Normalize ensures the request is valid, by enforcing limits, and ensuring the
-// query (if provided) is a valid regexp.
+// Normalize ensures the request is valid by enforcing limits and compiling the
+// query to a regexp. It must be called before the request can be used.
 func (req *SearchRequest) Normalize(ctx context.Context) {
 	if req.Bucketing == nil {
 		req.Bucketing = DefaultBucketing

@@ -66,7 +66,7 @@ func renderHTML(ctx context.Context, w http.ResponseWriter, fs fs.FS, templateNa
 		body = []byte(fmt.Sprintf(`<html><body><h1>Error</h1><p>%v</p>`, err))
 	}
 
-	tr.Tracef("rendered template size %s", humanizebytes(len(body)))
+	tr.Tracef("rendered template (%s)", humanizebytes(len(body)))
 
 	w.Header().Set("content-type", "text/html; charset=utf-8")
 	w.WriteHeader(code)
@@ -85,7 +85,7 @@ func renderJSON(ctx context.Context, w http.ResponseWriter, data any) {
 		buf = []byte(`{"error":"failed to marshal response"}`)
 	}
 
-	tr.Tracef("JSON response size %s", humanizebytes(len(buf)))
+	tr.Tracef("marshaled JSON response (%s)", humanizebytes(len(buf)))
 
 	w.Header().Set("content-type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
