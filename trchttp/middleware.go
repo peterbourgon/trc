@@ -35,9 +35,9 @@ func Middleware(create NewTraceFunc, categorize CategorizeFunc) func(http.Handle
 
 			defer func(b time.Time) {
 				code := iw.Code()
-				sent := iw.Written()
+				sent := humanizebytes(iw.Written())
 				took := humanizeduration(time.Since(b))
-				tr.LazyTracef("HTTP %d, %dB, %s", code, sent, took)
+				tr.LazyTracef("HTTP %d, %s, %s", code, sent, took)
 			}(time.Now())
 
 			w = iw

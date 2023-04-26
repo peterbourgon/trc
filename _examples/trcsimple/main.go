@@ -11,7 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/eztrc"
+	"github.com/peterbourgon/trc/trcexp"
 )
 
 func main() {
@@ -20,7 +22,7 @@ func main() {
 	var apiHandler http.Handler
 	{
 		apiHandler = kv
-		apiHandler = eztrc.Middleware(func(r *http.Request) string { return r.Method })(apiHandler)
+		apiHandler = eztrc.Middleware(apiCategory)(apiHandler)
 	}
 
 	go func() {
@@ -34,6 +36,13 @@ func main() {
 	}
 
 	eztrc.Collector().Resize(context.Background(), 500)
+
+	eztrc.Collector().SetNewTrace(context.Background(), func(ctx context.Context, category string) (context.Context, trc.Trace) {
+		ctx, tr := trc.NewTrace(ctx, category)
+		tr = &trcexp.LoggerTrace{Trace: tr, Logger: log.New(log.Writer(), "", log.LstdFlags|log.Lmicroseconds|log.LUTC)}
+		ctx = trc.ToContext(ctx, tr)
+		return ctx, tr
+	})
 
 	mux := http.NewServeMux()
 	mux.Handle("/api", http.StripPrefix("/api", apiHandler))

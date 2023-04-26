@@ -13,6 +13,15 @@ import (
 	"github.com/peterbourgon/trc/eztrc"
 )
 
+func apiCategory(r *http.Request) string {
+	switch r.Method {
+	case "DELETE":
+		return "DEL"
+	default:
+		return r.Method
+	}
+}
+
 type KV struct {
 	s *Store
 }

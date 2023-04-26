@@ -125,3 +125,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 func (c *Collector) Resize(ctx context.Context, maxTracesPerCategory int) {
 	c.categories.Resize(maxTracesPerCategory)
 }
+
+func (c *Collector) SetNewTrace(ctx context.Context, newTrace func(ctx context.Context, category string) (context.Context, Trace)) {
+	c.newTrace = newTrace
+}

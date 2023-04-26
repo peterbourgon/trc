@@ -49,33 +49,6 @@ func (s *SearchStats) observe(traces []Trace) {
 	s.Categories = slice
 }
 
-func newSearchStatsFrom(bucketing []time.Duration, traces []Trace) SearchStats {
-	byCategory := map[string]SearchStatsCategory{}
-	for _, tr := range traces {
-		category := tr.Category()
-		cs, ok := byCategory[category]
-		if !ok {
-			cs = newSearchStatsCategory(category, bucketing)
-			byCategory[category] = cs
-		}
-		cs.observe(tr, bucketing)
-	}
-
-	categories := make([]SearchStatsCategory, 0, len(byCategory))
-	for _, cs := range byCategory {
-		categories = append(categories, cs)
-	}
-
-	sort.Slice(categories, func(i, j int) bool {
-		return categories[i].Name < categories[j].Name
-	})
-
-	return SearchStats{
-		Bucketing:  bucketing,
-		Categories: categories,
-	}
-}
-
 func (s *SearchStats) isZero() bool {
 	return len(s.Bucketing) == 0 && len(s.Categories) == 0
 }
