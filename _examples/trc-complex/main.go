@@ -72,7 +72,6 @@ func main() {
 		mux := http.NewServeMux()
 		mux.Handle("/api", http.StripPrefix("/api", apiHandlers[i]))
 		mux.Handle("/trc", http.StripPrefix("/trc", trcHandlers[i]))
-		mux.Handle("/all", http.StripPrefix("/all", trcGlobal))
 		s := &http.Server{Addr: addr, Handler: mux}
 		go func() { log.Fatal(s.ListenAndServe()) }()
 		log.Printf("http://localhost:%s/trc", ports[i])

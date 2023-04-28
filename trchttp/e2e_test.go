@@ -56,7 +56,7 @@ func TestE2E(t *testing.T) {
 		opts := []cmp.Option{
 			// cmp.AllowUnexported(trc.SearchStatsCategory{}),
 			cmpopts.IgnoreFields(trc.SearchResponse{}, "Duration"),
-			cmpopts.IgnoreFields(trc.SelectedTrace{}, "Via"),
+			cmpopts.IgnoreFields(trc.SearchTrace{}, "Via"),
 		}
 		if !cmp.Equal(res1, res2, opts...) {
 			t.Fatal(cmp.Diff(res1, res2, opts...))

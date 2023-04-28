@@ -161,26 +161,28 @@ func (req *SearchRequest) Allow(ctx context.Context, tr Trace) bool {
 
 // SearchResponse is the result of performing a search request.
 type SearchResponse struct {
-	Stats    *SearchStats     `json:"stats"`
-	Total    int              `json:"total"`
-	Matched  int              `json:"matched"`
-	Selected []*SelectedTrace `json:"selected"`
-	Problems []string         `json:"problems,omitempty"`
-	Duration time.Duration    `json:"duration"`
+	Stats    *SearchStats   `json:"stats"`
+	Total    int            `json:"total"`
+	Matched  int            `json:"matched"`
+	Selected []*SearchTrace `json:"selected"`
+	Problems []string       `json:"problems,omitempty"`
+	Duration time.Duration  `json:"duration"`
 }
 
 // Sources returns all of the unique "Via" sources among all of the selected
 // traces in the response.
 func (res *SearchResponse) Sources() []string {
-	index := map[string]struct{}{}
+	var (
+		index = map[string]struct{}{}
+		slice = []string{}
+	)
 	for _, x := range res.Selected {
 		for _, s := range x.Via {
+			if _, ok := index[s]; !ok {
+				slice = append(slice, s)
+			}
 			index[s] = struct{}{}
 		}
-	}
-	slice := make([]string, 0, len(index))
-	for s := range index {
-		slice = append(slice, s)
 	}
 	sort.Strings(slice)
 	return slice
@@ -269,4 +271,24 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 
 	// That should be it.
 	return aggregate, nil
+}
+
+//
+//
+//
+
+type SearchTrace struct {
+	// Via records the source(s) of the trace, which is useful when aggregating
+	// traces from multiple collectors into a single result.
+	Via []string `json:"via,omitempty"`
+
+	*ConstTrace
+}
+
+var _ Trace = (*SearchTrace)(nil)
+
+func NewSearchTrace(tr Trace) *SearchTrace {
+	return &SearchTrace{
+		ConstTrace: NewConstTrace(tr),
+	}
 }

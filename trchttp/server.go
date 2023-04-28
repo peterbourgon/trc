@@ -13,25 +13,6 @@ import (
 	"github.com/peterbourgon/unixtransport"
 )
 
-// SearchResponse is what the server returns to search requests.
-type SearchResponse struct {
-	Remotes []string `json:"remotes,omitempty"` // actually returned by intermediates
-
-	Request  *trc.SearchRequest  `json:"request"`
-	Response *trc.SearchResponse `json:"response"`
-}
-
-func (res *SearchResponse) Problems() []string {
-	var s []string
-	if p := res.Request.Problems; len(p) > 0 {
-		s = append(s, p...)
-	}
-	if p := res.Response.Problems; len(p) > 0 {
-		s = append(s, p...)
-	}
-	return s
-}
-
 // Server implements a JSON API and HTML UI over a [trc.Searcher].
 type Server struct {
 	searcher Searcher
@@ -61,29 +42,13 @@ func NewServer(searcher Searcher) *Server {
 // UI based on the request's Accept header. Callers can force the JSON API
 // response by providing a `json` query parameter.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	begin := time.Now()
+
 	ctx, tr, finish := trc.Region(r.Context(), "trchttp.Server.ServeHTTP")
 	defer finish()
 
-	var (
-		begin    = time.Now()
-		req      = parseSearchRequest(ctx, r)
-		urlquery = r.URL.Query()
-		remotes  = urlquery["r"]
-		searcher = s.searcher
-	)
-
-	if len(remotes) > 0 {
-		var multi trc.MultiSearcher
-		for _, r := range remotes {
-			multi = append(multi, NewClient(s.client, r))
-		}
-		tr.Tracef("searching remotes %v", remotes)
-		searcher = multi
-	}
-
-	tr.Tracef("making search")
-
-	res, err := searcher.Search(ctx, req)
+	req := parseSearchRequest(ctx, r)
+	res, err := s.searcher.Search(ctx, req)
 	if err != nil {
 		tr.Errorf("search error: %v", err)
 		res = &trc.SearchResponse{} // default
@@ -95,7 +60,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	tr.Tracef("total=%d matched=%d selected=%d duration=%s", res.Total, res.Matched, len(res.Selected), res.Duration)
 
 	renderResponse(ctx, w, r, assets, "traces.html", templateFuncs, &SearchResponse{
-		Remotes:  remotes,
 		Request:  req,
 		Response: res,
 	})
@@ -104,6 +68,23 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //
 //
 //
+
+// SearchResponse is what the server returns to search requests.
+type SearchResponse struct {
+	Request  *trc.SearchRequest  `json:"request"`
+	Response *trc.SearchResponse `json:"response"`
+}
+
+func (res *SearchResponse) Problems() []string {
+	var s []string
+	if p := res.Request.Problems; len(p) > 0 {
+		s = append(s, p...)
+	}
+	if p := res.Response.Problems; len(p) > 0 {
+		s = append(s, p...)
+	}
+	return s
+}
 
 func parseSearchRequest(ctx context.Context, r *http.Request) *trc.SearchRequest {
 	var (

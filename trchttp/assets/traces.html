@@ -98,7 +98,6 @@ function highlightquery() {
 {{ $r := .Request }}
 
 {{ $query_params := printf "n=%d" $r.Limit | safeurl }}
-{{ range .Remotes }}{{ $r := . | urlencode }}{{ $query_params = printf "r=%s&%s" $r $query_params | safeurl }}{{ end }}
 {{ if $r.Regexp }}{{ $query_params = printf "%s&q=%s" $query_params $r.Regexp.String | safeurl }}{{ end }}
 
 <table id="summary">
@@ -297,10 +296,6 @@ function highlightquery() {
 			{{ if .Request.IsActive    -}}<input type="hidden" name="active"    value="{{.Request.IsActive}}"    />{{ end -}}
 			{{ if .Request.MinDuration -}}<input type="hidden" name="min"       value="{{.Request.MinDuration}}" />{{ end -}}
 			{{ if .Request.IsErrored   -}}<input type="hidden" name="errored"    value="{{.Request.IsErrored}}"  />{{ end -}}
-
-			{{ range .Remotes -}}
-				<input type="hidden" name="r" value="{{.}}" />
-			{{ end -}}
 
 			<input id="search-button" type="submit" value="search"/>
 		</form>

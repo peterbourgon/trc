@@ -15,7 +15,7 @@ func BenchmarkTraceCollector(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_, tr := collector.NewTrace(ctx, category)
-			tr.Tracef("trace")
+			tr.Tracef("trace %d", i)
 			tr.Finish()
 		}
 	})
@@ -27,7 +27,7 @@ func BenchmarkTraceCollector(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_, tr := collector.NewTrace(ctx, category)
-			tr.LazyTracef("trace")
+			tr.LazyTracef("trace %d", i)
 			tr.Finish()
 		}
 	})

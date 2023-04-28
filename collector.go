@@ -100,7 +100,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 		}
 	}
 
-	tr.Tracef("trace count %d, category count %d, matched count %d", total, len(stats.Categories), len(allowed))
+	tr.Tracef("category count %d, trace count %d, matched count %d", len(stats.Categories), total, len(allowed))
 
 	matched := len(allowed)
 	sort.Sort(allowed)
@@ -108,9 +108,9 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 		allowed = allowed[:req.Limit]
 	}
 
-	selected := make([]*SelectedTrace, len(allowed))
+	selected := make([]*SearchTrace, len(allowed))
 	for i, tr := range allowed {
-		selected[i] = NewSelectedTrace(tr)
+		selected[i] = NewSearchTrace(tr)
 	}
 
 	return &SearchResponse{
