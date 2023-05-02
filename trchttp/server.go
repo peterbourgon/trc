@@ -11,6 +11,7 @@ import (
 
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/unixtransport"
+	"golang.org/x/exp/slices"
 )
 
 // Server implements a JSON API and HTML UI over a [trc.Searcher].
@@ -69,12 +70,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //
 //
 
-// SearchResponse is what the server returns to search requests.
+// SearchResponse is what the server returns to search requests. It basically
+// just couples the request and response into a single data structure, allowing
+// e.g. templates to access information from both.
 type SearchResponse struct {
 	Request  *trc.SearchRequest  `json:"request"`
 	Response *trc.SearchResponse `json:"response"`
 }
 
+// Problems returns problem strings from the request and response.
 func (res *SearchResponse) Problems() []string {
 	var s []string
 	if p := res.Request.Problems; len(p) > 0 {
@@ -83,6 +87,8 @@ func (res *SearchResponse) Problems() []string {
 	if p := res.Response.Problems; len(p) > 0 {
 		s = append(s, p...)
 	}
+	sort.Strings(s)
+	s = slices.Compact(s)
 	return s
 }
 

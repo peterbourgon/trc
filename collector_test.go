@@ -2,65 +2,81 @@ package trc_test
 
 import (
 	"context"
-	"fmt"
-	"math/rand"
-	"strings"
+	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/peterbourgon/trc"
 )
 
-func TestCollector(t *testing.T) {
+func TestCollectorBasics(t *testing.T) {
 	ctx := context.Background()
-	seed := int64(123456)
-	rng := rand.New(rand.NewSource(seed))
-	words := []string{"foo", "bar", "baz", "quux"}
 
-	for _, categoryCount := range []int{5, 50} {
-		for _, maxPerCategory := range []int{1000, 5000} {
-			for _, traceCount := range []int{1000, 10000} {
-				t.Run(fmt.Sprintf("%d %d %d", categoryCount, maxPerCategory, traceCount), func(t *testing.T) {
-					categories := make([]string, categoryCount)
-					for i := range categories {
-						categories[i] = fmt.Sprintf("cat%d", i)
-					}
+	t.Run("Constructor", func(t *testing.T) {
+		var count atomic.Uint64
 
-					collector := trc.NewCollector(trc.CollectorConfig{MaxTracesPerCategory: maxPerCategory})
-					for i := 0; i < traceCount; i++ {
-						category := categories[rng.Intn(len(categories))]
-						_, tr := collector.NewTrace(ctx, category)
-						word := words[rng.Intn(len(words))]
-						errored := rng.Float64() < 0.2
-						tr.Tracef("i=%d category=%s word=%s errored=%v", i, category, word, errored)
-						if errored {
-							tr.Errorf("errored")
-						}
-						tr.Finish()
-					}
+		collector := trc.NewCollector(trc.CollectorConfig{
+			Constructor: func(ctx context.Context, category string) (context.Context, trc.Trace) {
+				count.Add(1)
+				return trc.NewTrace(ctx, category)
+			},
+		})
 
-					ctx, tr := trc.NewTrace(ctx, "search")
-					res, err := collector.Search(ctx, &trc.SearchRequest{Limit: 10, Query: "quux"})
-					t.Logf("total=%d matched=%d selected=%d err=%v", res.Total, res.Matched, len(res.Selected), err)
-					tr.Finish()
-					t.Logf("\n%s\n", debugTrace(tr))
-				})
-			}
+		n := 5
+
+		for i := 0; i < n; i++ {
+			_, tr := collector.NewTrace(ctx, "foo")
+			tr.Finish()
 		}
-	}
+
+		AssertEqual(t, n, int(count.Load()))
+	})
+
+	t.Run("MaxTracesPerCategory", func(t *testing.T) {
+		max := 5
+
+		collector := trc.NewCollector(trc.CollectorConfig{
+			MaxTracesPerCategory: max,
+		})
+
+		for i := 0; i < max+3; i++ {
+			_, tr := collector.NewTrace(ctx, "foo")
+			tr.Finish()
+		}
+
+		res, err := collector.Search(ctx, &trc.SearchRequest{
+			Limit: 2 * max,
+		})
+		AssertNoError(t, err)
+		AssertEqual(t, max, len(res.Selected))
+	})
+
+	t.Run("Resize", func(t *testing.T) {
+		max := 10
+
+		collector := trc.NewCollector(trc.CollectorConfig{
+			MaxTracesPerCategory: max,
+		})
+
+		for i := 0; i < 2*max; i++ {
+			_, tr := collector.NewTrace(ctx, "foo")
+			tr.Finish()
+		}
+
+		res, err := collector.Search(ctx, &trc.SearchRequest{})
+		AssertNoError(t, err)
+		AssertEqual(t, max, len(res.Selected))
+
+		max /= 2
+		collector.Resize(ctx, max)
+
+		res, err = collector.Search(ctx, &trc.SearchRequest{})
+		AssertNoError(t, err)
+		AssertEqual(t, max, len(res.Selected))
+	})
 }
 
-func debugTrace(tr trc.Trace) string {
-	var sb strings.Builder
-	started := tr.Started()
-	fmt.Fprintf(&sb, "ID=%s\n", tr.ID())
-	fmt.Fprintf(&sb, "Start=%s (%s ago)\n", started.Format(time.RFC3339), time.Since(started))
-	fmt.Fprintf(&sb, "Finished=%v\n", tr.Finished())
-	fmt.Fprintf(&sb, "Errored=%v\n", tr.Errored())
-	fmt.Fprintf(&sb, "Events=%d\n", len(tr.Events()))
-	for _, ev := range tr.Events() {
-		fmt.Fprintf(&sb, "\t+%s\t%s\n", ev.When().Sub(started), ev.What())
-	}
-	fmt.Fprintf(&sb, "Duration=%s\n", tr.Duration())
-	return sb.String()
+func TestCollectorSearch(t *testing.T) {
+	collector := trc.NewDefaultCollector()
+	ids := testLoadCorpus(t, collector.NewTrace)
+	testSearchCorpus(t, collector, ids)
 }

@@ -65,13 +65,22 @@ func (s *SearchStats) Overall() SearchStatsCategory {
 	return overall
 }
 
+// AllCategories returns category stats for all categories, including the
+// composite category returned by Overall.
+func (s *SearchStats) AllCategories() []SearchStatsCategory {
+	cs := make([]SearchStatsCategory, len(s.Categories)+1)
+	copy(cs, s.Categories)
+	cs[len(cs)-1] = s.Overall()
+	return cs
+}
+
 //
 //
 //
 
 // SearchStatsCategory are summary statistics for a group of traces in a single
-// category. Category stats are always part of a parent summary stats, and can
-// also be merged.
+// category. SearchStatsCategory always exist in the context of a parent
+// SearchStats, and can also be merged.
 type SearchStatsCategory struct {
 	Name       string    `json:"name"`
 	NumActive  uint64    `json:"num_active"`  // active
@@ -84,7 +93,6 @@ type SearchStatsCategory struct {
 
 func newSearchStatsCategory(name string, bucketing []time.Duration) SearchStatsCategory {
 	return SearchStatsCategory{
-
 		Name:      name,
 		NumBucket: make([]uint64, len(bucketing)),
 	}

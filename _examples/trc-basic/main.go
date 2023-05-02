@@ -15,30 +15,37 @@ import (
 )
 
 func main() {
+	// Create a `kv` service in memory.
 	kv := NewKV(NewStore())
 
+	// Serve the `kv` API over HTTP.
 	var apiHandler http.Handler
 	{
-		apiHandler = kv
-		apiHandler = eztrc.Middleware(apiCategory)(apiHandler)
+		apiHandler = kv                                        // `kv`  already implements http.Handler
+		apiHandler = eztrc.Middleware(apiCategory)(apiHandler) // this creates a trace for each `kv` request
 	}
 
+	// Generate random get/set/del requests to the API.
 	go func() {
 		load(context.Background(), apiHandler)
 	}()
 
+	// Serve the trc API over HTTP.
 	var trcHandler http.Handler
 	{
-		trcHandler = eztrc.Handler()
-		trcHandler = eztrc.Middleware(func(r *http.Request) string { return "traces" })(trcHandler)
+		trcHandler = eztrc.Handler()                                                              // this serves the singleton eztrc.Collector
+		trcHandler = eztrc.Middleware(func(*http.Request) string { return "traces" })(trcHandler) // this creates a trace for each `trc` request
 	}
 
-	eztrc.Collector().Resize(context.Background(), 500)
+	// Here's how you would change the number of traces per category.
+	eztrc.Collector().Resize(context.Background(), 100)
 
+	// Create a single serve mux for both API endpoints.
 	mux := http.NewServeMux()
 	mux.Handle("/api", http.StripPrefix("/api", apiHandler))
 	mux.Handle("/trc", http.StripPrefix("/trc", trcHandler))
 
+	// Run the server.
 	server := &http.Server{Addr: "localhost:8080", Handler: mux}
 	log.Printf("http://localhost:8080/trc")
 	log.Fatal(server.ListenAndServe())
@@ -70,6 +77,6 @@ func load(ctx context.Context, dst http.Handler) {
 			rec := httptest.NewRecorder()
 			dst.ServeHTTP(rec, req)
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
 }

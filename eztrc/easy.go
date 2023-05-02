@@ -1,3 +1,15 @@
+// Package eztrc is how most programs are expected to use traces.
+//
+// Typically, each instance of a program will maintain a single set of traces,
+// grouped by category. This package provides a singleton (process global) trace
+// collector, and helper functions that interact with that collector, to
+// facilitate this common use case.
+//
+// The most typical usage in application code is producing a trace event, e.g.
+//
+//	eztrc.Tracef(ctx, "my trace event %d", i)
+//
+// See the examples directory for more information.
 package eztrc
 
 import (
@@ -9,10 +21,24 @@ import (
 )
 
 // Region is an alias for [trc.Region].
-var Region = trc.Region
+func Region(ctx context.Context, format string, args ...any) (context.Context, trc.Trace, func()) {
+	return trc.Region(ctx, format, args...)
+}
 
 // Prefix is an alias for [trc.Prefix].
-var Prefix = trc.Prefix
+func Prefix(ctx context.Context, format string, args ...any) (context.Context, trc.Trace) {
+	return trc.Prefix(ctx, format, args...)
+}
+
+// FromContext is an alias for [trc.FromContext].
+func FromContext(ctx context.Context) trc.Trace {
+	return trc.FromContext(ctx)
+}
+
+// MaybeFromContext is an alias for [trc.MaybeFromContext].
+func MaybeFromContext(ctx context.Context) (trc.Trace, bool) {
+	return trc.MaybeFromContext(ctx)
+}
 
 var collector = trc.NewDefaultCollector()
 
@@ -29,7 +55,7 @@ func Handler() http.Handler {
 // Middleware returns an HTTP middleware that adds a trace to the singleton
 // trace collector for each received request. The category is determined by the
 // categorize function.
-func Middleware(categorize trchttp.CategorizeFunc) func(http.Handler) http.Handler {
+func Middleware(categorize func(*http.Request) string) func(http.Handler) http.Handler {
 	return trchttp.Middleware(collector.NewTrace, categorize)
 }
 

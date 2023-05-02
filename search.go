@@ -50,7 +50,7 @@ func (req *SearchRequest) Normalize(ctx context.Context) {
 		case err == nil:
 			req.Regexp = re
 		case err != nil:
-			req.Problems = append(req.Problems, err.Error())
+			req.Problems = append(req.Problems, fmt.Sprintf("query ignored: %v", err))
 		}
 	}
 

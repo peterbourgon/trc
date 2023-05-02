@@ -17,6 +17,8 @@ type Collector struct {
 	categories  *trcringbuf.RingBuffers[Trace]
 }
 
+var _ Searcher = (*Collector)(nil)
+
 // CollectorConfig defines the configuration parameters for a collector.
 type CollectorConfig struct {
 	// Constructor is called by the collector to create a new trace for a given
@@ -25,12 +27,12 @@ type CollectorConfig struct {
 
 	// MaxTracesPerCategory specifies how many recent traces are maintained in
 	// the collector for each unique category. The default value is 1000, the
-	// minimum value is 10, and the maximum value is 10000.
+	// minimum value is 1, and the maximum value is 10000.
 	MaxTracesPerCategory int
 }
 
 const (
-	tracesPerCategoryMin = 10
+	tracesPerCategoryMin = 1
 	tracesPerCategoryDef = 1000
 	tracesPerCategoryMax = 10000
 )

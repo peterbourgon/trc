@@ -8,22 +8,17 @@ import (
 	"github.com/peterbourgon/trc"
 )
 
-// CreateFunc is a function that produces a new trace in a provided context.
-// Typically, callers should use the NewTrace method of a collector.
-type CreateFunc func(context.Context, string) (context.Context, trc.Trace)
-
-// CategorizeFunc is a function that produces a category string from an HTTP
-// request. The total number of categories in a given program is expected to be
-// relatively small, approximately O(10) or fewer.
-type CategorizeFunc func(*http.Request) string
-
-// Middleware decorates an HTTP handler by creating a trace for each request.
-// The trace category is determined by the categorize function. Basic metadata,
-// such as method, path, duration, and response code, is recorded in the trace.
+// Middleware decorates an HTTP handler by creating a trace for each request via
+// the create function. The trace category is determined by the categorize
+// function. Basic metadata, such as method, path, duration, and response code,
+// is recorded in the trace.
 //
 // This is meant as a convenience for simple use cases. Users who want different
 // or more sophisticated behavior should implement their own middlewares.
-func Middleware(create CreateFunc, categorize CategorizeFunc) func(http.Handler) http.Handler {
+func Middleware(
+	create func(context.Context, string) (context.Context, trc.Trace),
+	categorize func(*http.Request) string,
+) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx, tr := create(r.Context(), categorize(r))

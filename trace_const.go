@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-// ConstTrace is a "snapshot" of a trace which can be e.g. JSON serialized but
-// cannot be modified. It's used when sending traces over the wire.
+// ConstTrace is a "snapshot" of a trace which can be inspected, serialized,
+// etc. but cannot be modified. It's used for sending traces over the wire.
 type ConstTrace struct {
 	ConstID       string         `json:"id"`
 	ConstCategory string         `json:"category"`
@@ -20,8 +20,8 @@ type ConstTrace struct {
 
 var _ Trace = (*ConstTrace)(nil)
 
-// NewConstTrace constructs a static copy of the provided trace, including a
-// copy of all of the current trace events.
+// NewConstTrace constructs a const copy of the provided trace, including a copy
+// of all of the trace events at the time of construction.
 func NewConstTrace(tr Trace) *ConstTrace {
 	return &ConstTrace{
 		ConstID:       tr.ID(),
@@ -87,10 +87,17 @@ type ConstEvent struct {
 
 var _ Event = (*ConstEvent)(nil)
 
+// When implements Event.
 func (cev ConstEvent) When() time.Time { return cev.ConstWhen }
-func (cev ConstEvent) What() string    { return cev.ConstWhat }
-func (cev ConstEvent) Stack() []Frame  { return toTraceFrames(cev.ConstStack) }
-func (cev ConstEvent) IsError() bool   { return cev.ConstIsError }
+
+// What implements Event.
+func (cev ConstEvent) What() string { return cev.ConstWhat }
+
+// Stack implements Event.
+func (cev ConstEvent) Stack() []Frame { return toTraceFrames(cev.ConstStack) }
+
+// IsError implements Event.
+func (cev ConstEvent) IsError() bool { return cev.ConstIsError }
 
 func toConstEvents(evs []Event) []ConstEvent {
 	cevs := make([]ConstEvent, len(evs))
@@ -134,13 +141,17 @@ func toConstFrames(cs []Frame) []ConstFrame {
 
 var _ Frame = (*ConstFrame)(nil)
 
+// ConstFrame is a const call stack frame which can be e.g. serialized.
 type ConstFrame struct {
 	StaticFunction string `json:"function"`
 	StaticFileLine string `json:"fileline"`
 }
 
-func (c ConstFrame) Function() string { return c.StaticFunction }
-func (c ConstFrame) FileLine() string { return c.StaticFileLine }
+// Function implements Frame.
+func (cf ConstFrame) Function() string { return cf.StaticFunction }
+
+// FileLine implements Frame.
+func (cf ConstFrame) FileLine() string { return cf.StaticFileLine }
 
 //
 //
@@ -151,8 +162,8 @@ func (c ConstFrame) FileLine() string { return c.StaticFileLine }
 type DurationString time.Duration
 
 // MarshalJSON implements [json.Marshaler].
-func (d *DurationString) MarshalJSON() ([]byte, error) {
-	return json.Marshal(time.Duration(*d).String())
+func (d DurationString) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Duration(d).String())
 }
 
 // UnmarshalJSON implements [json.Marshaler].

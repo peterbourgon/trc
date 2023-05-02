@@ -142,16 +142,21 @@ function highlightquery() {
 	</th>
 </tr>
 
-{{ range .Response.Stats.Categories -}}
+{{ range .Response.Stats.AllCategories -}}
 <tr class="category">
-	{{ $category_name         := .Name                                                          -}}
-	{{ $category_class_name   := category2class .Name                                           -}}
-	{{ $category_query_params := printf "%s&category=%s" $query_params $category_name | safeurl -}}
-	{{ $num_active            := .NumActive                                                     -}}
-	{{ $num_errored           := .NumErrored                                                    -}}
-	{{ $num_total             := .NumTotal                                                      -}}
-	{{ $pct_active            := uint64percent $num_active  $num_total                          -}}
-	{{ $pct_errored           := uint64percent $num_errored $num_total                          -}}
+	{{ $category_name         := .Name                -}}
+	{{ $category_class_name   := category2class .Name -}}
+
+	{{ $category_query_params := $query_params -}}
+	{{ if ne $category_name "overall" -}}
+		{{ $category_query_params = printf "%s&category=%s" $query_params $category_name | safeurl -}}
+	{{ end -}}
+
+	{{ $num_active  := .NumActive                            -}}
+	{{ $num_errored := .NumErrored                           -}}
+	{{ $num_total   := .NumTotal                             -}}
+	{{ $pct_active  := uint64percent $num_active  $num_total -}}
+	{{ $pct_errored := uint64percent $num_errored $num_total -}}
 
 	<td class="category text {{$category_class_name}}">
 		<a href="?{{$category_query_params}}">{{$category_name}}</a>
@@ -206,70 +211,6 @@ function highlightquery() {
 </tr>
 {{ end -}}
 
-{{ with .Response.Stats.Overall -}}
-<tr class="category overall">
-	{{ $category_name       := .Name                                 -}}
-	{{ $category_class_name := category2class .Name                  -}}
-	{{ $num_active          := .NumActive                            -}}
-	{{ $num_errored         := .NumErrored                           -}}
-	{{ $num_total           := .NumTotal                             -}}
-	{{ $pct_active          := uint64percent $num_active $num_total  -}}
-	{{ $pct_errored         := uint64percent $num_errored $num_total -}}
-
-	<td class="category text {{$category_class_name}}">
-		<a href="?{{$query_params}}">{{$category_name}}</a>
-	</td>
-
-	<td class="active count progress active {{$category_class_name}}" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
-		<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
-		{{$num_active}}
-	</td>
-
-	{{ range $i, $n := .NumBucket -}}
-	{{ $min := index $r.Bucketing $i -}}
-	{{ $pct := uint64percent $n $num_total -}}
-	<td class="bucket count progress min-{{$min}} {{$category_class_name}}" title="{{$n}} of {{$num_total}}, {{$pct}}%">
-		<div class="progress-bar" style="width:{{$pct}}%;"></div>
-		{{$n}}
-	</td>
-	{{ end -}}
-
-	<td class="errored count progress {{$category_class_name}}" title="{{$num_errored}} of {{$num_total}}, {{$pct_errored}}%">
-		<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
-		{{$num_errored}}
-	</td>
-
-	<td class="total count {{$category_class_name}}" title="{{$num_total}} total traces">
-		{{$num_total}}
-	</td>
-
-	<td class="separator {{$category_class_name}}">
-		&nbsp;
-	</td>
-
-	<td class="oldest {{$category_class_name}}" title="{{.Oldest}}">
-		{{ if not .Oldest.IsZero }}
-		{{humanizeduration (timesince .Oldest)}}
-		{{ else }}
-		n/a
-		{{ end }}
-	</td>
-
-	<td class="newest {{$category_class_name}}" title="{{.Newest}}">
-		{{ if not .Newest.IsZero }}
-		{{humanizeduration (timesince .Newest)}}
-		{{ else }}
-		n/a
-		{{ end }}
-	</td>
-
-	<td class="rate numeric {{$category_class_name}}">
-		{{ humanizefloat .Rate }}/s
-	</td>
-</tr>
-{{ end -}}
-
-
 </table>
 
 <!-- --------------------------------- -->
@@ -292,7 +233,7 @@ function highlightquery() {
 				{{ end -}}
 			</select>
 
-			{{ if .Request.Category    -}}<input type="hidden" name="category"  value="{{.Request.Category}}"    />{{ end -}}
+			{{ if .Request.Category    -}}{{ if ne .Request.Category "overall" -}}<input type="hidden" name="category"  value="{{.Request.Category}}"    />{{ end -}}{{ end -}}
 			{{ if .Request.IsActive    -}}<input type="hidden" name="active"    value="{{.Request.IsActive}}"    />{{ end -}}
 			{{ if .Request.MinDuration -}}<input type="hidden" name="min"       value="{{.Request.MinDuration}}" />{{ end -}}
 			{{ if .Request.IsErrored   -}}<input type="hidden" name="errored"    value="{{.Request.IsErrored}}"  />{{ end -}}

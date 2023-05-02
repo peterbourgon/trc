@@ -1,33 +1,21 @@
 package trc
 
 import (
+	"context"
 	"testing"
 )
 
-func TestLazyCallStack(t *testing.T) {
-	var stacks [][]Frame
-
-	foo := func() {
-		stacks = append(stacks, getLazyCallStack(1))
-	}
-
-	bar := func() {
-		stacks = append(stacks, getLazyCallStack(1))
-		foo()
-	}
-
-	baz := func() {
-		bar()
-		stacks = append(stacks, getLazyCallStack(1))
-	}
-
-	foo()
-	bar()
-	baz()
-
-	for i, s := range stacks {
-		for j, c := range s {
-			t.Logf("stack %d/%d: call %d/%d: %s: %s", i+1, len(stacks), j+1, len(s), c.FileLine(), c.Function())
+func TestEventStacks(t *testing.T) {
+	ctx := context.Background()
+	ctx, tr := NewTrace(ctx, "my category")
+	testCallStackFoo(t, ctx)
+	tr.Finish()
+	events := tr.Events()
+	for i, ev := range events {
+		t.Logf("%d/%d: %s", i+1, len(events), ev.What())
+		frames := ev.Stack()
+		for j, fr := range frames {
+			t.Logf(" - %d/%d: %s (%s)", j+1, len(frames), fr.Function(), fr.FileLine())
 		}
 	}
 }

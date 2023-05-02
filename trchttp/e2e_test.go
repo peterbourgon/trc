@@ -43,18 +43,20 @@ func TestE2E(t *testing.T) {
 
 	testSearch := func(t *testing.T, req *trc.SearchRequest) {
 		t.Helper()
+
 		res1, err1 := collector.Search(ctx, req)
 		if err1 != nil {
 			t.Fatal(err1)
 		}
 		t.Logf("direct: total %d, matched %d, selected %d, err %v", res1.Total, res1.Matched, len(res1.Selected), err1)
+
 		res2, err2 := traceClient.Search(ctx, req)
 		if err2 != nil {
 			t.Fatal(err2)
 		}
 		t.Logf("client: total %d, matched %d, selected %d, err %v", res2.Total, res2.Matched, len(res2.Selected), err2)
+
 		opts := []cmp.Option{
-			// cmp.AllowUnexported(trc.SearchStatsCategory{}),
 			cmpopts.IgnoreFields(trc.SearchResponse{}, "Duration"),
 			cmpopts.IgnoreFields(trc.SearchTrace{}, "Via"),
 		}
