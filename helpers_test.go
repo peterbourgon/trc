@@ -10,7 +10,7 @@ import (
 
 func TestRegion(t *testing.T) {
 	ctx := context.Background()
-	ctx, tr := trc.NewTrace(ctx, "foo")
+	ctx, tr := trc.New(ctx, "source", "category")
 	tr.Tracef("before x1")
 	{
 		_, tr, finish := trc.Region(ctx, "region")
@@ -33,7 +33,7 @@ func TestRegion(t *testing.T) {
 	}
 
 	for i, ev := range tr.Events() {
-		havestr := ev.What()
+		havestr := ev.What
 		wantstr := want[i]
 		if !strings.Contains(havestr, wantstr) {
 			t.Errorf("event %d/%d: want %q, have %q", i+1, len(tr.Events()), wantstr, havestr)
@@ -43,11 +43,13 @@ func TestRegion(t *testing.T) {
 
 func TestPrefix(t *testing.T) {
 	ctx := context.Background()
-	ctx, tr := trc.NewTrace(ctx, "foo")
+	ctx, tr := trc.New(ctx, "source", "category")
 	tr.Tracef("before x1")
 	{
 		_, tr := trc.Prefix(ctx, "prefix")
 		tr.Tracef("one")
+		tr.LazyTracef("two")
+		tr.Errorf("three")
 	}
 	tr.Tracef("after x2")
 	tr.Finish()
@@ -55,6 +57,8 @@ func TestPrefix(t *testing.T) {
 	want := []string{
 		"before x1",
 		"prefix one",
+		"prefix two",
+		"prefix three",
 		"after x2",
 	}
 
@@ -63,7 +67,7 @@ func TestPrefix(t *testing.T) {
 	}
 
 	for i, ev := range tr.Events() {
-		havestr := ev.What()
+		havestr := ev.What
 		wantstr := want[i]
 		if !strings.Contains(havestr, wantstr) {
 			t.Errorf("event %d/%d: want %q, have %q", i+1, len(tr.Events()), wantstr, havestr)

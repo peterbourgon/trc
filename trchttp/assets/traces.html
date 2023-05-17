@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <!-- Look, I'm doing my best here. I'm sorry. -->
+
 <head>
 <title>trc</title>
 <style>
@@ -14,7 +16,7 @@ table#summary
 	tr{{ range $hc -}}.{{.}}{{ end }}
 	{
 		font-weight: bold;
-		{{ if .Request.Regexp -}}
+		{{ if .Request.Query -}}
 		background-color: rgba(255, 255, 0, 0.4);
 		{{ else -}}
 		background-color: rgba(173, 216, 230, 0.4);
@@ -72,8 +74,8 @@ function calcdates() {
 setInterval(calcdates, 1000);
 
 function highlightquery() {
-	{{ if .Request.Regexp -}}
-	let re = new RegExp('('+{{.Request.Regexp.String}}+')');
+	{{ if .Request.Query -}}
+	let re = new RegExp('('+{{.Request.Query}}+')');
 	document.getElementById("traces").querySelectorAll(".searchable").forEach(elem => {
 		if (re.test(elem.textContent)) {
 			elem.classList.add("highlight");
@@ -87,8 +89,6 @@ function highlightquery() {
 }
 </script>
 
-<!-- --------------------------------- -->
-
 <body>
 
 <!-- --------------------------------- -->
@@ -97,119 +97,129 @@ function highlightquery() {
 {{ $q := .Request.Query }}
 {{ $r := .Request }}
 
-{{ $query_params := printf "n=%d" $r.Limit | safeurl }}
-{{ if $r.Regexp }}{{ $query_params = printf "%s&q=%s" $query_params $r.Regexp.String | safeurl }}{{ end }}
+{{ $query_params := printf "n=%d" $n | safeurl }}
+
+{{ if $r.Query }}
+	{{ $query_params = printf "%s&q=%s" $query_params ($r.Query | safeurl) }}
+{{ end }}
+
+{{ if not (reflectdeepequal defaultbucketing $r.Bucketing) }}
+	{{ range $r.Bucketing }}
+		{{ $query_params = printf "%s&b=%s" $query_params (. | safeurl) }}
+	{{ end }}
+{{ end }}
+
+<!-- --------------------------------- -->
 
 <table id="summary">
+	<tr class="header">
+		<th class="category text">
+			&nbsp;
+		</th>
 
-<tr class="header">
-	<th class="category text">
-		&nbsp;
-	</th>
+		<th class="active">
+			<a href="?{{$query_params}}&active">Active</a>
+		</th>
 
-	<th class="active count">
-		<a href="?{{$query_params}}&active">Active</a>
-	</th>
-
-	{{ range .Response.Stats.Bucketing -}}
-	<th class="bucket count min-{{.String}}">
-		<a href="?{{$query_params}}&min={{.String}}">&geq;{{.String}}</a>
-	</th>
-	{{ end -}}
-
-	<th class="errored count">
-		<a href="?{{$query_params}}&errored">Error</a>
-	</th>
-
-	<th class="total count">
-		Total
-	</th>
-
-	<th class="separator">
-		&nbsp;
-	</th>
-
-	<th class="oldest" title="Oldest trace">
-		Oldest
-	</th>
-
-	<th class="newest" title="Newest trace">
-		Newest
-	</th>
-
-	<th class="rate numeric">
-		Rate
-	</th>
-</tr>
-
-{{ range .Response.Stats.AllCategories -}}
-<tr class="category">
-	{{ $category_name         := .Name                -}}
-	{{ $category_class_name   := category2class .Name -}}
-
-	{{ $category_query_params := $query_params -}}
-	{{ if ne $category_name "overall" -}}
-		{{ $category_query_params = printf "%s&category=%s" $query_params $category_name | safeurl -}}
-	{{ end -}}
-
-	{{ $num_active  := .NumActive                            -}}
-	{{ $num_errored := .NumErrored                           -}}
-	{{ $num_total   := .NumTotal                             -}}
-	{{ $pct_active  := uint64percent $num_active  $num_total -}}
-	{{ $pct_errored := uint64percent $num_errored $num_total -}}
-
-	<td class="category text {{$category_class_name}}">
-		<a href="?{{$category_query_params}}">{{$category_name}}</a>
-	</td>
-
-	<td class="active count progress active {{$category_class_name}}" title="{{$num_active}} of {{$num_total}}, {{$pct_active}}%">
-		<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
-		<a href="?{{$category_query_params}}&active">{{$num_active}}</a>
-	</td>
-
-	{{ range $i, $n := .NumBucket -}}
-	{{ $min := index $r.Bucketing $i -}}
-	{{ $pct := uint64percent $n $num_total -}}
-	<td class="bucket count progress min-{{$min}} {{$category_class_name}}" title="{{$n}} of {{$num_total}}, {{$pct}}%">
-		<div class="progress-bar" style="width:{{$pct}}%;"></div>
-		<a href="?{{$category_query_params}}&min={{$min.String}}">{{$n}}</a>
-	</td>
-	{{ end -}}
-
-	<td class="errored count progress {{$category_class_name}}" title="{{$num_errored}} of {{$num_total}}, {{$pct_errored}}%">
-		<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
-		<a href="?{{$category_query_params}}&errored">{{$num_errored}}</a>
-	</td>
-
-	<td class="total count {{$category_class_name}}" title="{{$num_total}} total traces">
-		{{$num_total}}
-	</td>
-
-	<td class="separator {{$category_class_name}}">
-		&nbsp;
-	</td>
-
-	<td class="oldest {{$category_class_name}}" title="{{.Oldest}}">
-		{{ if not .Oldest.IsZero -}}
-			{{humanizeduration (timesince .Oldest)}}
-		{{ else -}}
-			n/a
+		{{ range .Response.Stats.Bucketing -}}
+		<th class="bucket min-{{.String}}">
+			<a href="?{{$query_params}}&min={{.String}}">&geq;{{.String}}</a>
+		</th>
 		{{ end -}}
-	</td>
 
-	<td class="newest {{$category_class_name}}" title="{{.Newest}}">
-		{{ if not .Newest.IsZero -}}
-			{{humanizeduration (timesince .Newest)}}
-		{{ else -}}
-			n/a
+		<th class="errored">
+			<a href="?{{$query_params}}&errored">Error</a>
+		</th>
+
+		<th class="total">
+			Total
+		</th>
+
+		<th class="separator">
+			&nbsp;
+		</th>
+
+		<th class="oldest" title="Oldest trace">
+			Oldest
+		</th>
+
+		<th class="newest" title="Newest trace">
+			Newest
+		</th>
+
+		<th class="rate numeric">
+			Rate
+		</th>
+	</tr>
+
+	{{ range .Response.Stats.AllCategories -}}
+	<tr class="category">
+		{{ $category_name         := .Category                     -}}
+		{{ $category_class_name   := category2class $category_name -}}
+
+		{{ $category_query_params := $query_params -}}
+		{{ if ne $category_name "overall" -}}
+			{{ $category_query_params = printf "%s&category=%s" $query_params $category_name | safeurl -}}
 		{{ end -}}
-	</td>
 
-	<td class="rate numeric {{$category_class_name}}">
-		{{ humanizefloat .Rate }}/s
-	</td>
-</tr>
-{{ end -}}
+		{{ $active_count  := .ActiveCount                           -}}
+		{{ $errored_count := .ErroredCount                          -}}
+		{{ $total_count   := .TotalCount                            -}}
+		{{ $pct_active    := intpercent $active_count  $total_count -}}
+		{{ $pct_errored   := intpercent $errored_count $total_count -}}
+
+		<td class="category text {{$category_class_name}}">
+			<a href="?{{$category_query_params}}">{{$category_name}}</a>
+		</td>
+
+		<td class="active count progress active {{$category_class_name}}" title="{{$active_count}} of {{$total_count}}, {{$pct_active}}%">
+			<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
+			<a href="?{{$category_query_params}}&active">{{$active_count}}</a>
+		</td>
+
+		{{ range $i, $n := .BucketCount -}}
+		{{ $min := index $r.Bucketing $i -}}
+		{{ $pct := intpercent $n $total_count -}}
+		<td class="bucket count progress min-{{$min}} {{$category_class_name}}" title="{{$n}} of {{$total_count}}, {{$pct}}%">
+			<div class="progress-bar" style="width:{{$pct}}%;"></div>
+			<a href="?{{$category_query_params}}&min={{$min.String}}">{{$n}}</a>
+		</td>
+		{{ end -}}
+
+		<td class="errored count progress {{$category_class_name}}" title="{{$errored_count}} of {{$total_count}}, {{$pct_errored}}%">
+			<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
+			<a href="?{{$category_query_params}}&errored">{{$errored_count}}</a>
+		</td>
+
+		<td class="total count {{$category_class_name}}" title="{{$total_count}} total traces">
+			{{$total_count}}
+		</td>
+
+		<td class="separator {{$category_class_name}}">
+			&nbsp;
+		</td>
+
+		<td class="oldest {{$category_class_name}}" title="{{.Oldest}}">
+			{{ if not .Oldest.IsZero -}}
+				{{humanizeduration (timesince .Oldest)}}
+			{{ else -}}
+				n/a
+			{{ end -}}
+		</td>
+
+		<td class="newest {{$category_class_name}}" title="{{.Newest}}">
+			{{ if not .Newest.IsZero -}}
+				{{humanizeduration (timesince .Newest)}}
+			{{ else -}}
+				n/a
+			{{ end -}}
+		</td>
+
+		<td class="rate numeric {{$category_class_name}}">
+			{{ humanizefloat .Rate }}/s
+		</td>
+	</tr>
+	{{ end -}}
 
 </table>
 
@@ -219,24 +229,21 @@ function highlightquery() {
 
 	<div id="topline-form">
 		<form id="search-form" method="GET" target="">
-			{{ $q_value := .Request.Query }}
-			{{ $q_class := "" }}
-			{{ if and ( .Request.Query ) (not .Request.Regexp) }} {{ $q_class = "invalid" }} {{ end }}
-			<input id="search-box" type="text" name="q" placeholder="regex" value="{{.Request.Query}}" class="{{$q_class}}" size="32" autofocus />
+			<input id="search-box" type="text" name="q" placeholder="regex" value="{{.Request.Query}}" size="32" autofocus />
 
 			<select id="search-limit" name="n">
-				<option name="10"   {{ if eq .Request.Limit 10   -}}selected{{ end -}}>10  </option>
-				<option name="25"   {{ if eq .Request.Limit 25   -}}selected{{ end -}}>25  </option>
-				<option name="100"  {{ if eq .Request.Limit 100  -}}selected{{ end -}}>100 </option>
+				<option name="10"   {{ if eq .Request.Limit 10  -}}selected{{ end -}}>10 </option>
+				<option name="25"   {{ if eq .Request.Limit 25  -}}selected{{ end -}}>25 </option>
+				<option name="100"  {{ if eq .Request.Limit 100 -}}selected{{ end -}}>100</option>
 				{{ if not ( or ( or (eq .Request.Limit 10) (eq .Request.Limit 25) ) (eq .Request.Limit 100) ) -}}
 				<option name="{{.Request.Limit}}" selected>{{.Request.Limit}}</option>
 				{{ end -}}
 			</select>
 
-			{{ if .Request.Category    -}}{{ if ne .Request.Category "overall" -}}<input type="hidden" name="category"  value="{{.Request.Category}}"    />{{ end -}}{{ end -}}
-			{{ if .Request.IsActive    -}}<input type="hidden" name="active"    value="{{.Request.IsActive}}"    />{{ end -}}
-			{{ if .Request.MinDuration -}}<input type="hidden" name="min"       value="{{.Request.MinDuration}}" />{{ end -}}
-			{{ if .Request.IsErrored   -}}<input type="hidden" name="errored"    value="{{.Request.IsErrored}}"  />{{ end -}}
+			{{ if .Request.Category    -}}{{ if ne .Request.Category "overall" -}}<input type="hidden" name="category"  value="{{.Request.Category}}" />{{ end -}}{{ end -}}
+			{{ if .Request.IsActive    -}}<input type="hidden" name="active"   value="{{.Request.IsActive}}"    />{{ end -}}
+			{{ if .Request.MinDuration -}}<input type="hidden" name="min"      value="{{.Request.MinDuration}}" />{{ end -}}
+			{{ if .Request.IsErrored   -}}<input type="hidden" name="errored"  value="{{.Request.IsErrored}}"   />{{ end -}}
 
 			<input id="search-button" type="submit" value="search"/>
 		</form>
@@ -269,7 +276,7 @@ function highlightquery() {
 				</details>
 			</div>
 		{{ end }}
-		<div id="topline-search-total"    class="topline-search">traces={{ .Response.Stats.Overall.NumTotal }}</div>
+		<div id="topline-search-total"    class="topline-search">traces={{ .Response.Stats.Overall.TotalCount }}</div>
 		<div id="topline-search-matched"  class="topline-search">matched={{ .Response.Matched }}</div>
 		<div id="topline-search-shown"    class="topline-search">shown={{ len .Response.Selected }}</div>
 		<div id="topline-search-took"     class="topline-search">took={{ humanizeduration .Response.Duration }}</div>
@@ -296,20 +303,24 @@ function highlightquery() {
 {{ end -}}
 
 {{ range .Response.Selected -}}
+<a class="trace-anchor" name="{{.ID}}"> </a>
 <div id="{{.ID}}" class="trace">
-	<a name="{{.ID}}">
-
 	<div class="metadata">
-		{{ $href := printf "%s&id=%s" $query_params .ID | safeurl }}
+		{{ $href := printf "id=%s" .ID | safeurl }}
 		<strong><a href="?{{$href}}">{{ .ID }}</a></strong>
+
 		&middot;
+
 		<a href="?{{$href}}&json">JSON</a>
-		{{ range .Via }}
-			&middot; <span class="via">via <a href="{{.}}">{{.}}</a></span>
+
+		{{ if .Source }}
+			&middot;
+			<span class="source">via {{.Source}}</span>
 		{{ end }}
+
 		<span class="right">
-			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks">
-				<a href="#{{.ID}}" onclick="showstacks({{.ID}});"><strong>≡</strong></a>
+			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks" onclick="showstacks({{.ID}});">
+				<strong>≡</strong>
 			</span>
 		</span>
 	</div>
@@ -330,30 +341,28 @@ function highlightquery() {
 			</div>
 		</div>
 
-		{{ $start      := .Started    -}}
+		{{ $start      := .Started  -}}
 		{{ $duration   := .Duration -}}
-		{{ $prev_ts    := .Started    -}}
-		{{ $zero_depth := 0         -}}
-		{{ if .Events }} {{ $zero_depth = len (index .Events 0).Stack }} {{ end -}}
+		{{ $prev_ts    := .Started  -}}
 
 		{{ range .Events -}}
 		<div class="event">
-			{{ $delta   := timediff .When $prev_ts      -}}
-			{{ $targetverall := timediff .When $start        -}}
+			{{ $delta   := timediff .When $prev_ts          -}}
+			{{ $overall := timediff .When $start            -}}
 			{{ $percent := durationpercent $delta $duration -}}
 
 			<div class="timestamp">
 				{{timetrunc .When}}
 			</div>
 
-			<div class="delta" title="+{{$delta}} = {{$targetverall}}">
+			<div class="delta" title="+{{$delta}} = {{$overall}}">
 				<div class="progress-bar" style="width:{{$percent}}%;"></div>
-				+{{ humanizeduration $delta }}
-				{{ $prev_ts = .When -}}
+				+{{$delta | humanizeduration}}
+				{{ $prev_ts = .When }}
 			</div>
 
-			<div class="what {{if .IsError}}error{{end}}">
-				<span class="searchable">{{ .What | htmlescape | insertbreaks }}</span>
+			<div class="what{{if .IsError}} error{{end}}">
+				<span class="searchable">{{ .What | htmlescape | insertbreaks -}}</span>
 			</div>
 
 			<div class="stack">
@@ -378,15 +387,16 @@ function highlightquery() {
 		{{ end -}}
 
 		<div class="event end">
-			{{ $delta   := timediff (timeadd .Started .Duration) $prev_ts -}}
-			{{ $percent := durationpercent $delta $duration               -}}
+			{{ $ts      := timeadd .Started .Duration -}}
+			{{ $delta   := timediff $ts $prev_ts | positiveduration -}}
+			{{ $percent := durationpercent $delta $duration -}}
 
-			<div class="timestamp" title="{{timeadd .Started .Duration}}">
-				{{timetrunc (timeadd .Started .Duration)}}
+			<div class="timestamp" title="{{$ts}}">
+				{{timetrunc $ts}}
 			</div>
 
 			<div class="delta" title="+{{ $delta }} = {{.Duration}}">
-				{{ if .Finished }}<div class="progress-bar" style="width:{{$percent}}%;"></div>{{ end }}
+				{{ if .Finished }}<div class="progress-bar" style="width:{{$percent}}%;"></div>{{ end -}}
 				+{{ humanizeduration $delta }}
 			</div>
 
@@ -414,6 +424,47 @@ function highlightquery() {
 	let input = document.getElementById("search-box");
 	input.focus();
 	input.select();
+</script>
+
+<!-- -------------------- -->
+
+<div id="debuginfo" title="Debug info (D)">
+	<pre>{{ if debuginfo -}}{{ debuginfo }}{{ else -}}(No debug info){{ end -}}</pre>
+</div>
+
+<script type="text/javascript">
+	function updatedebuginfo() {
+		let debugElem = document.getElementById("debuginfo");
+		if (sessionStorage.getItem("debuginfo")) {
+			debugElem.style.visibility = "inherit";
+		} else {
+			debugElem.style.visibility = "hidden";
+		}
+	}
+
+	function toggledebug() {
+		if (sessionStorage.getItem("debuginfo")) {
+			sessionStorage.removeItem("debuginfo");
+		} else {
+			sessionStorage.setItem("debuginfo", "true");
+		}
+		updatedebuginfo();
+	}
+
+	document.body.addEventListener("keydown", (ev) => {
+		if (ev.srcElement !== document.body) {
+			return;
+		}
+		if (ev.keyCode === 68) { // "d" or "D"
+			toggledebug();
+		}
+	});
+
+	document.getElementById("debuginfo").addEventListener("click", (ev) => {
+		toggledebug();
+	});
+
+	updatedebuginfo();
 </script>
 
 <!-- -------------------- -->

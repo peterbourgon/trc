@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/trcstore"
 )
 
 // HTTPClient models a concrete http.Client.
@@ -27,10 +28,10 @@ type Client struct {
 	baseurl string
 }
 
-var _ trc.Searcher = (*Client)(nil)
+var _ trcstore.Searcher = (*Client)(nil)
 
 // NewClient returns a client calling the provided URL, which is assumed to be
-// an instance of the server also defined in this package.
+// an endpoint served by the server type also defined in this package.
 func NewClient(client HTTPClient, baseurl string) *Client {
 	if !strings.HasPrefix(baseurl, "http") {
 		baseurl = "http://" + baseurl
@@ -41,22 +42,22 @@ func NewClient(client HTTPClient, baseurl string) *Client {
 	}
 }
 
-// Search implements the [trc.Searcher] interface.
-func (c *Client) Search(ctx context.Context, req *trc.SearchRequest) (_ *trc.SearchResponse, err error) {
+// Search implements the [trcstore.Searcher] interface.
+func (c *Client) Search(ctx context.Context, req *trcstore.SearchRequest) (_ *trcstore.SearchResponse, err error) {
 	defer func() {
 		if err != nil {
 			err = fmt.Errorf("%s: %w", c.baseurl, err)
 		}
 	}()
 
-	tr := trc.FromContext(ctx)
+	tr := trc.Get(ctx)
 
 	httpReq, err := httpRequest(ctx, req, c.baseurl)
 	if err != nil {
 		return nil, fmt.Errorf("make HTTP request: %w", err)
 	}
 
-	tr.Tracef("⇒ %s", httpReq.URL.String())
+	tr.LazyTracef("⇒ %s", httpReq.URL.String())
 
 	httpResp, err := c.client.Do(httpReq)
 	if err != nil {
@@ -71,16 +72,19 @@ func (c *Client) Search(ctx context.Context, req *trc.SearchRequest) (_ *trc.Sea
 		return nil, fmt.Errorf("remote status code %d", httpResp.StatusCode)
 	}
 
-	var d SearchResponse
+	var d SearchResponseData
 	if err := json.NewDecoder(httpResp.Body).Decode(&d); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
-	for _, tr := range d.Response.Selected {
-		tr.Via = append(tr.Via, c.baseurl)
+	if len(d.Response.Sources) <= 0 {
+		d.Response.Sources = append(d.Response.Sources, c.baseurl)
+		for _, tr := range d.Response.Selected {
+			tr.Source = c.baseurl
+		}
 	}
 
-	tr.Tracef("⇐ total=%d matched=%d selected=%d", d.Response.Total, d.Response.Matched, len(d.Response.Selected))
+	tr.LazyTracef("⇐ total=%d matched=%d selected=%d", d.Response.Total, d.Response.Matched, len(d.Response.Selected))
 
 	return d.Response, nil
 }
@@ -92,7 +96,7 @@ func redactURL(err error) error {
 	return err
 }
 
-func httpRequest(ctx context.Context, req *trc.SearchRequest, baseurl string) (*http.Request, error) {
+func httpRequest(ctx context.Context, req *trcstore.SearchRequest, baseurl string) (*http.Request, error) {
 	r, err := http.NewRequestWithContext(ctx, "GET", baseurl, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create HTTP request: %w", err)
@@ -130,8 +134,8 @@ func httpRequest(ctx context.Context, req *trc.SearchRequest, baseurl string) (*
 		urlquery.Set("errored", "true")
 	}
 
-	if req.Regexp != nil {
-		urlquery.Set("q", req.Regexp.String())
+	if req.Query != "" {
+		urlquery.Set("q", req.Query)
 	}
 
 	urlquery.Set("local", "true")

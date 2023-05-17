@@ -15,10 +15,14 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/internal/trcdebug"
+	"github.com/peterbourgon/trc/trcstore"
 )
 
 //go:embed assets/*
@@ -62,11 +66,11 @@ func renderHTML(ctx context.Context, w http.ResponseWriter, fs fs.FS, templateNa
 	body, err := renderTemplate(ctx, fs, templateName, funcs, data)
 	if err != nil {
 		code = http.StatusInternalServerError
-		tr.Errorf("render template: %v", err)
+		tr.LazyErrorf("render template: %v", err)
 		body = []byte(fmt.Sprintf(`<html><body><h1>Error</h1><p>%v</p>`, err))
+	} else {
+		tr.LazyTracef("rendered template (%s)", humanizebytes(len(body)))
 	}
-
-	tr.Tracef("rendered template (%s)", humanizebytes(len(body)))
 
 	w.Header().Set("content-type", "text/html; charset=utf-8")
 	w.WriteHeader(code)
@@ -78,18 +82,18 @@ func renderJSON(ctx context.Context, w http.ResponseWriter, data any) {
 	defer finish()
 
 	code := http.StatusOK
-	buf, err := json.Marshal(data)
+	body, err := json.Marshal(data)
 	if err != nil {
 		code = http.StatusInternalServerError
-		tr.Errorf("marshal JSON: %v", err)
-		buf = []byte(`{"error":"failed to marshal response"}`)
+		tr.LazyErrorf("marshal JSON: %v", err)
+		body = []byte(`{"error":"failed to marshal response"}`)
+	} else {
+		tr.LazyTracef("marshaled JSON response (%s)", humanizebytes(len(body)))
 	}
-
-	tr.Tracef("marshaled JSON response (%s)", humanizebytes(len(buf)))
 
 	w.Header().Set("content-type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
-	w.Write(buf)
+	w.Write(body)
 }
 
 func requestExplicitlyAccepts(r *http.Request, acceptable ...string) bool {
@@ -133,7 +137,7 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 		return nil, fmt.Errorf("parse assets: %w", err)
 	}
 
-	tr.Tracef("template ParseFS OK")
+	tr.LazyTracef("template ParseFS OK")
 
 	{
 		var (
@@ -166,14 +170,14 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 		return nil, fmt.Errorf("template (%s) not found", templateName)
 	}
 
-	tr.Tracef("template Lookup OK")
+	tr.LazyTracef("template Lookup OK")
 
 	var templateBuf bytes.Buffer
 	if err := templateFile.Execute(&templateBuf, data); err != nil {
 		return nil, fmt.Errorf("execute template: %w", err)
 	}
 
-	tr.Tracef("template Execute OK (%s)", humanizebytes(templateBuf.Len()))
+	tr.LazyTracef("template Execute OK (%s)", humanizebytes(templateBuf.Len()))
 
 	return templateBuf.Bytes(), nil
 }
@@ -208,6 +212,9 @@ var templateFuncs = template.FuncMap{
 	"urlencode":          func(s string) template.URL { return template.URL(url.QueryEscape(s)) },
 	"safeurl":            func(s string) template.URL { return template.URL(s) },
 	"stringsjoinnewline": func(a []string) string { return strings.Join(a, string([]byte{0xa})) },
+	"defaultbucketing":   func() []time.Duration { return trcstore.DefaultBucketing },
+	"reflectdeepequal":   func(a, b any) bool { return reflect.DeepEqual(a, b) },
+	"positiveduration":   positiveduration,
 	"truncateduration":   truncateduration,
 	"humanizeduration":   humanizeduration,
 	"humanizebytes":      humanizebytes,
@@ -215,6 +222,7 @@ var templateFuncs = template.FuncMap{
 	"ratecalc":           ratecalc,
 	"category2class":     category2class,
 	"highlightclasses":   highlightclasses,
+	"debuginfo":          debuginfo,
 }
 
 func sha256hex(input string) string {
@@ -227,7 +235,7 @@ func category2class(name string) string {
 	return "category-" + sha256hex(name)
 }
 
-func highlightclasses(req *trc.SearchRequest) []string {
+func highlightclasses(req *trcstore.SearchRequest) []string {
 	var classes []string
 	if len(req.IDs) > 0 {
 		return nil
@@ -268,6 +276,13 @@ func truncateduration(d time.Duration) time.Duration {
 	default:
 		return d
 	}
+}
+
+func positiveduration(d time.Duration) time.Duration {
+	if d < 0 {
+		d = 0
+	}
+	return d
 }
 
 func humanizeduration(d time.Duration) string {
@@ -324,4 +339,29 @@ func ratecalc(n int, d time.Duration) float64 {
 		return 0.0
 	}
 	return float64(n) / float64(d.Seconds())
+}
+
+func debuginfo() string {
+	var (
+		tn  = trcdebug.CoreTraceNewCount.Load()
+		ta  = trcdebug.CoreTraceAllocCount.Load()
+		tf  = trcdebug.CoreTraceFreeCount.Load()
+		tr  = 100 * float64(tf) / float64(tn)
+		en  = trcdebug.CoreEventNewCount.Load()
+		ea  = trcdebug.CoreEventAllocCount.Load()
+		ef  = trcdebug.CoreEventFreeCount.Load()
+		er  = 100 * float64(ef) / float64(en)
+		sn  = trcdebug.StringerNewCount.Load()
+		sa  = trcdebug.StringerAllocCount.Load()
+		sf  = trcdebug.StringerFreeCount.Load()
+		sr  = 100 * float64(sf) / float64(sn)
+		buf = &bytes.Buffer{}
+		tw  = tabwriter.NewWriter(buf, 0, 2, 2, ' ', 0)
+	)
+	fmt.Fprintf(tw, "KIND\tNEW\tALLOC\tFREE\tREUSE\n")
+	fmt.Fprintf(tw, "coreTrace\t%d\t%d\t%d\t%.2f%%\n", tn, ta, tf, tr)
+	fmt.Fprintf(tw, "coreEvent\t%d\t%d\t%d\t%.2f%%\n", en, ea, ef, er)
+	fmt.Fprintf(tw, "stringer\t%d\t%d\t%d\t%.2f%%\n", sn, sa, sf, sr)
+	tw.Flush()
+	return buf.String()
 }

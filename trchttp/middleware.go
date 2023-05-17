@@ -9,22 +9,22 @@ import (
 )
 
 // Middleware decorates an HTTP handler by creating a trace for each request via
-// the create function. The trace category is determined by the categorize
+// the constructor function. The trace category is determined by the categorize
 // function. Basic metadata, such as method, path, duration, and response code,
 // is recorded in the trace.
 //
 // This is meant as a convenience for simple use cases. Users who want different
 // or more sophisticated behavior should implement their own middlewares.
 func Middleware(
-	create func(context.Context, string) (context.Context, trc.Trace),
+	constructor func(context.Context, string) (context.Context, trc.Trace),
 	categorize func(*http.Request) string,
 ) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx, tr := create(r.Context(), categorize(r))
+			ctx, tr := constructor(r.Context(), categorize(r))
 			defer tr.Finish()
 
-			tr.Tracef("%s %s %s", r.RemoteAddr, r.Method, r.URL.String())
+			tr.LazyTracef("%s %s %s", r.RemoteAddr, r.Method, r.URL.String())
 
 			iw := newInterceptor(w)
 
@@ -45,12 +45,17 @@ func Middleware(
 type interceptor struct {
 	http.ResponseWriter
 
-	code int
-	n    int
+	flush func()
+	code  int
+	n     int
 }
 
 func newInterceptor(w http.ResponseWriter) *interceptor {
-	return &interceptor{ResponseWriter: w}
+	flush := func() {}
+	if f, ok := w.(http.Flusher); ok {
+		flush = f.Flush
+	}
+	return &interceptor{ResponseWriter: w, flush: flush}
 }
 
 func (i *interceptor) WriteHeader(code int) {
@@ -75,4 +80,8 @@ func (i *interceptor) Code() int {
 
 func (i *interceptor) Written() int {
 	return i.n
+}
+
+func (i *interceptor) Flush() {
+	i.flush()
 }

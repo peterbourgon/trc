@@ -25,7 +25,7 @@ func TestRingBuffer(t *testing.T) {
 			if k >= 0 && len(res) >= k {
 				return errors.New("done")
 			}
-			res = append(res, i)
+			res = append(res, int(i))
 			return nil
 		})
 		return res
@@ -62,8 +62,10 @@ func TestRingBuffer(t *testing.T) {
 	assertEqual(t, top(3), []int{3, 2, 1})
 	assertEqual(t, top(4), []int{3, 2, 1})
 
-	rb.Add(4)
+	removed, did := rb.Add(4)
 
+	assertEqual(t, did, true)
+	assertEqual(t, removed, 1)
 	assertEqual(t, top(-1), []int{4, 3, 2})
 	assertEqual(t, top(0), []int{})
 	assertEqual(t, top(1), []int{4})
@@ -132,7 +134,7 @@ func TestRingBufferStats(t *testing.T) {
 		rb := NewRingBuffer[int](123)
 
 		for i := 42; i < 951; i++ {
-			rb.Add(i)
+			rb.Add(int(i))
 		}
 
 		newest, oldest, n := rb.Stats()
@@ -152,7 +154,7 @@ func TestRingBufferResize(t *testing.T) {
 			if k >= 0 && len(res) >= k {
 				return errors.New("done")
 			}
-			res = append(res, i)
+			res = append(res, int(i))
 			return nil
 		})
 		return res
@@ -161,15 +163,24 @@ func TestRingBufferResize(t *testing.T) {
 	rb.Add(1)
 	rb.Add(2)
 	rb.Add(3)
+
 	assertEqual(t, top(3), []int{3, 2, 1})
-	rb.Resize(2)
+
+	removed := rb.Resize(2)
+
+	assertEqual(t, removed, []int{1})
 	assertEqual(t, top(3), []int{3, 2})
-	rb.Resize(4)
+
+	removed = rb.Resize(4)
+
+	assertEqual(t, removed, nil)
 	assertEqual(t, top(3), []int{3, 2})
+
 	rb.Add(4)
 	rb.Add(5)
 	rb.Add(6)
 	rb.Add(7)
+
 	assertEqual(t, top(3), []int{7, 6, 5})
 	assertEqual(t, top(10), []int{7, 6, 5, 4})
 }
@@ -179,7 +190,7 @@ func BenchmarkRingBuffer(b *testing.B) {
 		b.Run(strconv.Itoa(cap), func(b *testing.B) {
 			rb := NewRingBuffer[int](cap)
 			for i := 0; i < cap; i++ {
-				rb.Add(i)
+				rb.Add(int(i))
 			}
 
 			var captured int
@@ -194,9 +205,11 @@ func BenchmarkRingBuffer(b *testing.B) {
 				return nil
 			}
 
+			b.ReportAllocs()
+
 			b.Run("Add", func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
-					rb.Add(i)
+					rb.Add(int(i))
 				}
 			})
 
@@ -214,14 +227,14 @@ func BenchmarkRingBuffer(b *testing.B) {
 
 			b.Run("Add+Walk", func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
-					rb.Add(i)
+					rb.Add(int(i))
 					rb.Walk(walkOnlyFn)
 				}
 			})
 
 			b.Run("Add+Walk+Read", func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
-					rb.Add(i)
+					rb.Add(int(i))
 					rb.Walk(walkReadFn)
 				}
 			})
@@ -233,15 +246,16 @@ func BenchmarkRingBufferParallel(b *testing.B) {
 	walkFn := func(int) error { return nil }
 	_ = walkFn
 
-	for _, cap := range []int{10000} {
+	for _, cap := range []int{100, 1000, 10000} {
 		for _, par := range []int{10, 100, 1000} {
 			b.Run(fmt.Sprintf("cap=%d/par=%d", cap, par), func(b *testing.B) {
 				rb := NewRingBuffer[int](cap)
 				b.SetParallelism(par)
+
 				b.RunParallel(func(p *testing.PB) {
 					for p.Next() {
 						rb.Add(123)
-						// rb.walk(walkFn)
+						rb.Walk(walkFn)
 					}
 				})
 			})

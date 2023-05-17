@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/eztrc"
 )
 
@@ -39,14 +40,14 @@ func (a *KV) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "DELETE":
 		a.handleDel(w, r)
 	default:
-		eztrc.Tracef(r.Context(), "method %s not allowed", r.Method)
+		eztrc.Errorf(r.Context(), "method %s not allowed", r.Method)
 		http.Error(w, "method must be GET, PUT, or DELETE", http.StatusMethodNotAllowed)
 	}
 }
 
 func (a *KV) handleSet(w http.ResponseWriter, r *http.Request) {
-	ctx, tr, finish := eztrc.Region(r.Context(), "handleSet")
-	defer finish()
+	ctx := r.Context()
+	tr := trc.Get(ctx)
 
 	key := getKey(r.URL.Path)
 	if key == "" {
@@ -75,8 +76,8 @@ func (a *KV) handleSet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *KV) handleGet(w http.ResponseWriter, r *http.Request) {
-	ctx, tr, finish := eztrc.Region(r.Context(), "handleGet")
-	defer finish()
+	ctx := r.Context()
+	tr := trc.Get(ctx)
 
 	key := getKey(r.URL.Path)
 	if key == "" {
@@ -100,8 +101,8 @@ func (a *KV) handleGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *KV) handleDel(w http.ResponseWriter, r *http.Request) {
-	ctx, tr, finish := eztrc.Region(r.Context(), "handleDel")
-	defer finish()
+	ctx := r.Context()
+	tr := trc.Get(ctx)
 
 	key := getKey(r.URL.Path)
 	if key == "" {
@@ -176,31 +177,25 @@ func NewStore() *Store {
 }
 
 func (s *Store) Set(ctx context.Context, key, val string) {
-	_, _, finish := eztrc.Region(ctx, "Store.Set")
-	defer finish()
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-	time.Sleep(getDelay(key, 250*time.Microsecond))
+	// time.Sleep(getDelay(key, 3*time.Nanosecond)) // let this KV go as fast as it can
 	s.set[key] = val
 }
 
 func (s *Store) Get(ctx context.Context, key string) (string, bool) {
-	_, _, finish := eztrc.Region(ctx, "Store.Get")
-	defer finish()
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	val, ok := s.set[key]
-	time.Sleep(getDelay(key, 100*time.Microsecond))
+	// time.Sleep(getDelay(key, 2*time.Nanosecond)) // let this KV go as fast as it can
 	return val, ok
 }
 
 func (s *Store) Del(ctx context.Context, key string) bool {
-	_, _, finish := eztrc.Region(ctx, "Store.Del")
-	defer finish()
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	_, ok := s.set[key]
 	delete(s.set, key)
-	time.Sleep(getDelay(key, 10*time.Microsecond))
+	// time.Sleep(getDelay(key, 1*time.Nanosecond)) // let this KV go as fast as it can
 	return ok
 }

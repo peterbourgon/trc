@@ -1,7 +1,6 @@
 // Package trchttp provides HTTP functionality for traces.
 //
-// Specifically, it provides an HTTP server for searching traces, an HTTP client
-// that acts a remote searcher by communicating with an instance of that server,
-// and an HTTP middleware that will automatically create a trace for each
-// incoming request.
+// Specifically, it provides an HTTP middleware that creates (and finishes) a
+// trace for each incoming HTTP request. It also provides an HTTP server for
+// searching traces, and an HTTP client for that server.
 package trchttp

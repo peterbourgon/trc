@@ -10,10 +10,11 @@ import (
 	_ "net/http/pprof"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/peterbourgon/trc"
+	"github.com/felixge/fgprof"
+
 	"github.com/peterbourgon/trc/trchttp"
+	"github.com/peterbourgon/trc/trcstore"
 )
 
 func main() {
@@ -21,9 +22,11 @@ func main() {
 	ports := []string{"8081", "8082", "8083"}
 
 	// Create a trace collector for each instance.
-	collectors := make([]*trc.Collector, len(ports))
+	collectors := make([]*trcstore.Collector, len(ports))
 	for i := range collectors {
-		collectors[i] = trc.NewDefaultCollector()
+		collectors[i] = trcstore.NewCollector(trcstore.CollectorConfig{
+			Source: ports[i],
+		})
 	}
 
 	// Create a `kv` service for each instance.
@@ -58,26 +61,29 @@ func main() {
 		trcHandlers[i] = trchttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return "traces" })(trcHandlers[i])
 	}
 
-	// We can also create a "global" traces handler, which serves collective
+	// We can also create a "global" traces handler, which serves aggregate
 	// results from all of the individual trace handlers for each instance.
 	var trcGlobal http.Handler
 	{
-		var ms trc.MultiSearcher
+		// MultiSearcher allows multiple searchers to be treated as one. In this
+		// case, the searchers are the collectors for each instance.
+		var ms trcstore.MultiSearcher
 		for i := range ports {
-			// We model instances with HTTP clients querying the corresponding
-			// trace HTTP handler. That's usually how you'd do it, when you want
-			// to abstract over instances on different hosts.
+			// Each instance is modeled with an HTTP client querying the
+			// corresponding trace HTTP handler. This is usually how it would
+			// work, as different instances are usually on different hosts.
 			ms = append(ms, trchttp.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/trc", ports[i])))
 		}
 
-		// We want to collect traces for requests to this handler, too.
-		globalCollector := trc.NewDefaultCollector()
+		// Let's also trace requests to this global handler in a distinct trace
+		// collector, and include that collector in the multi-searcher.
+		globalCollector := trcstore.NewCollector(trcstore.CollectorConfig{
+			Source: "global",
+		})
 		ms = append(ms, globalCollector)
 
-		// MultiSearcher satisfies the Searcher interface required by the HTTP
-		// server, same as an e.g. collector.
 		trcGlobal = trchttp.NewServer(ms)
-		trcGlobal = trchttp.Middleware(globalCollector.NewTrace, func(r *http.Request) string { return "global" })(trcGlobal)
+		trcGlobal = trchttp.Middleware(globalCollector.NewTrace, func(r *http.Request) string { return "traces" })(trcGlobal)
 	}
 
 	// Now we run HTTP servers for each instance.
@@ -85,16 +91,18 @@ func main() {
 	for i := range httpServers {
 		addr := "localhost:" + ports[i]
 		mux := http.NewServeMux()
-		mux.Handle("/api", http.StripPrefix("/api", apiHandlers[i]))
+		mux.Handle("/api", http.StripPrefix("/api", apiHandlers[i])) // technically unnecessary as it's not used by the loader
 		mux.Handle("/trc", http.StripPrefix("/trc", trcHandlers[i]))
 		s := &http.Server{Addr: addr, Handler: mux}
 		go func() { log.Fatal(s.ListenAndServe()) }()
 		log.Printf("http://localhost:%s/trc", ports[i])
 	}
 
-	// And an extra HTTP server for the global trace handler.
+	// And an extra HTTP server for the global trace handler. We'll use this
+	// server for additional stuff like profiling endpoints.
 	go func() {
 		http.Handle("/trc", trcGlobal)
+		http.Handle("/debug/fgprof", fgprof.Handler())
 		log.Printf("http://localhost:8080/trc")
 		log.Fatal(http.ListenAndServe("localhost:8080", nil))
 	}()
@@ -128,6 +136,5 @@ func load(ctx context.Context, dst http.Handler) {
 			rec := httptest.NewRecorder()
 			dst.ServeHTTP(rec, req)
 		}
-		time.Sleep(5 * time.Millisecond)
 	}
 }

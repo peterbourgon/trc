@@ -21,20 +21,20 @@ func main() {
 	// Serve the `kv` API over HTTP.
 	var apiHandler http.Handler
 	{
-		apiHandler = kv                                        // `kv`  already implements http.Handler
-		apiHandler = eztrc.Middleware(apiCategory)(apiHandler) // this creates a trace for each `kv` request
+		apiHandler = kv                                        // `kv` implements http.Handler
+		apiHandler = eztrc.Middleware(apiCategory)(apiHandler) // create a trace for each `kv` API request
 	}
 
-	// Generate random get/set/del requests to the API.
+	// Generate random get/set/del requests to the API handler.
 	go func() {
 		load(context.Background(), apiHandler)
 	}()
 
-	// Serve the trc API over HTTP.
+	// Serve the trace API over HTTP.
 	var trcHandler http.Handler
 	{
 		trcHandler = eztrc.Handler()                                                              // this serves the singleton eztrc.Collector
-		trcHandler = eztrc.Middleware(func(*http.Request) string { return "traces" })(trcHandler) // this creates a trace for each `trc` request
+		trcHandler = eztrc.Middleware(func(*http.Request) string { return "traces" })(trcHandler) // create a trace for each `trc` request
 	}
 
 	// Here's how you would change the number of traces per category.
@@ -42,7 +42,7 @@ func main() {
 
 	// Create a single serve mux for both API endpoints.
 	mux := http.NewServeMux()
-	mux.Handle("/api", http.StripPrefix("/api", apiHandler))
+	mux.Handle("/api", http.StripPrefix("/api", apiHandler)) // technically unnecessary as it's not used by the loader
 	mux.Handle("/trc", http.StripPrefix("/trc", trcHandler))
 
 	// Run the server.

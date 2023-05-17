@@ -1,15 +1,24 @@
-// Package eztrc is how most programs are expected to use traces.
+// Package eztrc provides an easy-to-use API for typical use cases. Most
+// applications should only need to import this package.
 //
-// Typically, each instance of a program will maintain a single set of traces,
-// grouped by category. This package provides a singleton (process global) trace
-// collector, and helper functions that interact with that collector, to
-// facilitate this common use case.
+// A global [Collector] maintains recent traces, grouped by category, in memory.
+// Applications should create a new trace in that collector for each e.g.
+// request they process. The [Middleware] helper provides a simple decorator for
+// HTTP handlers which does this work.
 //
-// The most typical usage in application code is producing a trace event, e.g.
+// Traces are always created within a context. Application code should "log" by
+// adding events to the trace in the context. Helpers like [Get] can retrieve
+// the current trace from a context, and helpers like [Tracef] can log events
+// directly to the trace in the context.
 //
-//	eztrc.Tracef(ctx, "my trace event %d", i)
+// Traces may be viewed, queried, etc. via the [Handler], which provides an HTTP
+// interface to the global collector. Applications should install this handler
+// to their internal or debug HTTP server, on a route of their choice, e.g.
+// /traces.
 //
-// See the examples directory for more information.
+// See the [examples] to learn how to use tracing in various types of programs.
+//
+// [examples]: https://github.com/peterbourgon/trc/tree/main/_examples/
 package eztrc
 
 import (
@@ -18,85 +27,77 @@ import (
 
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/trchttp"
+	"github.com/peterbourgon/trc/trcstore"
 )
 
-// Region is an alias for [trc.Region].
-func Region(ctx context.Context, format string, args ...any) (context.Context, trc.Trace, func()) {
-	return trc.Region(ctx, format, args...)
-}
+var collector = trcstore.NewDefaultCollector()
 
-// Prefix is an alias for [trc.Prefix].
-func Prefix(ctx context.Context, format string, args ...any) (context.Context, trc.Trace) {
-	return trc.Prefix(ctx, format, args...)
-}
+var handler = trchttp.NewServer(collector)
 
-// FromContext is an alias for [trc.FromContext].
-func FromContext(ctx context.Context) trc.Trace {
-	return trc.FromContext(ctx)
-}
-
-// MaybeFromContext is an alias for [trc.MaybeFromContext].
-func MaybeFromContext(ctx context.Context) (trc.Trace, bool) {
-	return trc.MaybeFromContext(ctx)
-}
-
-var collector = trc.NewDefaultCollector()
-
-// Collector returns the singleton trace collector in the package.
-func Collector() *trc.Collector {
+// Collector returns the global [trcstore.NewDefaultCollector].
+func Collector() *trcstore.Collector {
 	return collector
 }
 
-// Handler returns an HTTP handler serving the singleton trace collector.
+// Handler returns a [trchttp.Server] for the global trace collector.
 func Handler() http.Handler {
-	return trchttp.NewServer(collector)
+	return handler
 }
 
-// Middleware returns an HTTP middleware that adds a trace to the singleton
+// Middleware returns a [trchttp.Middleware] which adds a trace to the global
 // trace collector for each received request. The category is determined by the
-// categorize function.
+// provided categorize function.
 func Middleware(categorize func(*http.Request) string) func(http.Handler) http.Handler {
 	return trchttp.Middleware(collector.NewTrace, categorize)
 }
 
-// New creates a new trace in the singleton trace collector, injects that trace
-// into the given context, and returns a new derived context containing the
-// trace, as well as the trace itself.
+// New creates a new trace in the global trace collector, injects that trace
+// into the given context, and returns a derived context containing the new
+// trace, as well as the new trace itself.
 func New(ctx context.Context, category string) (context.Context, trc.Trace) {
 	return collector.NewTrace(ctx, category)
 }
 
-// Get is really GetOrCreate: if a trace exists in the context, Get adds an
-// event reflecting the provided category and returns the context and the trace
-// directly. Otherwise, Get creates a new trace via [New].
-func Get(ctx context.Context, category string) (context.Context, trc.Trace) {
-	if tr, ok := trc.MaybeFromContext(ctx); ok {
-		tr.Tracef("(+ %s)", category)
-		return ctx, tr
-	}
-	return New(ctx, category)
+// Region calls [trc.Region].
+func Region(ctx context.Context, name string) (context.Context, trc.Trace, func()) {
+	return trc.Region(ctx, name)
 }
 
-// Tracef adds a new event to the trace in the context.
+// Prefix calls [trc.Prefix].
+func Prefix(ctx context.Context, format string, args ...any) (context.Context, trc.Trace) {
+	return trc.Prefix(ctx, format, args...)
+}
+
+// Get calls [trc.Get].
+func Get(ctx context.Context) trc.Trace {
+	return trc.Get(ctx)
+}
+
+// MaybeGet calls [trc.MaybeGet].
+func MaybeGet(ctx context.Context) (trc.Trace, bool) {
+	return trc.MaybeGet(ctx)
+}
+
+// Tracef adds a new normal event to the trace in the context.
 // Arguments are evaluated immediately.
 func Tracef(ctx context.Context, format string, args ...any) {
-	trc.FromContext(ctx).Tracef(format, args...)
+	trc.Get(ctx).Tracef(format, args...)
 }
 
-// LazyTracef adds a new event to the trace in the context.
+// LazyTracef adds a new normal event to the trace in the context.
 // Arguments are evaluated lazily.
 func LazyTracef(ctx context.Context, format string, args ...any) {
-	trc.FromContext(ctx).LazyTracef(format, args...)
+	trc.Get(ctx).LazyTracef(format, args...)
 }
 
 // Errorf adds a new error event to the trace in the context.
 // Arguments are evaluated immediately.
 func Errorf(ctx context.Context, format string, args ...any) {
-	trc.FromContext(ctx).Errorf(format, args...)
+	trc.Get(ctx).Errorf(format, args...)
 }
 
 // LazyErrorf adds a new error event to the trace in the context.
 // Arguments are evaluated lazily.
 func LazyErrorf(ctx context.Context, format string, args ...any) {
-	trc.FromContext(ctx).LazyErrorf(format, args...)
+	trc.Get(ctx).LazyErrorf(format, args...)
 }

@@ -162,11 +162,17 @@ div#topline-search-problems details[open]>div {
 }
 
 div#topline-search-problems summary,
-div#topline-search-sources summary {}
+div#topline-search-sources summary {
+	/* */
+}
 
 /*
  * traces
  */
+
+a.trace-anchor {
+	scroll-padding-block: 2ch;
+}
 
 div#traces .trace {
 	display: flex;
@@ -183,17 +189,16 @@ div#traces .trace .metadata span.right {
 	float: right;
 }
 
-div#traces .trace .metadata .via {
+div#traces .trace .metadata .source {
 	/* */
 }
 
-div#traces .trace .metadata .via>a {
+div#traces .trace .metadata .source>a {
 	color: inherit;
 }
 
-div#traces .trace .metadata span.stacks-link a {
-	color: #000;
-	text-decoration: none;
+div#traces .trace .metadata span.stacks-link {
+	cursor: pointer;
 }
 
 /* next section is the events table */
@@ -305,6 +310,23 @@ div.stack div.frame {
 div.stack table td {
 	text-align: left;
 	color: #666;
+}
+
+/*
+ * debug info
+ */
+
+div#debuginfo {
+	position: absolute;
+	top: 1em;
+	right: 1em;
+	max-width: 33%;
+	color: #666;
+	background-color: #eee;
+	border: solid 1px #666;
+	font-size: smaller;
+	padding: 0 2ch;
+	visibility: hidden;
 }
 
 /*
