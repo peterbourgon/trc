@@ -8,9 +8,9 @@
 //
 // Traces are created for each operation performed by your application, e.g.
 // every incoming HTTP request. Each trace is assigned a semantically meaningful
-// category, and injected into the downstream context. Traces are also typicall
+// category, and injected into the downstream context. Traces are also typically
 // written to a per-category ring buffer, which, in aggregate, represent the
-// most recent "log" data from the application.
+// most recent "logs" from the application.
 //
 // The traces collected in those ring buffers are exposed via an HTTP interface,
 // which operators can query. That interface is fairly rich, allowing traces to
@@ -24,11 +24,11 @@
 // by default lost.
 //
 // Even with these caveats, in-process request tracing often provides a better
-// user experience for operators than traditional logging. The value of
-// application telemetry is often highly correlated to its age. A rich interface
-// over only the most recent data can be surprisingly powerful.
+// user experience than traditional logging. The value of application telemetry
+// tends to be highly correlated to age. A rich interface over just the most
+// recent data can be surprisingly powerful.
 //
 // Most applications should not import this package directly, and should instead
-// use [github.com/peterbourgon/trc/eztrc], which provides an easy-to-use API
-// for common use cases.
+// use [github.com/peterbourgon/trc/eztrc], which provides an API specifically
+// designed for typical use cases.
 package trc
