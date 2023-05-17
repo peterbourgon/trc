@@ -313,7 +313,7 @@ div.stack table td {
 }
 
 div.stack a,
-a:visited {
+div.stack a:visited {
 	color: #666;
 }
 

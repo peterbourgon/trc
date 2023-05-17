@@ -2,17 +2,19 @@
 // logging. The package is inspired by https://golang.org/x/net/trace, much
 // gratitude to those authors.
 //
-// The basic idea is to "log" to a value in the context — known as a [Trace] —
-// rather than a destination like stdout or a file on disk. Traces are created,
-// assigned a category, and injected to the context for each e.g. request served
-// by the application, making them available to user code.
+// The basic idea is that your application should "log" not by writing to a
+// destination like stdout or a file on disk, but instead by adding events to a
+// value it retrieves from the context, known as a [Trace].
 //
-// The most recent traces are typically maintained in-memory, usually grouped
-// into per-category ring buffers. The complete set of traces, across all ring
-// buffers, are exposed via an HTTP interface. Operators access the application
-// "logs" by querying that HTTP interface. That interface is fairly rich,
-// allowing users to select traces by category, minimum duration, successful vs.
-// errored, and so on.
+// Traces are created for each operation performed by your application, e.g.
+// every incoming HTTP request. Each trace is assigned a semantically meaningful
+// category, and injected into the downstream context. Traces are also typicall
+// written to a per-category ring buffer, which, in aggregate, represent the
+// most recent "log" data from the application.
+//
+// The traces collected in those ring buffers are exposed via an HTTP interface,
+// which operators can query. That interface is fairly rich, allowing traces to
+// be selected by category, minimum duration, successful vs. errored, and so on.
 //
 // There are a few caveats. This approach is only suitable for applications that
 // do their work in the context of a trace-related operation, and which reliably
