@@ -91,7 +91,7 @@ func main() {
 	for i := range httpServers {
 		addr := "localhost:" + ports[i]
 		mux := http.NewServeMux()
-		mux.Handle("/api", http.StripPrefix("/api", apiHandlers[i])) // technically unnecessary as it's not used by the loader
+		mux.Handle("/api", http.StripPrefix("/api", apiHandlers[i])) // technically unnecessary as the loader calls the handler directly
 		mux.Handle("/trc", http.StripPrefix("/trc", trcHandlers[i]))
 		s := &http.Server{Addr: addr, Handler: mux}
 		go func() { log.Fatal(s.ListenAndServe()) }()

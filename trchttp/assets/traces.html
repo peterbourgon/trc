@@ -371,13 +371,21 @@ function highlightquery() {
 					<table class="stack-table">
 						{{ range $i, $c := .Stack -}}
 						<tr>
-							<td style="text-align: right;"><span class="searchable">{{$c.FileLine}}</span></td>
+							<td style="text-align: right;">
+								<span class="searchable">
+									<a href="vscode://file/{{$c.FileLine}}">{{$c.CompactFileLine}}</a>
+								</span>
+							</td>
 							<td style="width: 1ch;">&nbsp;</td>
-							<td style="text-align: left;"><span class="searchable">{{$c.Function}}</span></td>
+							<td style="text-align: left;">
+								<span class="searchable">
+									{{$c.Function}}
+								</span>
+							</td>
 						</tr>
 						{{ else -}}
 						<tr>
-							<td colspan=2>(stack elided)</td>
+							<td colspan=3>(no stack)</td>
 						</tr>
 						{{ end -}}
 					</table>
@@ -468,6 +476,15 @@ function highlightquery() {
 </script>
 
 <!-- -------------------- -->
+
+<script type="text/javascript">
+
+
+</script>
+
+<!-- -------------------- -->
+
+
 
 </body>
 </html>

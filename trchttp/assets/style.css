@@ -312,6 +312,11 @@ div.stack table td {
 	color: #666;
 }
 
+div.stack a,
+a:visited {
+	color: #666;
+}
+
 /*
  * debug info
  */

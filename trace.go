@@ -1,6 +1,7 @@
 package trc
 
 import (
+	"strings"
 	"time"
 )
 
@@ -55,7 +56,10 @@ type Trace interface {
 	Tracef(format string, args ...any)
 
 	// LazyTracef adds a normal event to the trace, with the given format string
-	// and args. Args are evaulated lazily, when the event is read.
+	// and args. Args are stored in their raw form and evaulated lazily, when
+	// the event is first read. Callers should be very careful to ensure that
+	// args passed to lazy-evaluated events will remain valid beyond the scope
+	// of the call.
 	LazyTracef(format string, args ...any)
 
 	// Errorf adds an error event to the trace, with the given format string and
@@ -63,8 +67,10 @@ type Trace interface {
 	Errorf(format string, args ...any)
 
 	// LazyErrorf adds an error event to the trace, with the given format string
-	// and args. It marks the trace as errored. Args are evaluated lazily, when
-	// the event is read.
+	// and args. It marks the trace as errored. Args are stored in their raw
+	// form and evaulated lazily, when the event is first read. Callers should
+	// be very careful to ensure that args passed to lazy-evaluated events will
+	// remain valid beyond the scope of the call.
 	LazyErrorf(format string, args ...any)
 
 	// Finish marks the trace as finished. Once finished, a trace is "frozen",
@@ -77,7 +83,7 @@ type Trace interface {
 	// Errored returns true if Errorf or LazyErrorf has been called.
 	Errored() bool
 
-	// Events returns all of the events collected from calls to e.g. Tracef.
+	// Events returns all of the events collected by the trace, newest first.
 	Events() []Event
 }
 
@@ -90,8 +96,38 @@ type Event struct {
 	IsError bool
 }
 
-// Frame represents a single call in a call stack.
+// Frame is a single call frame in an event's call stack.
 type Frame struct {
 	Function string
 	FileLine string
+}
+
+// CompactFileLine returns a more compact representation of the file and line.
+func (fr Frame) CompactFileLine() string {
+	file, line, _ := strings.Cut(fr.FileLine, ":")
+	prefix, suffix := pkgPrefix(fr.Function), pathSuffix(file)
+	if prefix == "" {
+		file = suffix
+	} else {
+		file = prefix + "/" + suffix
+	}
+	return file + ":" + line
+}
+
+func pkgPrefix(funcName string) string {
+	const pathSep = "/"
+	end := strings.LastIndex(funcName, pathSep)
+	if end == -1 {
+		return ""
+	}
+	return funcName[:end]
+}
+
+func pathSuffix(path string) string {
+	const pathSep = "/"
+	lastSep := strings.LastIndex(path, pathSep)
+	if lastSep == -1 {
+		return path
+	}
+	return path[strings.LastIndex(path[:lastSep], pathSep)+1:]
 }

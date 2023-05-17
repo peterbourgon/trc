@@ -19,8 +19,17 @@ import (
 // minimum is 10, and the maximum is 10000.
 var TraceMaxEvents atomic.Uint64
 
+// TraceEventCallStacks determines whether core trace events will capture call
+// stacks when they're created. The default value is true, as call stacks are
+// generally very useful. However, capturing call stacks can be the single most
+// expensive part of using traces, and call stacks can be the single biggest
+// contributor to the size of search results. Setting this value to false is
+// therefore a performance optimization.
+var TraceEventCallStacks atomic.Bool
+
 func init() {
 	TraceMaxEvents.Store(traceMaxEventsDef)
+	TraceEventCallStacks.Store(true)
 }
 
 const (
@@ -302,7 +311,11 @@ func newCoreEvent(flags uint8, format string, args ...any) *coreEvent {
 	} else {
 		cev.what = newNormalStringer(format, args...)
 	}
-	cev.pcn = runtime.Callers(3, cev.pc[:])
+	if TraceEventCallStacks.Load() {
+		cev.pcn = runtime.Callers(3, cev.pc[:])
+	} else {
+		cev.pcn = 0
+	}
 	cev.iserr = flags&flagError != 0
 	return cev
 }
@@ -321,16 +334,9 @@ func (cev *coreEvent) Stack() []Frame {
 	fr, more := stdframes.Next()
 	for more {
 		if !ignoreStackFrameFunction(fr.Function) {
-			file := fr.File
-			prefix, suffix := pkgPrefix(fr.Function), pathSuffix(file)
-			if prefix == "" {
-				file = suffix
-			} else {
-				file = prefix + "/" + suffix
-			}
 			trcframes = append(trcframes, Frame{
 				Function: fr.Function,
-				FileLine: file + ":" + strconv.Itoa(fr.Line),
+				FileLine: fr.File + ":" + strconv.Itoa(fr.Line),
 			})
 		}
 		fr, more = stdframes.Next()
@@ -373,24 +379,6 @@ func ignoreStackFrameFunction(function string) bool {
 		return true
 	}
 	return false
-}
-
-func pkgPrefix(funcName string) string {
-	const pathSep = "/"
-	end := strings.LastIndex(funcName, pathSep)
-	if end == -1 {
-		return ""
-	}
-	return funcName[:end]
-}
-
-func pathSuffix(path string) string {
-	const pathSep = "/"
-	lastSep := strings.LastIndex(path, pathSep)
-	if lastSep == -1 {
-		return path
-	}
-	return path[strings.LastIndex(path[:lastSep], pathSep)+1:]
 }
 
 //

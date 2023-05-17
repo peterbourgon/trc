@@ -222,6 +222,7 @@ var templateFuncs = template.FuncMap{
 	"ratecalc":           ratecalc,
 	"category2class":     category2class,
 	"highlightclasses":   highlightclasses,
+	"fileline2filepath":  fileline2filepath,
 	"debuginfo":          debuginfo,
 }
 
@@ -339,6 +340,18 @@ func ratecalc(n int, d time.Duration) float64 {
 		return 0.0
 	}
 	return float64(n) / float64(d.Seconds())
+}
+
+func fileline2filepath(fileline string) string {
+	if strings.HasPrefix(fileline, "github.com/peterbourgon") {
+		homedir, _ := os.UserHomeDir()
+		homedir, _ = filepath.Abs(homedir)
+		fileline = strings.TrimPrefix(fileline, "github.com/peterbourgon")
+		fileline = filepath.Join(homedir, "src", "peterbourgon", fileline)
+		return fileline
+	}
+
+	return ""
 }
 
 func debuginfo() string {
