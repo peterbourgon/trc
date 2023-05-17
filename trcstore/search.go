@@ -252,6 +252,8 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	tr := trc.Get(ctx)
 	begin := time.Now()
 
+	req.Normalize(ctx)
+
 	type tuple struct {
 		id  string
 		res *SearchResponse
