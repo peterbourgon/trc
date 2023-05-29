@@ -55,15 +55,15 @@ func main() {
 
 	// Create a traces HTTP handler for each instance.
 	// We'll also trace each request to this endpoint.
-	trcHandlers := make([]http.Handler, len(collectors))
-	for i := range trcHandlers {
-		trcHandlers[i] = trchttp.NewServer(collectors[i])
-		trcHandlers[i] = trchttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return "traces" })(trcHandlers[i])
+	tracesHandlers := make([]http.Handler, len(collectors))
+	for i := range tracesHandlers {
+		tracesHandlers[i] = trchttp.NewServer(collectors[i])
+		tracesHandlers[i] = trchttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return "traces" })(tracesHandlers[i])
 	}
 
 	// We can also create a "global" traces handler, which serves aggregate
 	// results from all of the individual trace handlers for each instance.
-	var trcGlobal http.Handler
+	var tracesGlobal http.Handler
 	{
 		// MultiSearcher allows multiple searchers to be treated as one. In this
 		// case, the searchers are the collectors for each instance.
@@ -72,7 +72,7 @@ func main() {
 			// Each instance is modeled with an HTTP client querying the
 			// corresponding trace HTTP handler. This is usually how it would
 			// work, as different instances are usually on different hosts.
-			ms = append(ms, trchttp.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/trc", ports[i])))
+			ms = append(ms, trchttp.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/traces", ports[i])))
 		}
 
 		// Let's also trace requests to this global handler in a distinct trace
@@ -82,8 +82,8 @@ func main() {
 		})
 		ms = append(ms, globalCollector)
 
-		trcGlobal = trchttp.NewServer(ms)
-		trcGlobal = trchttp.Middleware(globalCollector.NewTrace, func(r *http.Request) string { return "traces" })(trcGlobal)
+		tracesGlobal = trchttp.NewServer(ms)
+		tracesGlobal = trchttp.Middleware(globalCollector.NewTrace, func(r *http.Request) string { return "traces" })(tracesGlobal)
 	}
 
 	// Now we run HTTP servers for each instance.
@@ -92,18 +92,18 @@ func main() {
 		addr := "localhost:" + ports[i]
 		mux := http.NewServeMux()
 		mux.Handle("/api", http.StripPrefix("/api", apiHandlers[i])) // technically unnecessary as the loader calls the handler directly
-		mux.Handle("/trc", http.StripPrefix("/trc", trcHandlers[i]))
+		mux.Handle("/traces", http.StripPrefix("/traces", tracesHandlers[i]))
 		s := &http.Server{Addr: addr, Handler: mux}
 		go func() { log.Fatal(s.ListenAndServe()) }()
-		log.Printf("http://localhost:%s/trc", ports[i])
+		log.Printf("http://localhost:%s/traces", ports[i])
 	}
 
 	// And an extra HTTP server for the global trace handler. We'll use this
 	// server for additional stuff like profiling endpoints.
 	go func() {
-		http.Handle("/trc", trcGlobal)
+		http.Handle("/traces", tracesGlobal)
 		http.Handle("/debug/fgprof", fgprof.Handler())
-		log.Printf("http://localhost:8080/trc")
+		log.Printf("http://localhost:8080/traces")
 		log.Fatal(http.ListenAndServe("localhost:8080", nil))
 	}()
 

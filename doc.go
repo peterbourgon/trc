@@ -2,19 +2,20 @@
 // logging. The package is inspired by https://golang.org/x/net/trace, much
 // gratitude to those authors.
 //
-// The basic idea is that your application should "log" not by writing to a
+// The basic idea is that applications should log not by sending events to a
 // destination like stdout or a file on disk, but instead by adding events to a
-// value it retrieves from the context, known as a [Trace].
+// value retrieved from the context, known as a [Trace].
 //
-// Traces are created for each operation performed by your application, e.g.
-// every incoming HTTP request. Each trace is assigned a semantically meaningful
-// category, and injected into the downstream context. Traces are also typically
-// written to a per-category ring buffer, which, in aggregate, represent the
-// most recent "logs" from the application.
+// Traces are created for each operation processed by your application, e.g.
+// every incoming HTTP request. Each trace is given a semantically meaningful
+// category, and injected into the downstream context so applications can add
+// events over the course of the operation. The trace is marked as finished when
+// the operation completes.
 //
-// The traces collected in those ring buffers are exposed via an HTTP interface,
-// which operators can query. That interface is fairly rich, allowing traces to
-// be selected by category, minimum duration, successful vs. errored, and so on.
+// Traces are collected into per-category ring buffers, which are exposed via an
+// HTTP interface that operators can query. That interface is fairly rich,
+// allowing traces to be selected by category, minimum duration, successful vs.
+// errored, and so on.
 //
 // There are a few caveats. This approach is only suitable for applications that
 // do their work in the context of a trace-related operation, and which reliably
@@ -30,5 +31,5 @@
 //
 // Most applications should not import this package directly, and should instead
 // use [github.com/peterbourgon/trc/eztrc], which provides an API specifically
-// designed for typical use cases.
+// designed for common use cases.
 package trc

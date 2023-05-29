@@ -178,12 +178,21 @@ func (sc *StatsCategory) Rate() float64 {
 		return sc.rate
 	}
 
+	// if isFew := sc.Newest.Sub(sc.Oldest) < time.Second; isFew {
+	// return 1
+	// }
+
 	var (
-		total = sc.TotalCount()
-		delta = sc.Newest.Sub(sc.Oldest)
+		total      = sc.TotalCount()
+		delta      = sc.Newest.Sub(sc.Oldest)
+		totalZero  = total <= 0
+		deltaZero  = delta <= 0
+		newestZero = sc.Newest.IsZero()
+		oldestZero = sc.Oldest.IsZero()
+		isZero     = totalZero || deltaZero || newestZero || oldestZero
 	)
-	if total == 0 || delta <= 0 || sc.Newest.IsZero() || sc.Oldest.IsZero() {
-		return 0.0
+	if isZero {
+		return 0
 	}
 
 	return float64(total) / float64(delta.Seconds())

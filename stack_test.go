@@ -2,6 +2,7 @@ package trc_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/peterbourgon/trc"
@@ -46,42 +47,44 @@ func TestEventStacks(t *testing.T) {
 	}{
 		{
 			function: "github.com/peterbourgon/trc_test.testCallStackFoo",
-			fileline: "github.com/peterbourgon/trc/stack_test.go:14",
+			fileline: "stack_test.go:15",
 			what:     "foo 1",
 		},
 		{
 			function: "github.com/peterbourgon/trc_test.testCallStackBar",
-			fileline: "github.com/peterbourgon/trc/stack_test.go:22",
+			fileline: "stack_test.go:23",
 			what:     "bar 1",
 		},
 		{
 			function: "github.com/peterbourgon/trc_test.testCallStackBaz",
-			fileline: "github.com/peterbourgon/trc/stack_test.go:29",
+			fileline: "stack_test.go:30",
 			what:     "baz 1",
 		},
 		{
 			function: "github.com/peterbourgon/trc_test.testCallStackBaz.func1",
-			fileline: "github.com/peterbourgon/trc/stack_test.go:31",
+			fileline: "stack_test.go:32",
 			what:     "quux",
 		},
 		{
 			function: "github.com/peterbourgon/trc_test.testCallStackBaz",
-			fileline: "github.com/peterbourgon/trc/stack_test.go:33",
+			fileline: "stack_test.go:34",
 			what:     "baz 2",
 		},
 		{
 			function: "github.com/peterbourgon/trc_test.testCallStackBar",
-			fileline: "github.com/peterbourgon/trc/stack_test.go:24",
+			fileline: "stack_test.go:25",
 			what:     "bar 2",
 		},
 		{
 			function: "github.com/peterbourgon/trc_test.testCallStackFoo",
-			fileline: "github.com/peterbourgon/trc/stack_test.go:16",
+			fileline: "stack_test.go:17",
 			what:     "foo 2",
 		},
 	} {
 		AssertEqual(t, want.function, events[i].Stack[0].Function)
-		AssertEqual(t, want.fileline, events[i].Stack[0].FileLine)
+		if have := events[i].Stack[0].FileLine; !strings.HasSuffix(have, want.fileline) {
+			t.Errorf("%s: want %s", have, want.fileline)
+		}
 		AssertEqual(t, want.what, events[i].What)
 	}
 }

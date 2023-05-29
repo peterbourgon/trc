@@ -9,16 +9,16 @@
 // Traces are always created within a context. Application code should "log" by
 // adding events to the trace in the context. Helpers like [Get] can retrieve
 // the current trace from a context, and helpers like [Tracef] can log events
-// directly to the trace in the context.
+// directly to the trace in a context.
 //
 // Traces may be viewed, queried, etc. via the [Handler], which provides an HTTP
 // interface to the global collector. Applications should install this handler
 // to their internal or debug HTTP server, on a route of their choice, e.g.
 // /traces.
 //
-// See the [examples] to learn how to use tracing in various types of programs.
+// See the [examples] for more complete example applications.
 //
-// [examples]: https://github.com/peterbourgon/trc/tree/main/_examples/
+// [examples]: https://github.com/peterbourgon/trc/tree/main/_examples
 package eztrc
 
 import (
