@@ -24,9 +24,8 @@ func Get(ctx context.Context) Trace {
 	return newCoreTrace("", "(orphan)")
 }
 
-// MaybeGet returns the trace in the context, if it exists, with true as the
-// second return value. If not, a nil trace is returned, with false as the
-// second return value.
+// MaybeGet returns the trace in the context, if it exists. If not, MaybeGet
+// returns a nil trace and false.
 func MaybeGet(ctx context.Context) (Trace, bool) {
 	tr, ok := ctx.Value(traceContextVal).(Trace)
 	return tr, ok

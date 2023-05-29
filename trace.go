@@ -15,7 +15,7 @@ import (
 // or provide their own implementation entirely. Implementations must be safe
 // for concurrent use.
 //
-// Note that traces are created for every traced operation, but are accessed
+// Note that traces are typically created for every operation, but are accessed
 // only when operators explicitly ask for them, for example when diagnosing a
 // problem. Consequently, traces are written far more often than they are read.
 // Implementations should keep this access pattern in mind, and optimize for
@@ -35,8 +35,9 @@ type Trace interface {
 	// constructed.
 	Source() string
 
-	// ID returns a unique identifier for the trace, which should be generated
-	// by the trace constructor. By default, ID is a ULID.
+	// ID returns an identifier for the trace which should be automatically
+	// generated during construction, and should be unique within a given
+	// instance.
 	ID() string
 
 	// Category returns the category of the trace, which should be provided by
@@ -58,8 +59,7 @@ type Trace interface {
 	// LazyTracef adds a normal event to the trace, with the given format string
 	// and args. Args are stored in their raw form and evaulated lazily, when
 	// the event is first read. Callers should be very careful to ensure that
-	// args passed to lazy-evaluated events will remain valid beyond the scope
-	// of the call.
+	// args passed to this method will remain valid indefinitely.
 	LazyTracef(format string, args ...any)
 
 	// Errorf adds an error event to the trace, with the given format string and
@@ -69,8 +69,8 @@ type Trace interface {
 	// LazyErrorf adds an error event to the trace, with the given format string
 	// and args. It marks the trace as errored. Args are stored in their raw
 	// form and evaulated lazily, when the event is first read. Callers should
-	// be very careful to ensure that args passed to lazy-evaluated events will
-	// remain valid beyond the scope of the call.
+	// be very careful to ensure that args passed to this method will remain
+	// valid indefinitely.
 	LazyErrorf(format string, args ...any)
 
 	// Finish marks the trace as finished. Once finished, a trace is "frozen",
@@ -102,7 +102,8 @@ type Frame struct {
 	FileLine string
 }
 
-// CompactFileLine returns a more compact representation of the file and line.
+// CompactFileLine returns a human-readable representation of the file and line,
+// intended to be used in user-facing interfaces.
 func (fr Frame) CompactFileLine() string {
 	file, line, _ := strings.Cut(fr.FileLine, ":")
 	prefix, suffix := pkgPrefix(fr.Function), pathSuffix(file)

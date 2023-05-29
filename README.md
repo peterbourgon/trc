@@ -13,9 +13,9 @@ Here's a quick-and-dirty example for a typical HTTP server.
 func main() {
 	server := NewServer(...) // your HTTP server
 	traced := eztrc.Middleware(categorize)(server)
-	traces := eztrc.Handler()
-
 	go func() { log.Fatal(http.ListenAndServe(":8080", traced)) }() // normal API
+
+	traces := eztrc.Handler()
 	go func() { log.Fatal(http.ListenAndServe(":8081", traces)) }() // traces UI
 
 	select {}
@@ -31,8 +31,8 @@ func someFunction(ctx context.Context, ...) {
 }
 ```
 
-See the [examples](https://github.com/peterbourgon/trc/tree/main/_examples) for
-more complete example applications.
+See the [examples dir](https://github.com/peterbourgon/trc/tree/main/_examples)
+for more complete example applications.
 
-It's important to note that the current API is experimental and unstable.
-Breaking changes are guaranteed. Use at your own risk.
+The current API is experimental and unstable. Breaking changes are guaranteed.
+Use at your own risk.
