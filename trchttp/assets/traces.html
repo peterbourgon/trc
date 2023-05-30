@@ -100,12 +100,12 @@ function highlightquery() {
 {{ $query_params := printf "n=%d" $n | safeurl }}
 
 {{ if $r.Query }}
-	{{ $query_params = printf "%s&q=%s" $query_params ($r.Query | safeurl) }}
+	{{ $query_params = printf "%s&q=%s" $query_params $r.Query | safeurl }}
 {{ end }}
 
 {{ if not (reflectdeepequal defaultbucketing $r.Bucketing) }}
 	{{ range $r.Bucketing }}
-		{{ $query_params = printf "%s&b=%s" $query_params (. | safeurl) }}
+		{{ $query_params = printf "%s&b=%s" $query_params . | safeurl }}
 	{{ end }}
 {{ end }}
 
