@@ -373,7 +373,12 @@ function highlightquery() {
 						<tr>
 							<td style="text-align: right;">
 								<span class="searchable">
-									<a href="vscode://file/{{$c.FileLine}}">{{$c.CompactFileLine}}</a>
+									{{ $href := filelineurl $c.FileLine }}
+									{{ if $href }}
+										<a href="{{$href}}">{{$c.CompactFileLine}}</a>
+									{{ else }}
+										{{ $c.CompactFileLine }}
+									{{ end }}
 								</span>
 							</td>
 							<td style="width: 1ch;">&nbsp;</td>

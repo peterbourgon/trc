@@ -18,6 +18,9 @@ import (
 )
 
 func main() {
+	// Open stack trace links in VS Code.
+	trchttp.FileLineURL = trchttp.FileLineURLVSCode
+
 	// Each port is a distinct instance.
 	ports := []string{"8081", "8082", "8083"}
 

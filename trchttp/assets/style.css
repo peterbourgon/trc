@@ -315,6 +315,7 @@ div.stack table td {
 div.stack a,
 div.stack a:visited {
 	color: #666;
+	text-decoration: underline;
 }
 
 /*

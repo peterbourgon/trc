@@ -122,6 +122,11 @@ func parseAcceptMediaTypes(r *http.Request) map[string]map[string]string {
 //
 //
 
+// AssetsDirEnvKey is the environment variable key that specifies a directory
+// containing trace assets such as HTML and/or CSS files. By default, the
+// current working directory is used.
+const AssetsDirEnvKey = "TRC_ASSETS_DIR"
+
 func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFuncs template.FuncMap, data any) (_ []byte, err error) {
 	_, tr, finish := trc.Region(ctx, "renderTemplate")
 	defer finish()
@@ -141,7 +146,7 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 
 	{
 		var (
-			localPath  = filepath.Clean(os.Getenv("TRC_ASSETS_DIR")) // pwd by default
+			localPath  = filepath.Clean(os.Getenv(AssetsDirEnvKey)) // pwd by default
 			localFiles []string
 		)
 		for _, tp := range templateRoot.Templates() {
@@ -154,6 +159,7 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 				continue
 			}
 			localFiles = append(localFiles, assetName)
+			tr.Tracef("using local asset file %s", assetName)
 		}
 		if len(localFiles) > 0 {
 			tt, err := templateRoot.ParseFiles(localFiles...)
@@ -161,7 +167,6 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 				return nil, fmt.Errorf("parse local files: %w", err)
 			}
 			templateRoot = tt
-			tr.Tracef("TRC_ASSETS_DIR assets count %d", len(localFiles))
 		}
 	}
 
@@ -170,14 +175,12 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 		return nil, fmt.Errorf("template (%s) not found", templateName)
 	}
 
-	tr.LazyTracef("template Lookup OK")
-
 	var templateBuf bytes.Buffer
 	if err := templateFile.Execute(&templateBuf, data); err != nil {
 		return nil, fmt.Errorf("execute template: %w", err)
 	}
 
-	tr.LazyTracef("template Execute OK (%s)", humanizebytes(templateBuf.Len()))
+	tr.LazyTracef("template (%s) execute OK (%s)", templateName, humanizebytes(templateBuf.Len()))
 
 	return templateBuf.Bytes(), nil
 }
@@ -193,7 +196,20 @@ var breaksReplacer = strings.NewReplacer(
 	`;`, `;<wbr>`,
 )
 
+// FileLineURL converts a local source code file and line to a URL that can be
+// opened by a browser. The default value is FileLineURLNop.
+var FileLineURL = FileLineURLNop
+
+// FileLineURLNop returns an empty string, preventing any clickable link.
+func FileLineURLNop(string) template.URL { return "" }
+
+// FileLineURLVSCode opens the source file in VS Code.
+func FileLineURLVSCode(fileline string) template.URL {
+	return template.URL("vscode://file/" + fileline)
+}
+
 var templateFuncs = template.FuncMap{
+	"filelineurl":        func(fileline string) template.URL { return FileLineURL(fileline) },
 	"intadd":             func(i, j int) int { return i + j },
 	"floatadd":           func(i, j float64) float64 { return i + j },
 	"timenow":            func() time.Time { return time.Now().UTC() },
