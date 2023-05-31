@@ -45,5 +45,4 @@ func TestMultiSearch(t *testing.T) {
 
 	AssertEqual(t, len(ms), len(res.Sources))
 	AssertEqual(t, traceCount, res.Total)
-	AssertEqual(t, traceCount, res.Matched)
 }

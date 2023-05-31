@@ -130,28 +130,21 @@ func getKey(path string) string {
 	return strings.TrimPrefix(path, "/")
 }
 
-var words = []string{
-	"air", "area", "art", "back", "body",
-	"book", "business", "car", "case", "change",
-	"child", "city", "community", "company", "country",
-	"day", "door", "education", "end", "eye",
-	"face", "fact", "family", "father", "force",
-	"friend", "game", "girl", "government", "group",
-	"guy", "hand", "head", "health", "history",
-	"home", "hour", "house", "idea", "information",
-	"issue", "job", "kid", "kind", "law",
-	"level", "life", "line", "lot", "man",
-	"member", "minute", "moment", "money", "month",
-	"morning", "mother", "name", "night", "number",
-	"office", "others", "parent", "part", "party",
-	"people", "person", "place", "point", "power",
-	"president", "problem", "program", "question", "reason",
-	"research", "result", "right", "room", "school",
-	"service", "side", "state", "story", "student",
-	"study", "system", "teacher", "team", "thing",
-	"time", "war", "water", "way", "week",
-	"woman", "word", "work", "world", "year",
-}
+var words = strings.Fields(`
+	air      area       art      back      body        book     business   car
+	case     change     child    city      community   company  country    day
+	door     education  end      eye       face        fact     family     father
+	force    friend     game     girl      government  group    guy        hand
+	head     health     history  home      hour        house    idea       information
+	issue    job        kid      kind      law         level    life       line
+	lot      man        member   minute    moment      money    month      morning
+	mother   name       night    number    office      others   parent     part
+	party    people     person   place     point       power    president  problem
+	program  question   reason   research  result      right    room       school
+	service  side       state    story     student     study    system     teacher
+	team     thing      time     war       water       way      week       woman
+	word     work       world    year      yellow      yonder   zebra      zelda
+`)
 
 func getWord() string {
 	return words[rand.Intn(len(words))]

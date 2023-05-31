@@ -173,10 +173,16 @@ func (sc *StatsCategory) TotalCount() int {
 }
 
 // Rate is the approximate number of traces per second seen by this category.
-func (sc *StatsCategory) Rate() float64 {
+// The first call to rate that returns a non-zero value will store that value,
+// and subsequent calls will return the stored value.
+func (sc *StatsCategory) Rate() (r float64) {
 	if sc.rate != 0 {
 		return sc.rate
 	}
+
+	defer func() {
+		sc.rate = r
+	}()
 
 	// if isFew := sc.Newest.Sub(sc.Oldest) < time.Second; isFew {
 	// return 1
@@ -233,6 +239,10 @@ func (sc *StatsCategory) Merge(other *StatsCategory) {
 		return
 	}
 
+	ourRate := sc.Rate()
+	theirRate := other.Rate()
+	mergedRate := ourRate + theirRate
+
 	// Overall merges stats from different categories together, so we can't
 	// assert that category names must be the same.
 
@@ -250,6 +260,8 @@ func (sc *StatsCategory) Merge(other *StatsCategory) {
 
 	sc.Oldest = olderOf(sc.Oldest, other.Oldest)
 	sc.Newest = newerOf(sc.Newest, other.Newest)
+
+	sc.rate = mergedRate
 }
 
 //

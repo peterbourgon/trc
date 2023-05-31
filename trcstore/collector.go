@@ -125,14 +125,29 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 		selected []*SearchTrace
 	)
 	for _, rb := range c.categories.GetAll() {
+		var categorySelected []*SearchTrace
 		rb.Walk(func(tr trc.Trace) error {
-			stats.Observe(tr)
+			// Every trace should update the total, and be observed by stats.
 			total++
-			if req.Allow(ctx, tr) {
-				selected = append(selected, NewSearchTrace(tr))
+			stats.Observe(tr)
+
+			// If we already have the max number of traces from this category,
+			// then we won't select any more. We do this first, because it's
+			// cheaper than checking allow.
+			if len(categorySelected) >= req.Limit {
+				return nil
 			}
+
+			// If the request won't allow this trace, then we won't select it.
+			if !req.Allow(ctx, tr) {
+				return nil
+			}
+
+			// Otherwise, collect a static copy of the trace.
+			categorySelected = append(categorySelected, NewSearchTrace(tr))
 			return nil
 		})
+		selected = append(selected, categorySelected...)
 	}
 
 	matched := len(selected)
