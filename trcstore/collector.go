@@ -124,7 +124,8 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 		total    int
 		selected []*SearchTrace
 	)
-	for _, rb := range c.categories.GetAll() {
+	for category, rb := range c.categories.GetAll() {
+		// TODO: could do these concurrently
 		var categorySelected []*SearchTrace
 		rb.Walk(func(tr trc.Trace) error {
 			// Every trace should update the total, and be observed by stats.
@@ -147,10 +148,13 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 			categorySelected = append(categorySelected, NewSearchTrace(tr))
 			return nil
 		})
+		tr.LazyTracef("processed category=%s categorySelected=%d", category, len(categorySelected))
 		selected = append(selected, categorySelected...)
 	}
 
 	matched := len(selected)
+
+	tr.LazyTracef("categories=%d traces=%d matched=%d selected=%d", len(stats.Categories), total, matched, len(selected))
 
 	sort.Slice(selected, func(i, j int) bool {
 		return selected[i].Started.After(selected[j].Started)
@@ -159,7 +163,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 		selected = selected[:req.Limit]
 	}
 
-	tr.LazyTracef("categories=%d traces=%d matched=%d selected=%d", len(stats.Categories), total, matched, len(selected))
+	tr.LazyTracef("selected=%d", len(selected))
 
 	var sources []string
 	if c.source != "" {

@@ -175,6 +175,8 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 		return nil, fmt.Errorf("template (%s) not found", templateName)
 	}
 
+	tr.LazyTracef("template (%s) lookup OK (%s)", templateName, templateFile.Name())
+
 	var templateBuf bytes.Buffer
 	if err := templateFile.Execute(&templateBuf, data); err != nil {
 		return nil, fmt.Errorf("execute template: %w", err)
