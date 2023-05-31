@@ -37,11 +37,12 @@ func (s *Stats) Observe(trs ...trc.Trace) {
 		}
 
 		var (
-			start      = tr.Started()
-			isFinished = tr.Finished()
-			isActive   = !isFinished
-			isBucket   = isFinished && !tr.Errored()
-			isErrored  = isFinished && tr.Errored()
+			start         = tr.Started()
+			traceFinished = tr.Finished()
+			traceErrored  = tr.Errored()
+			isActive      = !traceFinished
+			isBucket      = traceFinished && !traceErrored
+			isErrored     = traceFinished && traceErrored
 		)
 
 		switch {

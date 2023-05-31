@@ -159,7 +159,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 		selected = selected[:req.Limit]
 	}
 
-	tr.LazyTracef("category count %d, trace count %d, matched count %d, selected count %d", len(stats.Categories), total, matched, len(selected))
+	tr.LazyTracef("categories=%d traces=%d matched=%d selected=%d", len(stats.Categories), total, matched, len(selected))
 
 	var sources []string
 	if c.source != "" {
