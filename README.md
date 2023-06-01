@@ -2,8 +2,6 @@
 
 trc provides in-process request tracing, an efficient alternative to logging.
 
-<kbd><img src="/ui.png"/></kbd>
-
 Most consumers should import [package eztrc][eztrc], which provides an API
 specifically designed for common use cases.
 
@@ -32,6 +30,10 @@ func someFunction(ctx context.Context, ...) {
 	// ...
 }
 ```
+
+Traces can be viewed, queried, etc. via a web UI.
+
+<kbd><img src="/ui.png"/></kbd>
 
 See the [examples dir](https://github.com/peterbourgon/trc/tree/main/_examples)
 for more complete example applications.
