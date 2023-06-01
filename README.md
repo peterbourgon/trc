@@ -1,13 +1,15 @@
 # trc [![Go Reference](https://pkg.go.dev/badge/github.com/peterbourgon/trc.svg)](https://pkg.go.dev/github.com/peterbourgon/trc) ![Latest Release](https://img.shields.io/github/v/release/peterbourgon/trc?style=flat-square) ![Build Status](https://github.com/peterbourgon/trc/actions/workflows/test.yaml/badge.svg?branch=main)
 
 trc provides in-process request tracing, an efficient alternative to logging.
+The package is heavily inspired by https://golang.org/x/net/trace, much
+gratitude to those authors.
 
-Most consumers should import [package eztrc][eztrc], which provides an API
-specifically designed for common use cases.
+Most users should import [package eztrc][eztrc], which offers an API designed
+for most common use cases.
 
 [eztrc]: https://pkg.go.dev/github.com/peterbourgon/trc/eztrc
 
-Here's a quick-and-dirty example for a typical HTTP server.
+Here's a quick-and-dirty usage example for a typical HTTP server.
 
 ```go
 func main() {
@@ -31,7 +33,7 @@ func someFunction(ctx context.Context, ...) {
 }
 ```
 
-Traces can be viewed, queried, etc. via a web UI.
+Traces can be viewed, queried, etc. through a web UI.
 
 <kbd><img src="/ui.png"/></kbd>
 
