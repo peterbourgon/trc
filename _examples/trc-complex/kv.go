@@ -17,9 +17,13 @@ import (
 func apiCategory(r *http.Request) string {
 	switch r.Method {
 	case "DELETE":
-		return "DEL"
+		return "KV Del"
+	case "GET":
+		return "KV Get"
+	case "PUT":
+		return "KV Set"
 	default:
-		return r.Method
+		return "KV " + r.Method
 	}
 }
 

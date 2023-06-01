@@ -2,6 +2,8 @@
 
 trc provides in-process request tracing, an efficient alternative to logging.
 
+<kbd><img src="/ui.png"/></kbd>
+
 Most consumers should import [package eztrc][eztrc], which provides an API
 specifically designed for common use cases.
 
