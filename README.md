@@ -1,4 +1,4 @@
-# trc [![Go Reference](https://pkg.go.dev/badge/github.com/peterbourgon/trc.svg)](https://pkg.go.dev/github.com/peterbourgon/trc) ![Latest Release](https://img.shields.io/github/v/release/peterbourgon/trc?style=flat-square) ![Build Status](https://github.com/peterbourgon/trc/actions/workflows/test.yml/badge.svg?branch=main)
+# trc [![Go Reference](https://pkg.go.dev/badge/github.com/peterbourgon/trc.svg)](https://pkg.go.dev/github.com/peterbourgon/trc) ![Latest Release](https://img.shields.io/github/v/release/peterbourgon/trc?style=flat-square) ![Build Status](https://github.com/peterbourgon/trc/actions/workflows/test.yaml/badge.svg?branch=main)
 
 trc provides in-process request tracing, an efficient alternative to logging.
 
