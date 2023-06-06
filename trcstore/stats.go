@@ -191,7 +191,7 @@ func (sc *StatsCategory) Rate() (r float64) {
 
 	var (
 		total      = sc.TotalCount()
-		delta      = sc.Newest.Sub(sc.Oldest)
+		delta      = time.Since(sc.Oldest)
 		totalZero  = total <= 0
 		deltaZero  = delta <= 0
 		newestZero = sc.Newest.IsZero()
