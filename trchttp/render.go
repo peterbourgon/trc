@@ -211,37 +211,38 @@ func FileLineURLVSCode(fileline string) template.URL {
 }
 
 var templateFuncs = template.FuncMap{
-	"filelineurl":        func(fileline string) template.URL { return FileLineURL(fileline) },
-	"intadd":             func(i, j int) int { return i + j },
-	"floatadd":           func(i, j float64) float64 { return i + j },
-	"timenow":            func() time.Time { return time.Now().UTC() },
-	"timesince":          func(t time.Time) time.Duration { return time.Since(t) },
-	"timediff":           func(a, b time.Time) time.Duration { return a.Sub(b) },
-	"timeadd":            func(t time.Time, d time.Duration) time.Time { return t.Add(d) },
-	"timetrunc":          func(t time.Time) string { return t.Format(timeFormat) },
-	"timerfc3339":        func(t time.Time) string { return t.Format(time.RFC3339) },
-	"durationpercent":    func(n, d time.Duration) int { return int(100 * float64(n) / float64(d)) },
-	"uint64percent":      func(n, d uint64) int { return int(100 * float64(n) / float64(d)) },
-	"intpercent":         func(n, d int) int { return int(100 * float64(n) / float64(d)) },
-	"queryescape":        func(s string) string { return url.QueryEscape(s) },
-	"pathescape":         func(s string) string { return url.PathEscape(s) },
-	"htmlescape":         func(s string) string { return template.HTMLEscapeString(s) },
-	"insertbreaks":       func(s string) template.HTML { return template.HTML(breaksReplacer.Replace(s)) },
-	"urlencode":          func(s string) template.URL { return template.URL(url.QueryEscape(s)) },
-	"safeurl":            func(s string) template.URL { return template.URL(s) },
-	"stringsjoinnewline": func(a []string) string { return strings.Join(a, string([]byte{0xa})) },
-	"defaultbucketing":   func() []time.Duration { return trcstore.DefaultBucketing },
-	"reflectdeepequal":   func(a, b any) bool { return reflect.DeepEqual(a, b) },
-	"positiveduration":   positiveduration,
-	"truncateduration":   truncateduration,
-	"humanizeduration":   humanizeduration,
-	"humanizebytes":      humanizebytes,
-	"humanizefloat":      humanizefloat,
-	"ratecalc":           ratecalc,
-	"category2class":     category2class,
-	"highlightclasses":   highlightclasses,
-	"fileline2filepath":  fileline2filepath,
-	"debuginfo":          debuginfo,
+	"filelineurl":         func(fileline string) template.URL { return FileLineURL(fileline) },
+	"intadd":              func(i, j int) int { return i + j },
+	"floatadd":            func(i, j float64) float64 { return i + j },
+	"timenow":             func() time.Time { return time.Now().UTC() },
+	"timesince":           func(t time.Time) time.Duration { return time.Since(t) },
+	"timediff":            func(a, b time.Time) time.Duration { return a.Sub(b) },
+	"timeadd":             func(t time.Time, d time.Duration) time.Time { return t.Add(d) },
+	"timetrunc":           func(t time.Time) string { return t.Format(timeFormat) },
+	"timerfc3339":         func(t time.Time) string { return t.Format(time.RFC3339) },
+	"durationpercent":     func(n, d time.Duration) int { return int(100 * float64(n) / float64(d)) },
+	"uint64percent":       func(n, d uint64) int { return int(100 * float64(n) / float64(d)) },
+	"intpercent":          func(n, d int) int { return int(100 * float64(n) / float64(d)) },
+	"queryescape":         func(s string) string { return url.QueryEscape(s) },
+	"pathescape":          func(s string) string { return url.PathEscape(s) },
+	"htmlescape":          func(s string) string { return template.HTMLEscapeString(s) },
+	"insertbreaks":        func(s string) template.HTML { return template.HTML(breaksReplacer.Replace(s)) },
+	"urlencode":           func(s string) template.URL { return template.URL(url.QueryEscape(s)) },
+	"safeurl":             func(s string) template.URL { return template.URL(s) },
+	"stringsjoinnewline":  func(a []string) string { return strings.Join(a, string([]byte{0xa})) },
+	"defaultbucketing":    func() []time.Duration { return trcstore.DefaultBucketing },
+	"reflectdeepequal":    func(a, b any) bool { return reflect.DeepEqual(a, b) },
+	"positiveduration":    positiveduration,
+	"truncateduration":    truncateduration,
+	"humanizeduration":    humanizeduration,
+	"humanizebytes":       humanizebytes,
+	"humanizefloat":       humanizefloat,
+	"ratecalc":            ratecalc,
+	"category2class":      category2class,
+	"highlightclasses":    highlightclasses,
+	"fileline2filepath":   fileline2filepath,
+	"stringslicecontains": stringslicecontains,
+	"debuginfo":           debuginfo,
 }
 
 func sha256hex(input string) string {
@@ -370,6 +371,15 @@ func fileline2filepath(fileline string) string {
 	}
 
 	return ""
+}
+
+func stringslicecontains(ss []string, s string) bool {
+	for _, candidate := range ss {
+		if candidate == s {
+			return true
+		}
+	}
+	return false
 }
 
 func debuginfo() string {

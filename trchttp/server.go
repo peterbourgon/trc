@@ -104,6 +104,7 @@ func parseSearchRequest(ctx context.Context, r *http.Request) *trcstore.SearchRe
 		)
 		tr.LazyTracef("parsing search request from URL %q", urlquery.Encode())
 		req = trcstore.SearchRequest{
+			Sources:     urlquery["source"],
 			IDs:         urlquery["id"],
 			Category:    urlquery.Get("category"),
 			IsActive:    urlquery.Has("active"),

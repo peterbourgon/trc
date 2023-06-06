@@ -24,6 +24,9 @@ type Searcher interface {
 // a collection of traces. All fields are optional; the zero value of a search
 // request is valid, and matches all traces.
 type SearchRequest struct {
+	// Sources selects traces from any of the provided sources.
+	Sources []string `json:"sources"`
+
 	// IDs selects traces with any of the provided ID strings.
 	IDs []string `json:"ids"`
 
@@ -168,6 +171,19 @@ func (req SearchRequest) String() string {
 
 // Allow returns true if the search request matches the provided trace.
 func (req *SearchRequest) Allow(ctx context.Context, tr trc.Trace) bool {
+	if len(req.Sources) > 0 {
+		var found bool
+		for _, source := range req.Sources {
+			if source == tr.Source() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+
 	if len(req.IDs) > 0 {
 		var found bool
 		for _, id := range req.IDs {

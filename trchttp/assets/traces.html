@@ -103,6 +103,12 @@ function highlightquery() {
 	{{ $query_params = printf "%s&q=%s" $query_params $r.Query | safeurl }}
 {{ end }}
 
+{{ if $r.Sources }}
+	{{ range $r.Sources }}
+		{{ $query_params = printf "%s&source=%s" $query_params . | safeurl }}
+	{{ end }}
+{{ end }}
+
 {{ if not (reflectdeepequal defaultbucketing $r.Bucketing) }}
 	{{ range $r.Bucketing }}
 		{{ $query_params = printf "%s&b=%s" $query_params . | safeurl }}
@@ -231,6 +237,17 @@ function highlightquery() {
 		<form id="search-form" method="GET" target="">
 			<input id="search-box" type="text" name="q" placeholder="regex" value="{{.Request.Query}}" size="32" autofocus />
 
+			{{ if .Response.Sources }}
+				{{ $first_source := "" }}
+				{{ if gt (len $r.Sources) 0 -}}{{ $first_source = index $r.Sources 0 }}{{ end -}}
+				<select id="search-source" name="source">
+					<option value="" {{ if eq $first_source "" -}}selected{{ end -}}>all sources</option>
+					{{ range .Response.Sources }}
+					<option value="{{.}}" {{ if eq $first_source . -}}selected{{ end -}}>{{.}}</option>
+					{{ end }}
+				</select>
+			{{ end }}
+
 			<select id="search-limit" name="n">
 				<option name="10"   {{ if eq .Request.Limit 10  -}}selected{{ end -}}>10 </option>
 				<option name="25"   {{ if eq .Request.Limit 25  -}}selected{{ end -}}>25 </option>
@@ -240,12 +257,23 @@ function highlightquery() {
 				{{ end -}}
 			</select>
 
-			{{ if .Request.Category    -}}{{ if ne .Request.Category "overall" -}}<input type="hidden" name="category"  value="{{.Request.Category}}" />{{ end -}}{{ end -}}
-			{{ if .Request.IsActive    -}}<input type="hidden" name="active"   value="{{.Request.IsActive}}"    />{{ end -}}
-			{{ if .Request.MinDuration -}}<input type="hidden" name="min"      value="{{.Request.MinDuration}}" />{{ end -}}
-			{{ if .Request.IsErrored   -}}<input type="hidden" name="errored"  value="{{.Request.IsErrored}}"   />{{ end -}}
+			{{ if and (.Request.Category) (ne .Request.Category "overall") -}}
+				<input type="hidden" name="category"  value="{{.Request.Category}}" />
+			{{ end -}}
 
-			<input id="search-button" type="submit" value="search"/>
+			{{ if .Request.IsActive -}}
+				<input type="hidden" name="active" value="{{.Request.IsActive}}" />
+			{{ end -}}
+
+			{{ if .Request.MinDuration -}}
+				<input type="hidden" name="min" value="{{.Request.MinDuration}}" />
+			{{ end -}}
+
+			{{ if .Request.IsErrored -}}
+				<input type="hidden" name="errored" value="{{.Request.IsErrored}}" />
+			{{ end -}}
+
+			<input id="search-button" type="submit" value="search" />
 		</form>
 	</div>
 
@@ -267,19 +295,32 @@ function highlightquery() {
 
 	<div id="topline-metadata">
 		{{ if .Response.Sources }}
-			<div id="topline-search-sources" class="topline-search" title="{{stringsjoinnewline .Response.Sources}}">
-				<details>
-					<summary>sources={{ len .Response.Sources }}</summary>
-					<div>
-						{{ range .Response.Sources }}{{ . }}<br/>{{ end }}
-					</div>
-				</details>
-			</div>
+		<div id="topline-search-sources" class="topline-search">
+			<details>
+				<summary>sources={{ len .Response.Sources }}</summary>
+				<div>
+					{{ range .Response.Sources -}} {{.}}<br/> {{ end -}}
+				</div>
+			</details>
+		</div>
 		{{ end }}
-		<div id="topline-search-total"    class="topline-search">traces={{ .Response.Stats.Overall.TotalCount }}</div>
-		<div id="topline-search-matched"  class="topline-search">matched={{ .Response.Matched }}</div>
-		<div id="topline-search-shown"    class="topline-search">shown={{ len .Response.Selected }}</div>
-		<div id="topline-search-took"     class="topline-search">took={{ humanizeduration .Response.Duration }}</div>
+
+		<div id="topline-search-total" class="topline-search">
+			traces={{ .Response.Stats.Overall.TotalCount }}
+		</div>
+
+		<div id="topline-search-matched" class="topline-search">
+			matched={{ .Response.Matched }}
+		</div>
+
+		<div id="topline-search-shown" class="topline-search">
+			shown={{ len .Response.Selected }}
+		</div>
+
+		<div id="topline-search-took" class="topline-search">
+			took={{ humanizeduration .Response.Duration }}
+		</div>
+
 		{{ $problems := .Problems }}
 		{{ if $problems -}}
 			<div id="topline-search-problems" class="topline-search">

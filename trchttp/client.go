@@ -108,6 +108,10 @@ func httpRequest(ctx context.Context, req *trcstore.SearchRequest, baseurl strin
 		urlquery.Set("n", strconv.Itoa(req.Limit))
 	}
 
+	for _, source := range req.Sources {
+		urlquery.Add("source", source)
+	}
+
 	for _, id := range req.IDs {
 		urlquery.Add("id", id)
 	}
