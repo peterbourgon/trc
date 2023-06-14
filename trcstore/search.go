@@ -227,7 +227,7 @@ func (req *SearchRequest) Allow(ctx context.Context, tr trc.Trace) bool {
 				if req.regexp.MatchString(c.Function) {
 					return true
 				}
-				if req.regexp.MatchString(c.FileLine) {
+				if req.regexp.MatchString(c.CompactFileLine()) {
 					return true
 				}
 			}
