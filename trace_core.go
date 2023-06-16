@@ -59,13 +59,14 @@ var traceIDEntropy = ulid.DefaultEntropy()
 type coreTrace struct {
 	mtx       sync.Mutex
 	source    string
-	id        string
+	id        ulid.ULID
 	category  string
 	start     time.Time
 	errored   bool
 	finished  bool
 	duration  time.Duration
 	events    []*coreEvent
+	nostacks  bool
 	eventsmax int
 	truncated int
 }
@@ -91,19 +92,20 @@ var coreTracePool = sync.Pool{
 	},
 }
 
-// newCoreTrace creates and starts a new trace with the given category.
+// newCoreTrace starts a new trace with the given source and category.
 func newCoreTrace(source, category string) *coreTrace {
 	trcdebug.CoreTraceNewCount.Add(1)
 	now := time.Now().UTC()
 	tr := coreTracePool.Get().(*coreTrace)
 	tr.source = source
-	tr.id = ulid.MustNew(ulid.Timestamp(now), traceIDEntropy).String()
+	tr.id = ulid.MustNew(ulid.Timestamp(now), traceIDEntropy) // defer String computation
 	tr.category = category
 	tr.start = now
 	tr.errored = false
 	tr.finished = false
 	tr.duration = 0
 	tr.events = tr.events[:0]
+	tr.nostacks = !TraceEventCallStacks.Load()
 	tr.eventsmax = getTraceMaxEvents()
 	tr.truncated = 0
 	return tr
@@ -114,7 +116,7 @@ func (tr *coreTrace) Source() string {
 }
 
 func (tr *coreTrace) ID() string {
-	return tr.id // immutable
+	return tr.id.String() // immutable
 }
 
 func (tr *coreTrace) Category() string {
@@ -268,8 +270,13 @@ func (tr *coreTrace) Free() {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
+	if !tr.finished { // presumably still in use by caller(s)
+		trcdebug.CoreTraceLostCount.Add(1)
+		return // can't recycle, will be GC'd
+	}
+
 	for _, ev := range tr.events {
-		ev.Free() // TODO: these individual Frees can show up in profiles, maybe pre-allocate?
+		ev.free() // TODO: these individual frees can show up in profiles, maybe pre-allocate?
 	}
 	tr.events = tr.events[:0]
 
@@ -288,6 +295,9 @@ var coreEventPool = sync.Pool{
 	},
 }
 
+// coreEvent must exist in the context of a single parent core trace, and must
+// not be retained beyond the lifetime of that parent trace, especially after
+// the parent trace is free'd. It is not safe for concurrent use.
 type coreEvent struct {
 	when  time.Time
 	what  *stringer
@@ -297,9 +307,10 @@ type coreEvent struct {
 }
 
 const (
-	flagNormal = 0b0000_0000
-	flagLazy   = 0b0000_0001
-	flagError  = 0b0000_0010
+	flagNormal  = 0b0000_0000
+	flagLazy    = 0b0000_0001
+	flagError   = 0b0000_0010
+	flagNoStack = 0b0000_0100
 )
 
 func newCoreEvent(flags uint8, format string, args ...any) *coreEvent {
@@ -311,24 +322,16 @@ func newCoreEvent(flags uint8, format string, args ...any) *coreEvent {
 	} else {
 		cev.what = newNormalStringer(format, args...)
 	}
-	if TraceEventCallStacks.Load() {
-		cev.pcn = runtime.Callers(3, cev.pc[:])
-	} else {
+	if flags&flagNoStack != 0 {
 		cev.pcn = 0
+	} else {
+		cev.pcn = runtime.Callers(3, cev.pc[:])
 	}
 	cev.iserr = flags&flagError != 0
 	return cev
 }
 
-func (cev *coreEvent) When() time.Time {
-	return cev.when
-}
-
-func (cev *coreEvent) What() string {
-	return cev.what.String()
-}
-
-func (cev *coreEvent) Stack() []Frame {
+func (cev *coreEvent) getStack() []Frame {
 	stdframes := runtime.CallersFrames(cev.pc[:cev.pcn])
 	trcframes := make([]Frame, 0, cev.pcn)
 	fr, more := stdframes.Next()
@@ -344,31 +347,30 @@ func (cev *coreEvent) Stack() []Frame {
 	return trcframes
 }
 
-func (cev *coreEvent) IsError() bool {
-	return cev.iserr
-}
-
-func (cev *coreEvent) Free() {
-	cev.what.Free()
+func (cev *coreEvent) free() {
+	cev.what.free()
 	cev.what = nil
 	trcdebug.CoreEventFreeCount.Add(1)
 	coreEventPool.Put(cev)
 }
 
-func snapshotEvents(evs []*coreEvent) []Event {
-	cevs := make([]Event, len(evs))
-	for i, ev := range evs {
-		cevs[i] = Event{
-			When:    ev.When(),
-			What:    ev.What(),
-			Stack:   ev.Stack(),
-			IsError: ev.IsError(),
+func snapshotEvents(cevs []*coreEvent) []Event {
+	res := make([]Event, len(cevs))
+	for i, ev := range cevs {
+		res[i] = Event{
+			When:    ev.when,
+			What:    ev.what.String(),
+			Stack:   ev.getStack(),
+			IsError: ev.iserr,
 		}
 	}
-	return cevs
+	return res
 }
 
 func ignoreStackFrameFunction(function string) bool {
+	if !strings.HasPrefix(function, "github.com/peterbourgon/trc") {
+		return false // fast path
+	}
 	if strings.HasPrefix(function, "github.com/peterbourgon/trc.(*prefixTrace)") {
 		return true
 	}
@@ -445,7 +447,7 @@ func (z *stringer) String() string {
 	return ns.value
 }
 
-func (z *stringer) Free() {
+func (z *stringer) free() {
 	trcdebug.StringerFreeCount.Add(1)
 	stringerPool.Put(z)
 }

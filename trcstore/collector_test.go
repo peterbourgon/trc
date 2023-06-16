@@ -2,10 +2,14 @@ package trcstore_test
 
 import (
 	"context"
+	"fmt"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/internal/trcdebug"
 	"github.com/peterbourgon/trc/trcstore"
 )
 
@@ -79,4 +83,54 @@ func TestCollectorBasics(t *testing.T) {
 			AssertEqual(t, "xyz", tr.Source())
 		}
 	})
+}
+
+func TestCollectorDropActive(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	categorySize := 3
+	collector := trcstore.NewCollector(trcstore.CollectorConfig{CategorySize: categorySize})
+
+	defer func(lostBefore uint64) {
+		lostAfter := trcdebug.CoreTraceLostCount.Load()
+		t.Logf("lost: %d -> %d", lostBefore, lostAfter)
+	}(trcdebug.CoreTraceLostCount.Load())
+
+	var traces []trc.Trace
+	for i := 0; i < 5*categorySize; i++ {
+		_, tr := collector.NewTrace(ctx, "foo")
+		tr.Tracef("trace %d", i+1)
+		traces = append(traces, tr)
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j, tr := range traces {
+				tr.Tracef("trace %d", j+1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	for i, tr := range traces {
+		tr.Finish()
+		want := fmt.Sprintf("trace %d", i+1)
+		bad := map[string]int{}
+		for _, ev := range tr.Events() {
+			if have := ev.What; want != have {
+				bad[have]++
+			}
+		}
+		if len(bad) > 0 {
+			var lines []string
+			for k, v := range bad {
+				lines = append(lines, fmt.Sprintf("%q (x%d)", k, v))
+			}
+			t.Errorf("want %q, have additional %s", want, strings.Join(lines, ", "))
+		}
+	}
 }
