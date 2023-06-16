@@ -17,7 +17,7 @@ func BenchmarkTraceEvents(b *testing.B) {
 		}
 	})
 
-	b.Run("Tracef const string", func(b *testing.B) {
+	b.Run("normal const string", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_, tr := trc.New(ctx, "source", "category")
 			tr.Tracef("format string")
@@ -25,7 +25,7 @@ func BenchmarkTraceEvents(b *testing.B) {
 		}
 	})
 
-	b.Run("LazyTracef const string", func(b *testing.B) {
+	b.Run("lazy const string", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_, tr := trc.New(ctx, "source", "category")
 			tr.LazyTracef("format string")
@@ -33,7 +33,7 @@ func BenchmarkTraceEvents(b *testing.B) {
 		}
 	})
 
-	b.Run("Tracef single int", func(b *testing.B) {
+	b.Run("normal single int", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_, tr := trc.New(ctx, "source", "category")
 			tr.Tracef("format string %d", i)
@@ -41,7 +41,7 @@ func BenchmarkTraceEvents(b *testing.B) {
 		}
 	})
 
-	b.Run("LazyTracef single int", func(b *testing.B) {
+	b.Run("lazy single int", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_, tr := trc.New(ctx, "source", "category")
 			tr.LazyTracef("format string %d", i)
@@ -49,7 +49,7 @@ func BenchmarkTraceEvents(b *testing.B) {
 		}
 	})
 
-	b.Run("Tracef five args", func(b *testing.B) {
+	b.Run("normal five args", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_, tr := trc.New(ctx, "source", "category")
 			tr.Tracef("format string %d %d %d %d %d", i, i, i, i, i)
@@ -57,7 +57,7 @@ func BenchmarkTraceEvents(b *testing.B) {
 		}
 	})
 
-	b.Run("LazyTracef five args", func(b *testing.B) {
+	b.Run("lazy five args", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_, tr := trc.New(ctx, "source", "category")
 			tr.LazyTracef("format string %d %d %d %d %d", i, i, i, i, i)
