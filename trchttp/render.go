@@ -159,7 +159,7 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 				continue
 			}
 			localFiles = append(localFiles, assetName)
-			tr.Tracef("using local asset file %s", assetName)
+			tr.LazyTracef("using local asset file %s", assetName)
 		}
 		if len(localFiles) > 0 {
 			tt, err := templateRoot.ParseFiles(localFiles...)
@@ -240,7 +240,6 @@ var templateFuncs = template.FuncMap{
 	"ratecalc":            ratecalc,
 	"category2class":      category2class,
 	"highlightclasses":    highlightclasses,
-	"fileline2filepath":   fileline2filepath,
 	"stringslicecontains": stringslicecontains,
 	"debuginfo":           debuginfo,
 }
@@ -359,18 +358,6 @@ func ratecalc(n int, d time.Duration) float64 {
 		return 0.0
 	}
 	return float64(n) / float64(d.Seconds())
-}
-
-func fileline2filepath(fileline string) string {
-	if strings.HasPrefix(fileline, "github.com/peterbourgon") {
-		homedir, _ := os.UserHomeDir()
-		homedir, _ = filepath.Abs(homedir)
-		fileline = strings.TrimPrefix(fileline, "github.com/peterbourgon")
-		fileline = filepath.Join(homedir, "src", "peterbourgon", fileline)
-		return fileline
-	}
-
-	return ""
 }
 
 func stringslicecontains(ss []string, s string) bool {
