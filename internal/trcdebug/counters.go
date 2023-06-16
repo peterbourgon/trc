@@ -38,6 +38,6 @@ var (
 	// StringerFreeCount tracks when a stringer is free'd.
 	StringerFreeCount atomic.Uint64
 
-	// StringerLostCount tracks when a core event is lost (see above).
+	// StringerLostCount tracks when a stringer is lost (see above).
 	StringerLostCount atomic.Uint64
 )
