@@ -127,10 +127,10 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 	for category, rb := range c.categories.GetAll() {
 		// TODO: could do these concurrently
 		var categorySelected []*SearchTrace
-		rb.Walk(func(tr trc.Trace) error {
+		rb.Walk(func(candidate trc.Trace) error {
 			// Every trace should update the total, and be observed by stats.
 			total++
-			stats.Observe(tr)
+			stats.Observe(candidate)
 
 			// If we already have the max number of traces from this category,
 			// then we won't select any more. We do this first, because it's
@@ -140,12 +140,12 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 			}
 
 			// If the request won't allow this trace, then we won't select it.
-			if !req.Allow(ctx, tr) {
+			if !req.Allow(ctx, candidate) {
 				return nil
 			}
 
 			// Otherwise, collect a static copy of the trace.
-			categorySelected = append(categorySelected, NewSearchTrace(tr))
+			categorySelected = append(categorySelected, NewSearchTrace(candidate))
 			return nil
 		})
 		tr.LazyTracef("processed category=%s categorySelected=%d", category, len(categorySelected))
