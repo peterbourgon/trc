@@ -68,7 +68,7 @@ func (f *Filter) String() string {
 	}
 
 	if f.Query != "" {
-		elems = append(elems, "Query:%q", f.Query)
+		elems = append(elems, fmt.Sprintf("Query:%q", f.Query))
 	}
 
 	return fmt.Sprintf("[%s]", strings.Join(elems, " "))
