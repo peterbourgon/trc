@@ -1,0 +1,354 @@
+body {
+	font-family: monospace;
+}
+
+form,
+input,
+select {
+	font-family: monospace;
+}
+
+a,
+a:visited {
+	text-decoration: none;
+	color: blue;
+}
+
+div#c {
+	margin: 1em;
+}
+
+/*
+ * summary table
+ */
+
+table#summary {
+	margin: 1em;
+	border-collapse: collapse;
+	table-layout: fixed;
+}
+
+table#summary th {
+	display: table-cell;
+	width: fit-content;
+	min-width: 7ch;
+	font-weight: normal;
+}
+
+table#summary td.category {
+	padding-right: 1ch;
+}
+
+table#summary th.separator {
+	width: 3ch;
+	min-width: 3ch;
+}
+
+table#summary td,
+th {
+	text-align: center;
+}
+
+table#summary tr {
+	border-bottom: solid 1px #eee;
+}
+
+table#summary tr.header {
+	border-bottom: solid 1px #000;
+}
+
+table#summary tr:nth-last-child(2) {
+	border-bottom: solid 1px #000;
+}
+
+table#summary tr:last-child {
+	border-bottom: 0;
+}
+
+table#summary td.progress {
+	position: relative;
+}
+
+table#summary td.progress div.progress-bar {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	min-width: 1%;
+	max-width: 99%;
+	background-color: rgba(0, 0, 0, 0.10);
+	z-index: -1;
+}
+
+/* error cells show percent from the the right side */
+table#summary td.errored div.progress-bar {
+	right: 0;
+	background-color: rgba(224, 0, 0, 0.2);
+}
+
+table#summary th.newest,
+th.oldest {
+	width: 8ch;
+	min-width: 8ch;
+}
+
+/*
+ * topline
+ */
+
+div#topline {
+	margin: 4ch 2ch;
+	display: flex;
+	align-items: baseline;
+	flex-direction: column;
+}
+
+div#topline>div {
+	display: flex;
+	align-items: baseline;
+	margin: 0 1ch;
+	gap: 1ch;
+}
+
+div#topline input#search-box::selection {
+	background-color: yellow;
+}
+
+div#topline input#search-box.invalid::selection {
+	background-color: rgba(224, 0, 0, 0.2);
+}
+
+div#topline-metadata {
+	padding-left: 1ch;
+	padding-top: 1ch;
+}
+
+div#topline-metadata details summary::-webkit-details-marker {
+	display: none;
+}
+
+div#topline-metadata details summary::marker {
+	display: none;
+}
+
+div#topline-metadata details {
+	display: inline;
+	cursor: pointer;
+}
+
+div#topline-metadata details summary {
+	display: inline;
+}
+
+div#topline-metadata details[open]>div {
+	position: absolute;
+	float: left;
+	border: solid 1px #000;
+	padding: 1ch 2ch;
+	z-index: 10;
+	background-color: white;
+	cursor: text;
+	margin-left: 1ch;
+	box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+}
+
+div#topline-metadata details[open] summary {
+	font-weight: bold;
+}
+
+div#topline-search-problems summary {
+	color: red;
+}
+
+div#topline-search-problems details[open]>div {
+	border: solid 1px red;
+}
+
+div#topline-search-problems summary,
+div#topline-search-sources summary {
+	/* */
+}
+
+/*
+ * traces
+ */
+
+a.trace-anchor {
+	scroll-padding-block: 2ch;
+}
+
+div#traces .trace {
+	display: flex;
+	flex-direction: column;
+	margin: 1em;
+}
+
+/* first line of a trace is a metadata header */
+div#traces .trace .metadata {
+	/* */
+}
+
+div#traces .trace .metadata span.right {
+	float: right;
+}
+
+div#traces .trace .metadata .source {
+	/* */
+}
+
+div#traces .trace .metadata .source>a {
+	color: inherit;
+}
+
+div#traces .trace .metadata span.stacks-link {
+	cursor: pointer;
+}
+
+/* next section is the events table */
+div#traces .trace .events {
+	flex-grow: 10;
+}
+
+/* each row is an event */
+div#traces .trace .events div.event {
+	display: flex;
+	flex-direction: row;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	border-top: solid 1px #ccc;
+}
+
+div#traces .trace .events div.event:first-child,
+div.event:last-child {
+	border-top: solid 1px #666;
+}
+
+/* first cell is timestamp, fixed width */
+div#traces .trace .events div.event div.timestamp {
+	text-align: left;
+	width: 10em;
+	min-width: 10em;
+}
+
+/* next cell is delta, also fixed width, with progress bar */
+div#traces .trace .events div.event div.delta {
+	text-align: left;
+	width: 5em;
+	min-width: 5em;
+	position: relative;
+	z-index: 1;
+}
+
+div#traces .trace .events div.event div.delta .progress-bar {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	min-width: 1%;
+	max-width: 99%;
+	background-color: rgba(0, 0, 0, 0.10);
+	z-index: -1;
+}
+
+/* last cell is the text, should fill the rest of the page */
+div#traces .trace .events div.event div.what {
+	flex: 10 0px;
+	min-width: 25%;
+	padding-left: 2em;
+	text-indent: -2em;
+	overflow: scroll;
+}
+
+div#traces .trace .events div.event div.what.error {
+	color: rgb(224, 0, 0);
+}
+
+div#traces .trace .events div.event div.what.meta {
+	font-style: italic;
+}
+
+/*
+ * stack
+ */
+
+.stack {
+	font-size: smaller;
+	display: flex;
+	flex-direction: column;
+	color: #666;
+}
+
+details.stack-details summary::-webkit-details-marker {
+	display: none;
+}
+
+details.stack-details summary::marker {
+	display: none;
+}
+
+details.stack-details {
+	text-align: right;
+	margin-right: 0.2ch;
+}
+
+details.stack-details>summary {
+	float: right;
+	list-style-type: none;
+	cursor: pointer;
+}
+
+details.stack-details[open] {
+	margin-left: 1rem;
+	padding-left: 1rem;
+}
+
+details.stack-details[open]>summary {
+	font-weight: bold;
+}
+
+div.stack div.frame {
+	margin-right: 2rem;
+}
+
+div.stack table td {
+	text-align: left;
+	color: #666;
+}
+
+div.stack a,
+div.stack a:visited {
+	color: #666;
+	text-decoration: underline;
+}
+
+/*
+ * debug info
+ */
+
+div#debuginfo {
+	position: absolute;
+	top: 1em;
+	right: 1em;
+	max-width: 33%;
+	color: #666;
+	background-color: #eee;
+	border: solid 1px #666;
+	font-size: smaller;
+	padding: 0 2ch;
+	visibility: hidden;
+}
+
+/*
+ * overrides
+ */
+
+.highlight {
+	background-color: yellow;
+}
+
+.numeric {
+	text-align: right !important;
+}
+
+.text {
+	text-align: left !important;
+}

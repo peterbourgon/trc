@@ -90,16 +90,16 @@ type Trace interface {
 // Event is a traced event, similar to a log event, which is created in the
 // context of a specific trace, via methods like Tracef.
 type Event struct {
-	When    time.Time
-	What    string
-	Stack   []Frame
-	IsError bool
+	When    time.Time `json:"when"`
+	What    string    `json:"what"`
+	Stack   []Frame   `json:"stack"`
+	IsError bool      `json:"is_error,omitempty"`
 }
 
 // Frame is a single call frame in an event's call stack.
 type Frame struct {
-	Function string
-	FileLine string
+	Function string `json:"function"`
+	FileLine string `json:"fileline"`
 }
 
 // CompactFileLine returns a human-readable representation of the file and line,

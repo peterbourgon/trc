@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	_ "net/http/pprof"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/eztrc"
 )
 
@@ -33,12 +35,18 @@ func main() {
 	// Serve the trace API over HTTP.
 	var tracesHandler http.Handler
 	{
-		tracesHandler = eztrc.Handler()                                                                 // this serves the singleton eztrc.Collector
-		tracesHandler = eztrc.Middleware(func(*http.Request) string { return "traces" })(tracesHandler) // create a trace for each trace request
+		h := eztrc.Handler() // this serves the singleton eztrc.Collector
+		hh := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx, _ := trc.LogEvents(r.Context(), os.Stderr)
+			h.ServeHTTP(w, r.WithContext(ctx))
+		})
+		hhh := eztrc.Middleware(func(*http.Request) string { return "traces" })(hh) // create a trace for each trace request
+
+		tracesHandler = hhh
 	}
 
 	// Here's how you would change the number of traces per category.
-	eztrc.Collector().Resize(context.Background(), 100)
+	eztrc.Source().SetCategorySize(100)
 
 	// Create a single serve mux for both API endpoints.
 	mux := http.NewServeMux()

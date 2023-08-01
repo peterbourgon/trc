@@ -13,23 +13,23 @@ import (
 
 	"github.com/felixge/fgprof"
 
+	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/trchttp"
-	"github.com/peterbourgon/trc/trcstore"
+	"github.com/peterbourgon/trc/trcsrc"
+	"github.com/peterbourgon/trc/trcweb"
 )
 
 func main() {
 	// Open stack trace links in VS Code.
-	trchttp.FileLineURL = trchttp.FileLineURLVSCode
+	trcweb.FileLineURL = trcweb.FileLineURLVSCode
 
 	// Each port is a distinct instance.
 	ports := []string{"8081", "8082", "8083"}
 
 	// Create a trace collector for each instance.
-	collectors := make([]*trcstore.Collector, len(ports))
-	for i := range collectors {
-		collectors[i] = trcstore.NewCollector(trcstore.CollectorConfig{
-			Source: ports[i],
-		})
+	sources := make([]*trcsrc.Source, len(ports))
+	for i := range sources {
+		sources[i] = trcsrc.NewSource(ports[i], trc.New)
 	}
 
 	// Create a `kv` service for each instance.
@@ -43,7 +43,7 @@ func main() {
 	apiHandlers := make([]http.Handler, len(ports))
 	for i := range apiHandlers {
 		apiHandlers[i] = kvs[i]
-		apiHandlers[i] = trchttp.Middleware(collectors[i].NewTrace, apiCategory)(apiHandlers[i])
+		apiHandlers[i] = trchttp.Middleware(sources[i].NewTrace, apiCategory)(apiHandlers[i])
 	}
 
 	// Generate random load for each `kv` instance.
@@ -58,35 +58,32 @@ func main() {
 
 	// Create a traces HTTP handler for each instance.
 	// We'll also trace each request to this endpoint.
-	tracesHandlers := make([]http.Handler, len(collectors))
+	tracesHandlers := make([]http.Handler, len(sources))
 	for i := range tracesHandlers {
-		tracesHandlers[i] = trchttp.NewServer(collectors[i])
-		tracesHandlers[i] = trchttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return "traces" })(tracesHandlers[i])
+		tracesHandlers[i] = trcweb.NewServer(sources[i])
+		tracesHandlers[i] = trchttp.Middleware(sources[i].NewTrace, func(r *http.Request) string { return "traces" })(tracesHandlers[i])
 	}
 
 	// We can also create a "global" traces handler, which serves aggregate
 	// results from all of the individual trace handlers for each instance.
 	var tracesGlobal http.Handler
 	{
-		// MultiSearcher allows multiple searchers to be treated as one. In this
-		// case, the searchers are the collectors for each instance.
-		var ms trcstore.MultiSearcher
+		// MultiSelecter allows multiple sources to be treated as one.
+		var ms trcsrc.MultiSelecter
 		for i := range ports {
 			// Each instance is modeled with an HTTP client querying the
 			// corresponding trace HTTP handler. This is usually how it would
 			// work, as different instances are usually on different hosts.
-			ms = append(ms, trchttp.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/traces", ports[i])))
+			ms = append(ms, trcweb.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/traces", ports[i])))
 		}
 
 		// Let's also trace requests to this global handler in a distinct trace
 		// collector, and include that collector in the multi-searcher.
-		globalCollector := trcstore.NewCollector(trcstore.CollectorConfig{
-			Source: "global",
-		})
-		ms = append(ms, globalCollector)
+		globalSource := trcsrc.NewSource("global", trc.New)
+		ms = append(ms, globalSource)
 
-		tracesGlobal = trchttp.NewServer(ms)
-		tracesGlobal = trchttp.Middleware(globalCollector.NewTrace, func(r *http.Request) string { return "traces" })(tracesGlobal)
+		tracesGlobal = trcweb.NewServer(ms)
+		tracesGlobal = trchttp.Middleware(globalSource.NewTrace, func(r *http.Request) string { return "traces" })(tracesGlobal)
 	}
 
 	// Now we run HTTP servers for each instance.

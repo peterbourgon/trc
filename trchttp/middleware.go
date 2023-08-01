@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/internal/trcutil"
 )
 
 // Middleware decorates an HTTP handler by creating a trace for each request via
@@ -30,8 +31,8 @@ func Middleware(
 
 			defer func(b time.Time) {
 				code := iw.Code()
-				sent := humanizebytes(iw.Written())
-				took := humanizeduration(time.Since(b))
+				sent := trcutil.HumanizeBytes(iw.Written())
+				took := trcutil.HumanizeDuration(time.Since(b))
 				tr.LazyTracef("HTTP %d, %s, %s", code, sent, took)
 			}(time.Now())
 
