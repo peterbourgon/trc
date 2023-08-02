@@ -9,7 +9,7 @@ import (
 
 func TestSelectScenarios(t *testing.T) {
 	ctx := context.Background()
-	src := trcsrc.NewDefaultSource()
+	src := trcsrc.NewDefaultCollector()
 
 	var id1 string
 	{

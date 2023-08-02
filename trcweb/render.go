@@ -24,7 +24,6 @@ import (
 	"github.com/peterbourgon/trc/internal/trcdebug"
 	"github.com/peterbourgon/trc/internal/trcutil"
 	"github.com/peterbourgon/trc/trcsrc"
-	"github.com/peterbourgon/trc/trcstore"
 )
 
 //go:embed assets/*
@@ -228,7 +227,7 @@ var templateFuncs = template.FuncMap{
 	"InsertBreaks":        func(s string) template.HTML { return template.HTML(breaksReplacer.Replace(s)) },
 	"URLEncode":           func(s string) template.URL { return template.URL(url.QueryEscape(s)) },
 	"SafeURL":             func(s string) template.URL { return template.URL(s) },
-	"DefaultBucketing":    func() []time.Duration { return trcstore.DefaultBucketing },
+	"DefaultBucketing":    func() []time.Duration { return trcsrc.DefaultBucketing },
 	"StringsJoinNewline":  func(a []string) string { return strings.Join(a, string([]byte{0xa})) },
 	"ReflectDeepEqual":    func(a, b any) bool { return reflect.DeepEqual(a, b) },
 	"PositiveDuration":    func(d time.Duration) time.Duration { return iff(d > 0, d, 0) },

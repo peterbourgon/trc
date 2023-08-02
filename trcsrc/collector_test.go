@@ -7,10 +7,10 @@ import (
 	"github.com/peterbourgon/trc/trcsrc"
 )
 
-func TestSourceResize(t *testing.T) {
+func TestCollectorResize(t *testing.T) {
 	var (
 		ctx      = context.Background()
-		src      = trcsrc.NewDefaultSource()
+		src      = trcsrc.NewDefaultCollector()
 		category = "my category"
 		count    = 100
 		ids      = []string{}

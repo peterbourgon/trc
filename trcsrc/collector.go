@@ -9,74 +9,74 @@ import (
 	"github.com/peterbourgon/trc/internal/trcringbuf"
 )
 
-type Source struct {
+type Collector struct {
 	name       string
 	newTrace   NewTraceFunc
 	categories *trcringbuf.RingBuffers[trc.Trace]
 }
 
-var _ Selecter = (*Source)(nil)
+var _ Selecter = (*Collector)(nil)
 
-func NewSource(name string, newTrace NewTraceFunc) *Source {
-	return &Source{
+func NewCollector(name string, newTrace NewTraceFunc) *Collector {
+	return &Collector{
 		name:       name,
 		newTrace:   newTrace,
 		categories: trcringbuf.NewRingBuffers[trc.Trace](defaultCategorySize),
 	}
 }
 
-func NewDefaultSource() *Source {
-	return NewSource("default", trc.New)
+func NewDefaultCollector() *Collector {
+	return NewCollector("default", trc.New)
 }
 
 type NewTraceFunc func(ctx context.Context, source string, category string) (context.Context, trc.Trace)
 
 const defaultCategorySize = 1000
 
-func (src *Source) SetSourceName(name string) *Source {
-	src.name = name
-	return src
+func (c *Collector) SetSourceName(name string) *Collector {
+	c.name = name
+	return c
 }
 
-func (src *Source) SetNewTrace(newTrace NewTraceFunc) *Source {
-	src.newTrace = newTrace
-	return src
+func (c *Collector) SetNewTrace(newTrace NewTraceFunc) *Collector {
+	c.newTrace = newTrace
+	return c
 }
 
-func (src *Source) SetCategorySize(cap int) *Source {
-	for _, droppedTrace := range src.categories.Resize(cap) {
+func (c *Collector) SetCategorySize(cap int) *Collector {
+	for _, droppedTrace := range c.categories.Resize(cap) {
 		maybeFree(droppedTrace)
 	}
-	return src
+	return c
 }
 
-func (src *Source) NewTrace(ctx context.Context, category string) (context.Context, trc.Trace) {
+func (c *Collector) NewTrace(ctx context.Context, category string) (context.Context, trc.Trace) {
 	if tr, ok := trc.MaybeGet(ctx); ok {
 		tr.LazyTracef("(+ %s)", category)
 		return ctx, tr
 	}
 
-	ctx, tr := src.newTrace(ctx, src.name, category)
+	ctx, tr := c.newTrace(ctx, c.name, category)
 
-	if droppedTrace, didDrop := src.categories.GetOrCreate(category).Add(tr); didDrop {
+	if droppedTrace, didDrop := c.categories.GetOrCreate(category).Add(tr); didDrop {
 		maybeFree(droppedTrace)
 	}
 
 	return ctx, tr
 }
 
-func (src *Source) Select(ctx context.Context, req *SelectRequest) (*SelectResponse, error) {
+func (c *Collector) Select(ctx context.Context, req *SelectRequest) (*SelectResponse, error) {
 	var (
 		tr            = trc.Get(ctx)
 		begin         = time.Now()
 		normalizeErrs = req.Normalize()
+		stats         = NewSelectStats(req.Bucketing)
 		totalCount    = 0
 		matchCount    = 0
 		traces        = []*SelectedTrace{}
-		stats         = NewSelectStats(req.Bucketing)
 	)
 
-	for _, ringBuf := range src.categories.GetAll() { // TODO: could do these concurrently
+	for _, ringBuf := range c.categories.GetAll() { // TODO: could do these concurrently
 		var categoryTraces []*SelectedTrace
 		ringBuf.Walk(func(candidate trc.Trace) error {
 			// Every candidate trace should be observed.
@@ -117,7 +117,7 @@ func (src *Source) Select(ctx context.Context, req *SelectRequest) (*SelectRespo
 
 	return &SelectResponse{
 		Request:    req,
-		Sources:    []string{src.name},
+		Sources:    []string{c.name},
 		TotalCount: totalCount,
 		MatchCount: matchCount,
 		Traces:     traces,

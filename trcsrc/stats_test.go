@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/peterbourgon/trc/trcsrc"
-	"github.com/peterbourgon/trc/trcstore"
 )
 
 func TestStatsMerge(t *testing.T) {
@@ -19,9 +18,9 @@ func TestStatsMerge(t *testing.T) {
 	categories := []string{"foo", "bar", "baz", "quux"}
 
 	sourceCount := 5
-	sources := make([]*trcsrc.Source, sourceCount)
+	sources := make([]*trcsrc.Collector, sourceCount)
 	for i := range sources {
-		sources[i] = trcsrc.NewDefaultSource()
+		sources[i] = trcsrc.NewDefaultCollector()
 	}
 
 	traceCount := 1024
@@ -50,6 +49,6 @@ func TestStatsMerge(t *testing.T) {
 	overall := merged.Overall()
 	AssertEqual(t, 0, overall.ActiveCount)
 	AssertEqual(t, 0, overall.ErroredCount)
-	AssertEqual(t, len(trcstore.DefaultBucketing), len(overall.BucketCounts))
+	AssertEqual(t, len(trcsrc.DefaultBucketing), len(overall.BucketCounts))
 	AssertEqual(t, traceCount, overall.TotalCount())
 }
