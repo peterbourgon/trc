@@ -26,17 +26,16 @@ import (
 	"net/http"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trcsrc"
 	"github.com/peterbourgon/trc/trcweb"
 )
 
-var source = trcsrc.NewDefaultCollector()
+var collector = trc.NewDefaultCollector()
 
-var handler = trcweb.NewServer(source)
+var handler = trcweb.NewSelecterServer(collector)
 
-// Source returns the global [trcsrc.NewDefaultSource].
-func Source() *trcsrc.Collector {
-	return source
+// Collector returns the global [trc.Collector].
+func Collector() *trc.Collector {
+	return collector
 }
 
 // Handler returns a [trcweb.Server] for the global trace collector.
@@ -48,14 +47,14 @@ func Handler() http.Handler {
 // trace collector for each received request. The category is determined by the
 // provided categorize function.
 func Middleware(categorize func(*http.Request) string) func(http.Handler) http.Handler {
-	return trcweb.Middleware(source.NewTrace, categorize)
+	return trcweb.Middleware(collector.NewTrace, categorize)
 }
 
 // New creates a new trace in the global trace collector, injects that trace
 // into the given context, and returns a derived context containing the new
 // trace, as well as the new trace itself.
 func New(ctx context.Context, category string) (context.Context, trc.Trace) {
-	return source.NewTrace(ctx, category)
+	return collector.NewTrace(ctx, category)
 }
 
 // Region calls [trc.Region].

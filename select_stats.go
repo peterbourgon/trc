@@ -1,11 +1,9 @@
-package trcsrc
+package trc
 
 import (
 	"fmt"
 	"sort"
 	"time"
-
-	"github.com/peterbourgon/trc"
 )
 
 type SelectStats struct {
@@ -36,7 +34,7 @@ func (ss *SelectStats) IsZero() bool {
 	return false
 }
 
-func (ss *SelectStats) Observe(trs ...trc.Trace) {
+func (ss *SelectStats) Observe(trs ...Trace) {
 	for _, tr := range trs {
 		category := tr.Category()
 		cs, ok := ss.Categories[category]

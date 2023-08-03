@@ -8,11 +8,9 @@ require (
 )
 
 require (
-	github.com/go-stack/stack v1.8.1 // indirect
+	github.com/bernerdschaefer/eventsource v0.0.0-20130606115634-220e99a79763 // indirect
 	github.com/google/pprof v0.0.0-20211214055906-6f57359322fd // indirect
 	github.com/oklog/ulid/v2 v2.1.0 // indirect
-	github.com/peterbourgon/unixtransport v0.0.1 // indirect
-	golang.org/x/exp v0.0.0-20230425010034-47ecfdc1ba53 // indirect
 )
 
 replace github.com/peterbourgon/trc => ../..

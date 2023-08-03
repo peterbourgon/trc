@@ -28,14 +28,14 @@ var TraceMaxEvents atomic.Uint64
 var TraceEventCallStacks atomic.Bool
 
 func init() {
-	TraceMaxEvents.Store(traceMaxEventsDef)
+	TraceMaxEvents.Store(traceMaxEventsDefault)
 	TraceEventCallStacks.Store(true)
 }
 
 const (
-	traceMaxEventsMin = 10
-	traceMaxEventsDef = 1000
-	traceMaxEventsMax = 10000
+	traceMaxEventsMin     = 10
+	traceMaxEventsDefault = 1000
+	traceMaxEventsMax     = 10000
 )
 
 func getTraceMaxEvents() int {
@@ -66,7 +66,6 @@ type coreTrace struct {
 	finished  bool
 	duration  time.Duration
 	events    []*coreEvent
-	nostacks  bool
 	eventsmax int
 	truncated int
 }
@@ -105,7 +104,6 @@ func newCoreTrace(source, category string) *coreTrace {
 	tr.finished = false
 	tr.duration = 0
 	tr.events = tr.events[:0]
-	tr.nostacks = !TraceEventCallStacks.Load()
 	tr.eventsmax = getTraceMaxEvents()
 	tr.truncated = 0
 	return tr
@@ -322,7 +320,7 @@ func newCoreEvent(flags uint8, format string, args ...any) *coreEvent {
 	} else {
 		cev.what = newNormalStringer(format, args...)
 	}
-	if flags&flagNoStack != 0 {
+	if flags&flagNoStack != 0 || !TraceEventCallStacks.Load() {
 		cev.pcn = 0
 	} else {
 		cev.pcn = runtime.Callers(3, cev.pc[:])

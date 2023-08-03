@@ -8,12 +8,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	_ "net/http/pprof"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/eztrc"
+	"github.com/peterbourgon/trc/trcsrc"
+	"github.com/peterbourgon/trc/trcstream"
 )
 
 func main() {
@@ -35,18 +36,41 @@ func main() {
 	// Serve the trace API over HTTP.
 	var tracesHandler http.Handler
 	{
-		h := eztrc.Handler() // this serves the singleton eztrc.Collector
-		hh := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx, _ := trc.LogEvents(r.Context(), os.Stderr)
-			h.ServeHTTP(w, r.WithContext(ctx))
-		})
-		hhh := eztrc.Middleware(func(*http.Request) string { return "traces" })(hh) // create a trace for each trace request
-
-		tracesHandler = hhh
+		tracesHandler = eztrc.Handler()                                                                 // this serves the singleton eztrc.Collector
+		tracesHandler = eztrc.Middleware(func(*http.Request) string { return "traces" })(tracesHandler) // create a trace for each trace request
 	}
 
 	// Here's how you would change the number of traces per category.
-	eztrc.Source().SetCategorySize(100)
+	eztrc.Collector().SetCategorySize(100)
+
+	broker := trcstream.NewBroker()
+	eztrc.Collector().SetDecorators(trcsrc.PublishDecorator(broker))
+
+	go func() {
+		ctx := context.Background()
+		c := make(chan trc.Trace)
+		f := trcsrc.Filter{}
+		if err := broker.Subscribe(ctx, c, f); err != nil {
+			log.Fatal(err)
+		}
+		deadline := time.Now().Add(3 * time.Second)
+		for x := range c {
+			stats, _ := broker.Stats(ctx, c)
+			log.Printf("got trace %s, sends=%d drops=%d", x.ID(), stats.Sends, stats.Drops)
+			events := x.Events()
+			if len(events) > 0 {
+				last := events[len(events)-1]
+				log.Printf(" last event: %s", last.What)
+			}
+			if time.Now().After(deadline) {
+				break
+			}
+		}
+		if err := broker.Unsubscribe(ctx, c); err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("unsubscribed")
+	}()
 
 	// Create a single serve mux for both API endpoints.
 	mux := http.NewServeMux()

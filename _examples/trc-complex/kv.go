@@ -44,7 +44,7 @@ func (a *KV) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "DELETE":
 		a.handleDel(w, r)
 	default:
-		eztrc.Errorf(r.Context(), "method %s not allowed", r.Method)
+		eztrc.LazyErrorf(r.Context(), "method %s not allowed", r.Method)
 		http.Error(w, "method must be GET, PUT, or DELETE", http.StatusMethodNotAllowed)
 	}
 }
@@ -59,7 +59,7 @@ func (a *KV) handleSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tr.Tracef("key %q", key)
+	tr.LazyTracef("key %q", key)
 
 	valbuf, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -74,7 +74,7 @@ func (a *KV) handleSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tr.Tracef("val %q", val)
+	tr.LazyTracef("val %q", val)
 
 	a.s.Set(ctx, key, val)
 }
@@ -85,21 +85,21 @@ func (a *KV) handleGet(w http.ResponseWriter, r *http.Request) {
 
 	key := getKey(r.URL.Path)
 	if key == "" {
-		tr.Errorf("key not provided")
+		tr.LazyErrorf("key not provided")
 		http.Error(w, "key required", http.StatusBadRequest)
 		return
 	}
 
-	tr.Tracef("key %q", key)
+	tr.LazyTracef("key %q", key)
 
 	val, ok := a.s.Get(ctx, key)
 	if !ok {
-		tr.Errorf("key not found")
+		tr.LazyErrorf("key not found")
 		http.Error(w, "not found", http.StatusNoContent)
 		return
 	}
 
-	tr.Tracef("val %q", val)
+	tr.LazyTracef("val %q", val)
 
 	fmt.Fprintln(w, val)
 }
@@ -110,17 +110,17 @@ func (a *KV) handleDel(w http.ResponseWriter, r *http.Request) {
 
 	key := getKey(r.URL.Path)
 	if key == "" {
-		tr.Errorf("key not provided")
+		tr.LazyErrorf("key not provided")
 		http.Error(w, "key required", http.StatusBadRequest)
 		return
 	}
 
-	tr.Tracef("key %q", key)
+	tr.LazyTracef("key %q", key)
 
 	ok := a.s.Del(ctx, key)
 
 	if !ok {
-		tr.Errorf("key not found")
+		tr.LazyErrorf("key not found")
 		http.Error(w, "not found", http.StatusNoContent)
 		return
 	}

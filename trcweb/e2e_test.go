@@ -8,30 +8,30 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/peterbourgon/trc/trcsrc"
+	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/trcweb"
 )
 
 func TestE2E(t *testing.T) {
 	ctx := context.Background()
-	source := trcsrc.NewDefaultCollector()
-	traceServer := trcweb.NewServer(source)
+	source := trc.NewDefaultCollector()
+	traceServer := trcweb.NewSelecterServer(source)
 	httpServer := httptest.NewServer(traceServer)
 	defer httpServer.Close()
-	traceClient := trcweb.NewClient(http.DefaultClient, httpServer.URL)
+	traceClient := trcweb.NewSelecterClient(http.DefaultClient, httpServer.URL)
 
 	for _, tuple := range []struct {
 		category string
 		message  string
 		isError  bool
 	}{
-		{"foo", "alpha   F1 X1", false},
-		{"foo", "beta    F1 X2", false},
-		{"foo", "delta   F1 X3", false},
-		{"bar", "alpha   B1 X1", false},
-		{"bar", "beta    B1 X2", false},
-		{"bar", "epsilon B1 X3", false},
-		{"baz", "alpha   Z1 X1", true},
+		{"foo", "alpha   F 1", false},
+		{"foo", "beta    F 2", false},
+		{"foo", "delta   F 3", false},
+		{"bar", "alpha   B 1", false},
+		{"bar", "beta    B 2", false},
+		{"bar", "epsilon B 3", false},
+		{"baz", "alpha   Z 1", true},
 	} {
 		_, tr := source.NewTrace(ctx, tuple.category)
 		tr.Tracef(tuple.message)
@@ -41,7 +41,7 @@ func TestE2E(t *testing.T) {
 		tr.Finish()
 	}
 
-	testSelect := func(t *testing.T, req *trcsrc.SelectRequest) {
+	testSelect := func(t *testing.T, req *trc.SelectRequest) {
 		t.Helper()
 
 		res1, err1 := source.Select(ctx, req)
@@ -59,23 +59,21 @@ func TestE2E(t *testing.T) {
 		t.Logf("client: total %d, matched %d, selected %d, err %v", res2.TotalCount, res2.MatchCount, len(res2.Traces), err2)
 
 		opts := []cmp.Option{
-			cmpopts.IgnoreFields(trcsrc.SelectResponse{}, "Duration", "Sources"),
-			cmpopts.IgnoreFields(trcsrc.SelectedTrace{}, "Source"),
-			cmpopts.IgnoreUnexported(trcsrc.CategoryStats{}),
-			cmpopts.IgnoreUnexported(trcsrc.Filter{}),
+			cmpopts.IgnoreFields(trc.SelectResponse{}, "Duration", "Sources"),
+			cmpopts.IgnoreFields(trc.SelectedTrace{}, "Source"),
+			cmpopts.IgnoreUnexported(trc.CategoryStats{}),
+			cmpopts.IgnoreUnexported(trc.Filter{}),
 		}
 		if !cmp.Equal(res1, res2, opts...) {
 			t.Fatal(cmp.Diff(res1, res2, opts...))
 		}
 	}
 
-	t.Run("default", func(t *testing.T) { testSelect(t, &trcsrc.SelectRequest{}) })
-	t.Run("Limit=1", func(t *testing.T) { testSelect(t, &trcsrc.SelectRequest{Limit: 1}) })
-	t.Run("Query=beta", func(t *testing.T) { testSelect(t, &trcsrc.SelectRequest{Filter: trcsrc.Filter{Query: "beta"}}) })
-	t.Run("IsErrored=true", func(t *testing.T) { testSelect(t, &trcsrc.SelectRequest{Filter: trcsrc.Filter{IsErrored: true}}) })
-	t.Run("Query=doesnotexist", func(t *testing.T) { testSelect(t, &trcsrc.SelectRequest{Filter: trcsrc.Filter{Query: "doesnotexist"}}) })
-	t.Run("Query=X1 Limit=2", func(t *testing.T) { testSelect(t, &trcsrc.SelectRequest{Filter: trcsrc.Filter{Query: "X1"}, Limit: 2}) })
-	t.Run("Query=(B1|Z1) Limit=2", func(t *testing.T) {
-		testSelect(t, &trcsrc.SelectRequest{Filter: trcsrc.Filter{Query: "(B1|Z1)"}, Limit: 2})
-	})
+	t.Run("default", func(t *testing.T) { testSelect(t, &trc.SelectRequest{}) })
+	t.Run("Limit=1", func(t *testing.T) { testSelect(t, &trc.SelectRequest{Limit: 1}) })
+	t.Run("Query=beta", func(t *testing.T) { testSelect(t, &trc.SelectRequest{Filter: trc.Filter{Query: "beta"}}) })
+	t.Run("IsErrored=true", func(t *testing.T) { testSelect(t, &trc.SelectRequest{Filter: trc.Filter{IsErrored: true}}) })
+	t.Run("Query=doesnotexist", func(t *testing.T) { testSelect(t, &trc.SelectRequest{Filter: trc.Filter{Query: "doesnotexist"}}) })
+	t.Run("Query=1 Limit=2", func(t *testing.T) { testSelect(t, &trc.SelectRequest{Filter: trc.Filter{Query: "1"}, Limit: 2}) })
+	t.Run("(B|Z)", func(t *testing.T) { testSelect(t, &trc.SelectRequest{Filter: trc.Filter{Query: "(B|Z)"}}) })
 }

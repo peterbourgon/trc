@@ -1,4 +1,4 @@
-package trcsrc
+package trc
 
 import (
 	"context"
@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/peterbourgon/trc"
 )
 
 type Selecter interface {
@@ -21,9 +19,10 @@ type Selecter interface {
 //
 
 type SelectRequest struct {
-	Bucketing []time.Duration `json:"bucketing"`
-	Filter    Filter          `json:"filter"`
-	Limit     int             `json:"limit"`
+	Bucketing  []time.Duration `json:"bucketing"`
+	Filter     Filter          `json:"filter"`
+	Limit      int             `json:"limit"`
+	StackDepth int             `json:"stack_depth,omitempty"`
 }
 
 func (req *SelectRequest) Normalize() []error {
@@ -70,6 +69,10 @@ func (req *SelectRequest) String() string {
 
 	elems = append(elems, fmt.Sprintf("Limit=%d", req.Limit))
 
+	if req.StackDepth != 0 {
+		elems = append(elems, fmt.Sprintf("StackDepth=%d", req.StackDepth))
+	}
+
 	return fmt.Sprintf("[%s]", strings.Join(elems, " "))
 }
 
@@ -109,40 +112,12 @@ type SelectResponse struct {
 //
 //
 
-type SelectedTrace struct {
-	Source   string        `json:"source"`
-	ID       string        `json:"id"`
-	Category string        `json:"category"`
-	Started  time.Time     `json:"started"`
-	Finished bool          `json:"finished"`
-	Errored  bool          `json:"errored"`
-	Duration time.Duration `json:"duration"`
-	Events   []trc.Event   `json:"events"`
-}
-
-func NewSelectedTrace(tr trc.Trace) *SelectedTrace {
-	return &SelectedTrace{
-		Source:   tr.Source(),
-		ID:       tr.ID(),
-		Category: tr.Category(),
-		Started:  tr.Started(),
-		Finished: tr.Finished(),
-		Errored:  tr.Errored(),
-		Duration: tr.Duration(),
-		Events:   tr.Events(),
-	}
-}
-
-//
-//
-//
-
 type MultiSelecter []Selecter
 
 func (ms MultiSelecter) Select(ctx context.Context, req *SelectRequest) (*SelectResponse, error) {
 	var (
 		begin         = time.Now()
-		tr            = trc.Get(ctx)
+		tr            = Get(ctx)
 		normalizeErrs = req.Normalize()
 	)
 
@@ -156,7 +131,7 @@ func (ms MultiSelecter) Select(ctx context.Context, req *SelectRequest) (*Select
 	tuplec := make(chan tuple, len(ms))
 	for i, s := range ms {
 		go func(id string, s Selecter) {
-			ctx, _ := trc.Prefix(ctx, "<%s>", id)
+			ctx, _ := Prefix(ctx, "<%s>", id)
 			res, err := s.Select(ctx, req)
 			tuplec <- tuple{id, res, err}
 		}(strconv.Itoa(i+1), s)

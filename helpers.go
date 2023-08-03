@@ -2,8 +2,6 @@ package trc
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"runtime/trace"
 	"strings"
 	"time"
@@ -129,45 +127,4 @@ func SetMaxEvents(tr Trace, maxEvents int) (Trace, bool) {
 	}
 	m.SetMaxEvents(maxEvents)
 	return tr, true
-}
-
-//
-//
-//
-
-type eventLogTrace struct {
-	Trace
-
-	dst io.Writer
-}
-
-func LogEvents(ctx context.Context, dst io.Writer) (context.Context, Trace) {
-	original := Get(ctx)
-	logging := &eventLogTrace{Trace: original, dst: dst}
-	return Put(ctx, logging)
-}
-
-func (etr *eventLogTrace) logEvent(kind, format string, args ...any) {
-	format = etr.Trace.ID() + " " + kind + " " + strings.TrimSuffix(format, "\n") + "\n"
-	fmt.Fprintf(etr.dst, format, args...)
-}
-
-func (etr *eventLogTrace) Tracef(format string, args ...any) {
-	etr.logEvent("TR", format, args...)
-	etr.Trace.Tracef(format, args...)
-}
-
-func (etr *eventLogTrace) LazyTracef(format string, args ...any) {
-	etr.logEvent("TR", format, args...)
-	etr.Trace.LazyTracef(format, args...)
-}
-
-func (etr *eventLogTrace) Errorf(format string, args ...any) {
-	etr.logEvent("ER", format, args...)
-	etr.Trace.Errorf(format, args...)
-}
-
-func (etr *eventLogTrace) LazyErrorf(format string, args ...any) {
-	etr.logEvent("ER", format, args...)
-	etr.Trace.LazyErrorf(format, args...)
 }

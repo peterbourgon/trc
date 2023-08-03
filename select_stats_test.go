@@ -1,11 +1,11 @@
-package trcsrc_test
+package trc_test
 
 import (
 	"context"
 	"math/rand"
 	"testing"
 
-	"github.com/peterbourgon/trc/trcsrc"
+	"github.com/peterbourgon/trc"
 )
 
 func TestStatsMerge(t *testing.T) {
@@ -18,9 +18,9 @@ func TestStatsMerge(t *testing.T) {
 	categories := []string{"foo", "bar", "baz", "quux"}
 
 	sourceCount := 5
-	sources := make([]*trcsrc.Collector, sourceCount)
+	sources := make([]*trc.Collector, sourceCount)
 	for i := range sources {
-		sources[i] = trcsrc.NewDefaultCollector()
+		sources[i] = trc.NewDefaultCollector()
 	}
 
 	traceCount := 1024
@@ -34,14 +34,14 @@ func TestStatsMerge(t *testing.T) {
 		tr.Finish()
 	}
 
-	responses := make([]*trcsrc.SelectResponse, len(sources))
+	responses := make([]*trc.SelectResponse, len(sources))
 	for i := range sources {
-		res, err := sources[i].Select(ctx, &trcsrc.SelectRequest{})
+		res, err := sources[i].Select(ctx, &trc.SelectRequest{})
 		AssertNoError(t, err)
 		responses[i] = res
 	}
 
-	var merged trcsrc.SelectStats
+	var merged trc.SelectStats
 	for _, res := range responses {
 		merged.Merge(res.Stats)
 	}
@@ -49,6 +49,6 @@ func TestStatsMerge(t *testing.T) {
 	overall := merged.Overall()
 	AssertEqual(t, 0, overall.ActiveCount)
 	AssertEqual(t, 0, overall.ErroredCount)
-	AssertEqual(t, len(trcsrc.DefaultBucketing), len(overall.BucketCounts))
+	AssertEqual(t, len(trc.DefaultBucketing), len(overall.BucketCounts))
 	AssertEqual(t, traceCount, overall.TotalCount())
 }

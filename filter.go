@@ -1,12 +1,10 @@
-package trcsrc
+package trc
 
 import (
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/peterbourgon/trc"
 )
 
 type Filter struct {
@@ -56,7 +54,7 @@ func (f *Filter) String() string {
 	}
 
 	if f.MinDuration != nil {
-		elems = append(elems, "MinDuration:%s", f.MinDuration.String())
+		elems = append(elems, fmt.Sprintf("MinDuration:%s", f.MinDuration.String()))
 	}
 
 	if f.IsSuccess {
@@ -74,7 +72,7 @@ func (f *Filter) String() string {
 	return fmt.Sprintf("[%s]", strings.Join(elems, " "))
 }
 
-func (f *Filter) Allow(tr trc.Trace) bool {
+func (f *Filter) Allow(tr Trace) bool {
 	if len(f.Sources) > 0 {
 		var found bool
 		for _, source := range f.Sources {

@@ -1,45 +1,49 @@
-package trcsrc
+package trc
 
 import (
 	"context"
 	"sort"
 	"time"
 
-	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/internal/trcringbuf"
 )
 
 type Collector struct {
-	name       string
+	source     string
 	newTrace   NewTraceFunc
-	categories *trcringbuf.RingBuffers[trc.Trace]
+	decorators []DecoratorFunc
+	categories *trcringbuf.RingBuffers[Trace]
 }
 
-var _ Selecter = (*Collector)(nil)
-
-func NewCollector(name string, newTrace NewTraceFunc) *Collector {
-	return &Collector{
-		name:       name,
-		newTrace:   newTrace,
-		categories: trcringbuf.NewRingBuffers[trc.Trace](defaultCategorySize),
-	}
-}
+type NewTraceFunc func(ctx context.Context, source string, category string) (context.Context, Trace)
 
 func NewDefaultCollector() *Collector {
-	return NewCollector("default", trc.New)
+	return NewCollector("default", New)
 }
 
-type NewTraceFunc func(ctx context.Context, source string, category string) (context.Context, trc.Trace)
+func NewCollector(source string, newTrace NewTraceFunc, decorators ...DecoratorFunc) *Collector {
+	return &Collector{
+		source:     source,
+		newTrace:   newTrace,
+		decorators: decorators,
+		categories: trcringbuf.NewRingBuffers[Trace](defaultCategorySize),
+	}
+}
 
 const defaultCategorySize = 1000
 
 func (c *Collector) SetSourceName(name string) *Collector {
-	c.name = name
+	c.source = name
 	return c
 }
 
 func (c *Collector) SetNewTrace(newTrace NewTraceFunc) *Collector {
 	c.newTrace = newTrace
+	return c
+}
+
+func (c *Collector) SetDecorators(decorators ...DecoratorFunc) *Collector {
+	c.decorators = decorators
 	return c
 }
 
@@ -50,13 +54,20 @@ func (c *Collector) SetCategorySize(cap int) *Collector {
 	return c
 }
 
-func (c *Collector) NewTrace(ctx context.Context, category string) (context.Context, trc.Trace) {
-	if tr, ok := trc.MaybeGet(ctx); ok {
+func (c *Collector) NewTrace(ctx context.Context, category string) (context.Context, Trace) {
+	if tr, ok := MaybeGet(ctx); ok {
 		tr.LazyTracef("(+ %s)", category)
 		return ctx, tr
 	}
 
-	ctx, tr := c.newTrace(ctx, c.name, category)
+	ctx, tr := c.newTrace(ctx, c.source, category)
+
+	if len(c.decorators) > 0 {
+		for _, d := range c.decorators {
+			tr = d(tr)
+		}
+		ctx, tr = Put(ctx, tr)
+	}
 
 	if droppedTrace, didDrop := c.categories.GetOrCreate(category).Add(tr); didDrop {
 		maybeFree(droppedTrace)
@@ -67,7 +78,7 @@ func (c *Collector) NewTrace(ctx context.Context, category string) (context.Cont
 
 func (c *Collector) Select(ctx context.Context, req *SelectRequest) (*SelectResponse, error) {
 	var (
-		tr            = trc.Get(ctx)
+		tr            = Get(ctx)
 		begin         = time.Now()
 		normalizeErrs = req.Normalize()
 		stats         = NewSelectStats(req.Bucketing)
@@ -78,7 +89,7 @@ func (c *Collector) Select(ctx context.Context, req *SelectRequest) (*SelectResp
 
 	for _, ringBuf := range c.categories.GetAll() { // TODO: could do these concurrently
 		var categoryTraces []*SelectedTrace
-		ringBuf.Walk(func(candidate trc.Trace) error {
+		ringBuf.Walk(func(candidate Trace) error {
 			// Every candidate trace should be observed.
 			stats.Observe(candidate)
 			totalCount++
@@ -96,7 +107,7 @@ func (c *Collector) Select(ctx context.Context, req *SelectRequest) (*SelectResp
 			}
 
 			// Otherwise, collect a static copy of the trace.
-			categoryTraces = append(categoryTraces, NewSelectedTrace(candidate))
+			categoryTraces = append(categoryTraces, NewSelectedTrace(candidate).TrimStacks(req.StackDepth))
 			matchCount++
 			return nil
 		})
@@ -117,7 +128,7 @@ func (c *Collector) Select(ctx context.Context, req *SelectRequest) (*SelectResp
 
 	return &SelectResponse{
 		Request:    req,
-		Sources:    []string{c.name},
+		Sources:    []string{c.source},
 		TotalCount: totalCount,
 		MatchCount: matchCount,
 		Traces:     traces,
@@ -127,7 +138,7 @@ func (c *Collector) Select(ctx context.Context, req *SelectRequest) (*SelectResp
 	}, nil
 }
 
-func maybeFree(tr trc.Trace) {
+func maybeFree(tr Trace) {
 	if f, ok := tr.(interface{ Free() }); ok {
 		f.Free()
 	}

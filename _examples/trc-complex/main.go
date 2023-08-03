@@ -14,12 +14,14 @@ import (
 	"github.com/felixge/fgprof"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trchttp"
-	"github.com/peterbourgon/trc/trcsrc"
+	"github.com/peterbourgon/trc/trcstream"
 	"github.com/peterbourgon/trc/trcweb"
 )
 
 func main() {
+	// TODO
+	broker := trcstream.NewBroker()
+
 	// Open stack trace links in VS Code.
 	trcweb.FileLineURL = trcweb.FileLineURLVSCode
 
@@ -27,9 +29,9 @@ func main() {
 	ports := []string{"8081", "8082", "8083"}
 
 	// Create a trace collector for each instance.
-	sources := make([]*trcsrc.Source, len(ports))
-	for i := range sources {
-		sources[i] = trcsrc.NewSource(ports[i], trc.New)
+	collectors := make([]*trc.Collector, len(ports))
+	for i := range collectors {
+		collectors[i] = trc.NewCollector(ports[i], trc.New)
 	}
 
 	// Create a `kv` service for each instance.
@@ -43,7 +45,7 @@ func main() {
 	apiHandlers := make([]http.Handler, len(ports))
 	for i := range apiHandlers {
 		apiHandlers[i] = kvs[i]
-		apiHandlers[i] = trchttp.Middleware(sources[i].NewTrace, apiCategory)(apiHandlers[i])
+		apiHandlers[i] = trcweb.Middleware(collectors[i].NewTrace, apiCategory)(apiHandlers[i])
 	}
 
 	// Generate random load for each `kv` instance.
@@ -58,32 +60,44 @@ func main() {
 
 	// Create a traces HTTP handler for each instance.
 	// We'll also trace each request to this endpoint.
-	tracesHandlers := make([]http.Handler, len(sources))
+	tracesHandlers := make([]http.Handler, len(collectors))
 	for i := range tracesHandlers {
-		tracesHandlers[i] = trcweb.NewServer(sources[i])
-		tracesHandlers[i] = trchttp.Middleware(sources[i].NewTrace, func(r *http.Request) string { return "traces" })(tracesHandlers[i])
+		tracesHandlers[i] = trcweb.NewSelecterServer(collectors[i])
+		tracesHandlers[i] = trcweb.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return "traces" })(tracesHandlers[i])
 	}
 
 	// We can also create a "global" traces handler, which serves aggregate
 	// results from all of the individual trace handlers for each instance.
 	var tracesGlobal http.Handler
+	var streamHandler http.Handler
 	{
 		// MultiSelecter allows multiple sources to be treated as one.
-		var ms trcsrc.MultiSelecter
+		var ms trc.MultiSelecter
 		for i := range ports {
 			// Each instance is modeled with an HTTP client querying the
 			// corresponding trace HTTP handler. This is usually how it would
 			// work, as different instances are usually on different hosts.
-			ms = append(ms, trcweb.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/traces", ports[i])))
+			ms = append(ms, trcweb.NewSelecterClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/traces", ports[i])))
 		}
 
 		// Let's also trace requests to this global handler in a distinct trace
 		// collector, and include that collector in the multi-searcher.
-		globalSource := trcsrc.NewSource("global", trc.New)
-		ms = append(ms, globalSource)
+		globalCollector := trc.NewCollector("global", trc.New)
+		ms = append(ms, globalCollector)
 
-		tracesGlobal = trcweb.NewServer(ms)
-		tracesGlobal = trchttp.Middleware(globalSource.NewTrace, func(r *http.Request) string { return "traces" })(tracesGlobal)
+		tracesGlobal = trcweb.NewSelecterServer(ms)
+		tracesGlobal = trcweb.Middleware(
+			func(ctx context.Context, category string) (context.Context, trc.Trace) {
+				ctx, tr := globalCollector.NewTrace(ctx, category)
+				tr = trc.PublishDecorator(broker)(tr)
+				ctx, tr = trc.Put(ctx, tr)
+				return ctx, tr
+			},
+			func(r *http.Request) string { return "traces" },
+		)(tracesGlobal)
+
+		streamHandler = trcweb.NewStreamServer(broker)
+		streamHandler = trcweb.Middleware(globalCollector.NewTrace, func(r *http.Request) string { return "stream" })(streamHandler)
 	}
 
 	// Now we run HTTP servers for each instance.
@@ -102,6 +116,7 @@ func main() {
 	// server for additional stuff like profiling endpoints.
 	go func() {
 		http.Handle("/traces", tracesGlobal)
+		http.Handle("/stream", streamHandler)
 		http.Handle("/debug/fgprof", fgprof.Handler())
 		log.Printf("http://localhost:8080/traces")
 		log.Fatal(http.ListenAndServe("localhost:8080", nil))

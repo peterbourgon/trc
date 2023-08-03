@@ -23,7 +23,6 @@ import (
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/internal/trcdebug"
 	"github.com/peterbourgon/trc/internal/trcutil"
-	"github.com/peterbourgon/trc/trcsrc"
 )
 
 //go:embed assets/*
@@ -227,7 +226,7 @@ var templateFuncs = template.FuncMap{
 	"InsertBreaks":        func(s string) template.HTML { return template.HTML(breaksReplacer.Replace(s)) },
 	"URLEncode":           func(s string) template.URL { return template.URL(url.QueryEscape(s)) },
 	"SafeURL":             func(s string) template.URL { return template.URL(s) },
-	"DefaultBucketing":    func() []time.Duration { return trcsrc.DefaultBucketing },
+	"DefaultBucketing":    func() []time.Duration { return trc.DefaultBucketing },
 	"StringsJoinNewline":  func(a []string) string { return strings.Join(a, string([]byte{0xa})) },
 	"ReflectDeepEqual":    func(a, b any) bool { return reflect.DeepEqual(a, b) },
 	"PositiveDuration":    func(d time.Duration) time.Duration { return iff(d > 0, d, 0) },
@@ -246,7 +245,7 @@ func categoryClass(category string) string {
 	return "category-" + sha256hex(category)
 }
 
-func highlightClasses(f trcsrc.Filter) []string {
+func highlightClasses(f trc.Filter) []string {
 	var classes []string
 	if len(f.IDs) > 0 {
 		return nil
@@ -268,24 +267,26 @@ func highlightClasses(f trcsrc.Filter) []string {
 
 func debugInfo() string {
 	var (
-		tn  = trcdebug.CoreTraceNewCount.Load()
-		ta  = trcdebug.CoreTraceAllocCount.Load()
-		tf  = trcdebug.CoreTraceFreeCount.Load()
-		tl  = trcdebug.CoreTraceLostCount.Load()
-		tr  = 100 * float64(tf) / float64(tn)
-		en  = trcdebug.CoreEventNewCount.Load()
-		ea  = trcdebug.CoreEventAllocCount.Load()
-		ef  = trcdebug.CoreEventFreeCount.Load()
-		el  = trcdebug.CoreEventLostCount.Load()
-		er  = 100 * float64(ef) / float64(en)
-		sn  = trcdebug.StringerNewCount.Load()
-		sa  = trcdebug.StringerAllocCount.Load()
-		sf  = trcdebug.StringerFreeCount.Load()
-		sl  = trcdebug.StringerLostCount.Load()
-		sr  = 100 * float64(sf) / float64(sn)
-		buf = &bytes.Buffer{}
-		tw  = tabwriter.NewWriter(buf, 0, 2, 2, ' ', 0)
+		tn = trcdebug.CoreTraceNewCount.Load()
+		ta = trcdebug.CoreTraceAllocCount.Load()
+		tf = trcdebug.CoreTraceFreeCount.Load()
+		tl = trcdebug.CoreTraceLostCount.Load()
+		tr = 100 * float64(tf) / float64(tn)
+
+		en = trcdebug.CoreEventNewCount.Load()
+		ea = trcdebug.CoreEventAllocCount.Load()
+		ef = trcdebug.CoreEventFreeCount.Load()
+		el = trcdebug.CoreEventLostCount.Load()
+		er = 100 * float64(ef) / float64(en)
+
+		sn = trcdebug.StringerNewCount.Load()
+		sa = trcdebug.StringerAllocCount.Load()
+		sf = trcdebug.StringerFreeCount.Load()
+		sl = trcdebug.StringerLostCount.Load()
+		sr = 100 * float64(sf) / float64(sn)
 	)
+	buf := &bytes.Buffer{}
+	tw := tabwriter.NewWriter(buf, 0, 2, 2, ' ', 0)
 	fmt.Fprintf(tw, "KIND\tNEW\tALLOC\tFREE\tLOST\tREUSE\n")
 	fmt.Fprintf(tw, "coreTrace\t%d\t%d\t%d\t%d\t%.2f%%\n", tn, ta, tf, tl, tr)
 	fmt.Fprintf(tw, "coreEvent\t%d\t%d\t%d\t%d\t%.2f%%\n", en, ea, ef, el, er)
