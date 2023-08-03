@@ -77,8 +77,8 @@ function highlightQuery() {
 	{{ if .Request.Filter.Query }}
 	let re = new RegExp('('+{{.Request.Filter.Query}}+')');
 	document.getElementById("traces").querySelectorAll(".searchable").forEach(elem => {
-		if (re.test(elem.textContent)) {
-			let oldText = elem.innerHTML.replace(/(<mark class="highlight">|<\/mark>)/gim, '');
+		if (re.test(elem.innerHTML)) {
+			let oldText = elem.textContent.replace(/(<mark class="highlight">|<\/mark>)/gim, '');
 			let newText = oldText.replace(re, '<mark class="highlight">$&</mark>');
 			elem.innerHTML = newText;
 			let details = elem.closest("details");
@@ -240,7 +240,7 @@ function highlightQuery() {
 		<form id="search-form" method="GET" target="">
 			<input id="search-box" type="text" name="q" placeholder="regex" value="{{.Request.Filter.Query}}" size="32" autofocus />
 
-			{{ if .Response.Sources }}
+			{{ if gt (len .Response.Sources) 1 }}
 				{{ $first_source := "" }}
 				{{ if gt (len $f.Sources) 0 }} {{ $first_source = index $f.Sources 0 }} {{ end }}
 				<select id="search-source" name="source">
@@ -249,6 +249,8 @@ function highlightQuery() {
 					<option value="{{.}}" {{ if eq $first_source . }}selected{{ end }}>{{.}}</option>
 					{{ end }}
 				</select>
+			{{ else }}
+				<input type="hidden" name="source" value="" />
 			{{ end }}
 
 			<select id="search-limit" name="n">
@@ -427,7 +429,7 @@ function highlightQuery() {
 								<span class="searchable">
 									{{ $href := FileLineURL $c.FileLine }}
 									{{ if $href }}
-										<a href="{{$href}}">{{$c.CompactFileLine}}</a>
+										<a class="searchable" href="{{$href}}">{{$c.CompactFileLine}}</a>
 									{{ else }}
 										{{ $c.CompactFileLine }}
 									{{ end }}
