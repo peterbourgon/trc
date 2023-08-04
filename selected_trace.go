@@ -31,10 +31,10 @@ func NewSelectedTrace(tr Trace) *SelectedTrace {
 
 func (st *SelectedTrace) TrimStacks(depth int) *SelectedTrace {
 	if depth == 0 {
-		return st
+		return st // zero value (0) means don't do anything
 	}
 	if depth < 0 {
-		depth = 0
+		depth = 0 // negative value means remove all stacks
 	}
 	for i, ev := range st.Events {
 		if len(ev.Stack) > depth {

@@ -2,6 +2,7 @@ package trc
 
 import (
 	"context"
+	"io"
 	"runtime/trace"
 	"strings"
 	"time"
@@ -127,4 +128,19 @@ func SetMaxEvents(tr Trace, maxEvents int) (Trace, bool) {
 	}
 	m.SetMaxEvents(maxEvents)
 	return tr, true
+}
+
+//
+//
+//
+
+// NewLogTrace creates a new trace in the provided context, which logs to the
+// provided writer. This can be useful when you don't have a pre-existing trace
+// infrastructure, and you just want to see the trace events produced by a
+// function or method.
+func NewLogTrace(ctx context.Context, source, category string, dst io.Writer) (context.Context, Trace) {
+	var tr Trace
+	ctx, tr = New(ctx, source, category)
+	ctx, tr = Put(ctx, LogDecorator(dst)(tr))
+	return ctx, tr
 }

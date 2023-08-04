@@ -6,7 +6,7 @@
 <head>
 <title>trc</title>
 <style>
-{{ template "style.css" . }}
+{{ template "traces.css" . }}
 
 {{ $highlight_classes := HighlightClasses .Request.Filter }}
 {{ if $highlight_classes }}
@@ -16,7 +16,7 @@ table#summary
 	tr{{ range $highlight_classes }}.{{.}}{{ end }}
 	{
 		font-weight: bold;
-		{{ if .Request.Filter.Query }}
+		{{ if or .Request.Filter.Query .Request.Filter.Sources }}
 		background-color: rgba(255, 255, 0, 0.4);
 		{{ else }}
 		background-color: rgba(173, 216, 230, 0.4);
@@ -25,6 +25,9 @@ table#summary
 {{ else if not .Request.Filter.IDs }}
 table#summary tr:last-child td {
 	font-weight: bold;
+	{{ if or .Request.Filter.Query .Request.Filter.Sources }}
+	background-color: rgba(255, 255, 0, 0.4);
+	{{ end }}
 }
 {{ end }}
 </style>
@@ -243,12 +246,12 @@ function highlightQuery() {
 			{{ if gt (len .Response.Sources) 1 }}
 				{{ $first_source := "" }}
 				{{ if gt (len $f.Sources) 0 }} {{ $first_source = index $f.Sources 0 }} {{ end }}
-				<select id="search-source" name="source">
-					<option value="" {{ if eq $first_source "" }}selected{{ end }}>all sources</option>
-					{{ range .Response.Sources }}
-					<option value="{{.}}" {{ if eq $first_source . }}selected{{ end }}>{{.}}</option>
-					{{ end }}
-				</select>
+					<select id="search-source" name="source" {{ if not (eq $first_source "") }}style="background-color: yellow;"{{ end }}>
+						<option value="" {{ if eq $first_source "" }}selected{{ end }}>all sources</option>
+						{{ range .Response.Sources }}
+						<option value="{{.}}" {{ if eq $first_source . }}selected{{ end }}>{{.}}</option>
+						{{ end }}
+					</select>
 			{{ else }}
 				<input type="hidden" name="source" value="" />
 			{{ end }}
@@ -271,7 +274,7 @@ function highlightQuery() {
 			{{ end }}
 
 			{{ if .Request.Filter.IsFinished }}
-				<input type="hidden" name="active" value="{{.Request.Filter.IsFinished}}" />
+				<input type="hidden" name="finished" value="{{.Request.Filter.IsFinished}}" />
 			{{ end }}
 
 			{{ if .Request.Filter.MinDuration }}
@@ -279,7 +282,7 @@ function highlightQuery() {
 			{{ end }}
 
 			{{ if .Request.Filter.IsSuccess }}
-				<input type="hidden" name="active" value="{{.Request.Filter.IsSuccess}}" />
+				<input type="hidden" name="success" value="{{.Request.Filter.IsSuccess}}" />
 			{{ end }}
 
 			{{ if .Request.Filter.IsErrored }}
@@ -323,7 +326,7 @@ function highlightQuery() {
 		</div>
 
 		<div id="topline-search-matched" class="topline-search">
-			match={{ .Response.MatchCount }}
+			matched={{ .Response.MatchCount }}
 		</div>
 
 		<div id="topline-search-shown" class="topline-search">
@@ -395,9 +398,9 @@ function highlightQuery() {
 			</div>
 		</div>
 
-		{{ $start      := .Started  }}
-		{{ $duration   := .Duration }}
-		{{ $prev_ts    := .Started  }}
+		{{ $start     := .Started  }}
+		{{ $duration  := .Duration }}
+		{{ $prev_ts   := .Started  }}
 
 		{{ range .Events }}
 		<div class="event">
@@ -415,7 +418,7 @@ function highlightQuery() {
 				{{ $prev_ts = .When }}
 			</div>
 
-			<div class="what{{if .IsError}} error{{end}}">
+			<div class="what {{if .IsError}}error{{end}}">
 				<span class="searchable">{{ .What | HTMLEscape | InsertBreaks }}</span>
 			</div>
 
@@ -435,7 +438,7 @@ function highlightQuery() {
 									{{ end }}
 								</span>
 							</td>
-							<td style="width: 1ch;">&nbsp;</td>
+							<td style="width: 1ch;"></td>
 							<td style="text-align: left;">
 								<span class="searchable">
 									{{$c.Function}}
@@ -508,27 +511,27 @@ function highlightQuery() {
 
 <!-- -------------------- -->
 
-<div id="debuginfo" title="Debug info (D)">
+<div id="debug-info" title="Debug info (D)">
 	<pre>{{ if DebugInfo }}{{ DebugInfo }}{{ else }}(No debug info){{ end }}</pre>
 </div>
 
 <script type="text/javascript">
-	function updatedebuginfo() {
-		let debugElem = document.getElementById("debuginfo");
-		if (sessionStorage.getItem("debuginfo")) {
+	function updateDebugInfo() {
+		let debugElem = document.getElementById("debug-info");
+		if (sessionStorage.getItem("debug-info")) {
 			debugElem.style.visibility = "inherit";
 		} else {
 			debugElem.style.visibility = "hidden";
 		}
 	}
 
-	function toggledebug() {
-		if (sessionStorage.getItem("debuginfo")) {
-			sessionStorage.removeItem("debuginfo");
+	function toggleDebug() {
+		if (sessionStorage.getItem("debug-info")) {
+			sessionStorage.removeItem("debug-info");
 		} else {
-			sessionStorage.setItem("debuginfo", "true");
+			sessionStorage.setItem("debug-info", "true");
 		}
-		updatedebuginfo();
+		updateDebugInfo();
 	}
 
 	document.body.addEventListener("keydown", (ev) => {
@@ -536,27 +539,20 @@ function highlightQuery() {
 			return;
 		}
 		if (ev.keyCode === 68) { // "d" or "D"
-			toggledebug();
+			toggleDebug();
 		}
 	});
 
-	document.getElementById("debuginfo").addEventListener("click", (ev) => {
-		toggledebug();
+	document.getElementById("debug-info").addEventListener("click", (ev) => {
+		toggleDebug();
 	});
 
-	updatedebuginfo();
+	updateDebugInfo();
+
+	onkeydown = function (e) { console.log("key down", e); };
 </script>
 
 <!-- -------------------- -->
-
-<script type="text/javascript">
-
-
-</script>
-
-<!-- -------------------- -->
-
-
 
 </body>
 </html>

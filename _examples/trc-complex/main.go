@@ -66,10 +66,14 @@ func main() {
 		tracesHandlers[i] = trcweb.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return "traces" })(tracesHandlers[i])
 	}
 
+	var globalCollector *trc.Collector
+	{
+		globalCollector = trc.NewCollector("global", trc.New, trc.PublishDecorator(broker))
+	}
+
 	// We can also create a "global" traces handler, which serves aggregate
 	// results from all of the individual trace handlers for each instance.
-	var tracesGlobal http.Handler
-	var streamHandler http.Handler
+	var globalHandler http.Handler
 	{
 		// MultiSelecter allows multiple sources to be treated as one.
 		var ms trc.MultiSelecter
@@ -82,20 +86,14 @@ func main() {
 
 		// Let's also trace requests to this global handler in a distinct trace
 		// collector, and include that collector in the multi-searcher.
-		globalCollector := trc.NewCollector("global", trc.New)
 		ms = append(ms, globalCollector)
 
-		tracesGlobal = trcweb.NewSelecterServer(ms)
-		tracesGlobal = trcweb.Middleware(
-			func(ctx context.Context, category string) (context.Context, trc.Trace) {
-				ctx, tr := globalCollector.NewTrace(ctx, category)
-				tr = trc.PublishDecorator(broker)(tr)
-				ctx, tr = trc.Put(ctx, tr)
-				return ctx, tr
-			},
-			func(r *http.Request) string { return "traces" },
-		)(tracesGlobal)
+		globalHandler = trcweb.NewSelecterServer(ms)
+		globalHandler = trcweb.Middleware(globalCollector.NewTrace, func(r *http.Request) string { return "traces" })(globalHandler)
+	}
 
+	var streamHandler http.Handler
+	{
 		streamHandler = trcweb.NewStreamServer(broker)
 		streamHandler = trcweb.Middleware(globalCollector.NewTrace, func(r *http.Request) string { return "stream" })(streamHandler)
 	}
@@ -115,7 +113,7 @@ func main() {
 	// And an extra HTTP server for the global trace handler. We'll use this
 	// server for additional stuff like profiling endpoints.
 	go func() {
-		http.Handle("/traces", tracesGlobal)
+		http.Handle("/traces", globalHandler)
 		http.Handle("/stream", streamHandler)
 		http.Handle("/debug/fgprof", fgprof.Handler())
 		log.Printf("http://localhost:8080/traces")

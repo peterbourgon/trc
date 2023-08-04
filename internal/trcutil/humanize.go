@@ -69,7 +69,9 @@ func HumanizeFloat(f float64) string {
 // HumanizeBytes returns a human-friendly string representation of n, which is
 // assumed to be bytes. KB is used to represent 1024 bytes, and MB is used to
 // represent 1048576 bytes. Larger units like GB are not used.
-func HumanizeBytes(n int) string {
+func HumanizeBytes[T interface {
+	~int | ~uint | ~int64 | ~uint64
+}](n T) string {
 	var (
 		kib = float64(1024)
 		mib = float64(1024 * kib)

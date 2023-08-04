@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/peterbourgon/trc/internal/trcutil"
 )
 
 type Selecter interface {
@@ -19,10 +21,10 @@ type Selecter interface {
 //
 
 type SelectRequest struct {
-	Bucketing  []time.Duration `json:"bucketing"`
-	Filter     Filter          `json:"filter"`
-	Limit      int             `json:"limit"`
-	StackDepth int             `json:"stack_depth,omitempty"`
+	Bucketing  []time.Duration `json:"bucketing,omitempty"`
+	Filter     Filter          `json:"filter,omitempty"`
+	Limit      int             `json:"limit,omitempty"`
+	StackDepth int             `json:"stack_depth,omitempty"` // 0 is default stacks, -1 for no stacks
 }
 
 func (req *SelectRequest) Normalize() []error {
@@ -54,7 +56,7 @@ func (req *SelectRequest) Normalize() []error {
 	return errs
 }
 
-func (req *SelectRequest) String() string {
+func (req SelectRequest) String() string {
 	var elems []string
 
 	if !reflect.DeepEqual(req.Bucketing, DefaultBucketing) {
@@ -142,7 +144,7 @@ func (ms MultiSelecter) Select(ctx context.Context, req *SelectRequest) (*Select
 	aggregate := &SelectResponse{
 		Request:  req,
 		Stats:    NewSelectStats(req.Bucketing),
-		Problems: flattenErrors(normalizeErrs...),
+		Problems: trcutil.FlattenErrors(normalizeErrs...),
 	}
 
 	// Gather.
@@ -173,6 +175,7 @@ func (ms MultiSelecter) Select(ctx context.Context, req *SelectRequest) (*Select
 			aggregate.Problems = append(aggregate.Problems, fmt.Sprintf("got valid search response with error (%v) -- weird", t.err))
 		}
 	}
+
 	tr.Tracef("gathered responses")
 
 	// At this point, the aggregate response has all of the raw data it's ever
@@ -185,6 +188,8 @@ func (ms MultiSelecter) Select(ctx context.Context, req *SelectRequest) (*Select
 	if len(aggregate.Traces) > req.Limit {
 		aggregate.Traces = aggregate.Traces[:req.Limit]
 	}
+
+	tr.Tracef("total %d, matched %d, returned %d", aggregate.TotalCount, aggregate.MatchCount, len(aggregate.Traces))
 
 	// Fix up the sources.
 	sort.Strings(aggregate.Sources)

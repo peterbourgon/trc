@@ -81,7 +81,9 @@ type Trace interface {
 	// Errored returns true if Errorf or LazyErrorf has been called.
 	Errored() bool
 
-	// Events returns all of the events collected by the trace, newest first.
+	// Events returns all of the events collected by the trace, oldest to
+	// newest. Events are produced by Tracef, LazyTracef, Errorf, and
+	// LazyErrorf.
 	Events() []Event
 }
 
@@ -90,7 +92,7 @@ type Trace interface {
 type Event struct {
 	When    time.Time `json:"when"`
 	What    string    `json:"what"`
-	Stack   []Frame   `json:"stack"`
+	Stack   []Frame   `json:"stack,omitempty"`
 	IsError bool      `json:"is_error,omitempty"`
 }
 

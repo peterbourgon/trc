@@ -1,17 +1,16 @@
-module trc-complex
+module trc-stream
 
 go 1.20
 
+replace github.com/peterbourgon/trc => ../../
+
 require (
-	github.com/NYTimes/gziphandler v1.1.1
-	github.com/felixge/fgprof v0.9.3
+	github.com/oklog/run v1.1.0
 	github.com/peterbourgon/trc v0.0.0-00010101000000-000000000000
 )
 
 require (
 	github.com/bernerdschaefer/eventsource v0.0.0-20130606115634-220e99a79763 // indirect
-	github.com/google/pprof v0.0.0-20211214055906-6f57359322fd // indirect
 	github.com/oklog/ulid/v2 v2.1.0 // indirect
+	github.com/peterbourgon/ff/v3 v3.4.0 // indirect
 )
-
-replace github.com/peterbourgon/trc => ../..

@@ -168,6 +168,10 @@ div#topline-search-sources summary {
 	/* */
 }
 
+div#topline-form select {
+	background-color: rgba(0, 0, 0, 0.0);
+}
+
 /*
  * traces
  */
@@ -324,7 +328,7 @@ div.stack a:visited {
  * debug info
  */
 
-div#debuginfo {
+div#debug-info {
 	position: absolute;
 	top: 1em;
 	right: 1em;
@@ -335,6 +339,7 @@ div#debuginfo {
 	font-size: smaller;
 	padding: 0 2ch;
 	visibility: hidden;
+	box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
 }
 
 /*

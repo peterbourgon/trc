@@ -30,7 +30,7 @@ func (f *Filter) Normalize() []error {
 	return errs
 }
 
-func (f *Filter) String() string {
+func (f Filter) String() string {
 	var elems []string
 
 	if len(f.Sources) > 0 {
@@ -42,7 +42,7 @@ func (f *Filter) String() string {
 	}
 
 	if f.Category != "" {
-		elems = append(elems, fmt.Sprintf("Category:%s", f.Category))
+		elems = append(elems, fmt.Sprintf("Category:'%s'", f.Category))
 	}
 
 	if f.IsActive {
@@ -66,7 +66,7 @@ func (f *Filter) String() string {
 	}
 
 	if f.Query != "" {
-		elems = append(elems, fmt.Sprintf("Query:%q", f.Query))
+		elems = append(elems, fmt.Sprintf("Query:'%s'", f.Query))
 	}
 
 	return fmt.Sprintf("[%s]", strings.Join(elems, " "))
@@ -118,6 +118,9 @@ func (f *Filter) Allow(tr Trace) bool {
 	}
 
 	if f.MinDuration != nil {
+		if !tr.Finished() {
+			return false // we assert MinDuration requires the trace to be finished
+		}
 		if tr.Duration() < *f.MinDuration {
 			return false
 		}

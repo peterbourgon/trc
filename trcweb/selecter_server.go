@@ -138,11 +138,7 @@ func (c *SelecterClient) Select(ctx context.Context, req *trc.SelectRequest) (_ 
 		return nil, fmt.Errorf("decode select response: %w", err)
 	}
 
-	tr.Tracef("%s -> total count %d, match count %d, trace count %d", c.uri, res.Response.TotalCount, res.Response.MatchCount, len(res.Response.Traces))
+	tr.Tracef("%s -> total %d, matched %d, returned %d", c.uri, res.Response.TotalCount, res.Response.MatchCount, len(res.Response.Traces))
 
 	return &res.Response, nil
 }
-
-//
-//
-//

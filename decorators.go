@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/peterbourgon/trc/internal/trcutil"
 )
 
 type DecoratorFunc func(Trace) Trace
@@ -13,76 +15,18 @@ type DecoratorFunc func(Trace) Trace
 //
 //
 
-func DecorateNewTrace(newTrace NewTraceFunc, decorators ...DecoratorFunc) NewTraceFunc {
-	return func(ctx context.Context, source, category string) (context.Context, Trace) {
-		ctx, tr := newTrace(ctx, source, category)
-
-		if len(decorators) > 0 {
-			for _, decorator := range decorators {
-				tr = decorator(tr)
-			}
-			ctx, tr = Put(ctx, tr)
-		}
-
-		return ctx, tr
-	}
-}
-
-//
-//
-//
-
-func LogDecorator(dst io.Writer) DecoratorFunc {
-	return func(tr Trace) Trace {
-		return &logTrace{
-			Trace: tr,
-			id:    tr.ID(),
-			dst:   dst,
-		}
-	}
-}
-
-type logTrace struct {
-	Trace
-	id  string
-	dst io.Writer
-}
-
-func (ltr *logTrace) Tracef(format string, args ...any) {
-	ltr.logEvent("TRC", format, args...)
-	ltr.Trace.Tracef(format, args...)
-}
-
-func (ltr *logTrace) LazyTracef(format string, args ...any) {
-	ltr.logEvent("TRC", format, args...)
-	ltr.Trace.LazyTracef(format, args...)
-}
-
-func (ltr *logTrace) Errorf(format string, args ...any) {
-	ltr.logEvent("ERR", format, args...)
-	ltr.Trace.Errorf(format, args...)
-}
-
-func (ltr *logTrace) LazyErrorf(format string, args ...any) {
-	ltr.logEvent("ERR", format, args...)
-	ltr.Trace.LazyErrorf(format, args...)
-}
-
-func (ltr *logTrace) logEvent(what, format string, args ...any) {
-	format = ltr.id + " " + what + " " + strings.TrimSuffix(format, "\n") + "\n"
-	fmt.Fprintf(ltr.dst, format, args...)
-}
-
-//
-//
-//
-
+// PublishDecorator publishes the trace to the publisher when it's created, on
+// every event, and when it's finished. The published trace is a reduced form of
+// the full trace, containing only the core metadata and, in the case of trace
+// events, the single event that triggered the publish.
 func PublishDecorator(p Publisher) DecoratorFunc {
 	return func(tr Trace) Trace {
-		return &publishTrace{
+		ptr := &publishTrace{
 			Trace: tr,
 			p:     p,
 		}
+		p.Publish(context.Background(), ptr.Trace)
+		return ptr
 	}
 }
 
@@ -118,4 +62,60 @@ func (ptr *publishTrace) LazyErrorf(format string, args ...any) {
 func (ptr *publishTrace) Finish() {
 	ptr.Trace.Finish()
 	ptr.p.Publish(context.Background(), ptr.Trace)
+}
+
+//
+//
+//
+
+// LogDecorator logs a simple string to the provided destination when the trace
+// is created, on every event, and when it's finished. The logged string is a
+// reduced form of the full trace, containing only the trace ID, the event type,
+// and the single event that triggered the log.
+func LogDecorator(dst io.Writer) DecoratorFunc {
+	return func(tr Trace) Trace {
+		ltr := &logTrace{
+			Trace: tr,
+			id:    tr.ID(),
+			dst:   dst,
+		}
+		ltr.logEvent("BEGIN", "category '%s'", ltr.Trace.Category())
+		return ltr
+	}
+}
+
+type logTrace struct {
+	Trace
+	id  string
+	dst io.Writer
+}
+
+func (ltr *logTrace) Tracef(format string, args ...any) {
+	ltr.logEvent("TRACE", format, args...)
+	ltr.Trace.Tracef(format, args...)
+}
+
+func (ltr *logTrace) LazyTracef(format string, args ...any) {
+	ltr.logEvent("TRACE", format, args...)
+	ltr.Trace.LazyTracef(format, args...)
+}
+
+func (ltr *logTrace) Errorf(format string, args ...any) {
+	ltr.logEvent("ERROR", format, args...)
+	ltr.Trace.Errorf(format, args...)
+}
+
+func (ltr *logTrace) LazyErrorf(format string, args ...any) {
+	ltr.logEvent("ERROR", format, args...)
+	ltr.Trace.LazyErrorf(format, args...)
+}
+
+func (ltr *logTrace) Finish() {
+	ltr.Trace.Finish()
+	ltr.logEvent("FINIS", "%s", trcutil.HumanizeDuration(ltr.Trace.Duration()))
+}
+
+func (ltr *logTrace) logEvent(what, format string, args ...any) {
+	format = ltr.id + " " + what + " " + strings.TrimSuffix(format, "\n") + "\n"
+	fmt.Fprintf(ltr.dst, format, args...)
 }

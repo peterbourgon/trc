@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc/internal/trcringbuf"
+	"github.com/peterbourgon/trc/internal/trcutil"
 )
 
 type Collector struct {
@@ -124,7 +125,7 @@ func (c *Collector) Select(ctx context.Context, req *SelectRequest) (*SelectResp
 		traces = traces[:req.Limit]
 	}
 
-	tr.LazyTracef("%s -> total count %d, match count %d, trace count %d", req.String(), totalCount, matchCount, len(traces))
+	tr.LazyTracef("%s -> total %d, matched %d, returned %d", req.String(), totalCount, matchCount, len(traces))
 
 	return &SelectResponse{
 		Request:    req,
@@ -133,7 +134,7 @@ func (c *Collector) Select(ctx context.Context, req *SelectRequest) (*SelectResp
 		MatchCount: matchCount,
 		Traces:     traces,
 		Stats:      stats,
-		Problems:   flattenErrors(normalizeErrs...),
+		Problems:   trcutil.FlattenErrors(normalizeErrs...),
 		Duration:   time.Since(begin),
 	}, nil
 }
@@ -142,15 +143,4 @@ func maybeFree(tr Trace) {
 	if f, ok := tr.(interface{ Free() }); ok {
 		f.Free()
 	}
-}
-
-func flattenErrors(errs ...error) []string {
-	if len(errs) <= 0 {
-		return nil
-	}
-	strs := make([]string, len(errs))
-	for i := range errs {
-		strs[i] = errs[i].Error()
-	}
-	return strs
 }

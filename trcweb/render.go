@@ -235,7 +235,7 @@ var templateFuncs = template.FuncMap{
 	"TruncateDuration":    trcutil.TruncateDuration,
 	"HumanizeDuration":    trcutil.HumanizeDuration,
 	"HumanizeFloat":       trcutil.HumanizeFloat,
-	"HumanizeBytes":       trcutil.HumanizeBytes,
+	"HumanizeBytes":       trcutil.HumanizeBytes[int],
 	"CategoryClass":       categoryClass,
 	"HighlightClasses":    highlightClasses,
 	"DebugInfo":           debugInfo,
