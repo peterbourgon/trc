@@ -12,22 +12,22 @@ import (
 	"github.com/peterbourgon/trc/internal/trcutil"
 )
 
-type Selecter interface {
-	Select(context.Context, *SelectRequest) (*SelectResponse, error)
+type Searcher interface {
+	Search(context.Context, *SearchRequest) (*SearchResponse, error)
 }
 
 //
 //
 //
 
-type SelectRequest struct {
+type SearchRequest struct {
 	Bucketing  []time.Duration `json:"bucketing,omitempty"`
 	Filter     Filter          `json:"filter,omitempty"`
 	Limit      int             `json:"limit,omitempty"`
 	StackDepth int             `json:"stack_depth,omitempty"` // 0 is default stacks, -1 for no stacks
 }
 
-func (req *SelectRequest) Normalize() []error {
+func (req *SearchRequest) Normalize() []error {
 	var errs []error
 
 	if len(req.Bucketing) <= 0 {
@@ -56,7 +56,7 @@ func (req *SelectRequest) Normalize() []error {
 	return errs
 }
 
-func (req SelectRequest) String() string {
+func (req SearchRequest) String() string {
 	var elems []string
 
 	if !reflect.DeepEqual(req.Bucketing, DefaultBucketing) {
@@ -99,24 +99,26 @@ var DefaultBucketing = []time.Duration{
 //
 //
 
-type SelectResponse struct {
-	Request    *SelectRequest   `json:"request"`
-	Sources    []string         `json:"sources"`
-	TotalCount int              `json:"total_count"`
-	MatchCount int              `json:"match_count"`
-	Traces     []*SelectedTrace `json:"traces"`
-	Stats      *SelectStats     `json:"stats"`
-	Problems   []string         `json:"problems,omitempty"`
-	Duration   time.Duration    `json:"duration"`
+type SearchResponse struct {
+	Request    *SearchRequest `json:"request"`
+	Sources    []string       `json:"sources"`
+	TotalCount int            `json:"total_count"`
+	MatchCount int            `json:"match_count"`
+	Traces     []*SearchTrace `json:"traces"`
+	Stats      *SearchStats   `json:"stats"`
+	Problems   []string       `json:"problems,omitempty"`
+	Duration   time.Duration  `json:"duration"`
 }
 
 //
 //
 //
 
-type MultiSelecter []Selecter
+type MultiSearcher []Searcher
 
-func (ms MultiSelecter) Select(ctx context.Context, req *SelectRequest) (*SelectResponse, error) {
+var _ Searcher = (MultiSearcher)(nil)
+
+func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
 	var (
 		begin         = time.Now()
 		tr            = Get(ctx)
@@ -125,25 +127,25 @@ func (ms MultiSelecter) Select(ctx context.Context, req *SelectRequest) (*Select
 
 	type tuple struct {
 		id  string
-		res *SelectResponse
+		res *SearchResponse
 		err error
 	}
 
 	// Scatter.
 	tuplec := make(chan tuple, len(ms))
 	for i, s := range ms {
-		go func(id string, s Selecter) {
+		go func(id string, s Searcher) {
 			ctx, _ := Prefix(ctx, "<%s>", id)
-			res, err := s.Select(ctx, req)
+			res, err := s.Search(ctx, req)
 			tuplec <- tuple{id, res, err}
 		}(strconv.Itoa(i+1), s)
 	}
 	tr.Tracef("scattered request count %d", len(ms))
 
 	// We'll collect responses into this aggregate value.
-	aggregate := &SelectResponse{
+	aggregate := &SearchResponse{
 		Request:  req,
-		Stats:    NewSelectStats(req.Bucketing),
+		Stats:    NewSearchStats(req.Bucketing),
 		Problems: trcutil.FlattenErrors(normalizeErrs...),
 	}
 

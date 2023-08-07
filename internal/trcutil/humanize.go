@@ -49,7 +49,12 @@ func HumanizeDuration(d time.Duration) string {
 // trying to ensure a max width of 3-4 characters, and using K to represent
 // 1000, e.g. "32K". Values are expected to range between 0 and 1 million.
 // Values larger than 1 million become "1M+".
-func HumanizeFloat(f float64) string {
+func HumanizeFloat(f float64) (s string) {
+	defer func() {
+		if s == "0.0" {
+			s = "0"
+		}
+	}()
 	switch {
 	case f > 1_000_000:
 		return "1M+"

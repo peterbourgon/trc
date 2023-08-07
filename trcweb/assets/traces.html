@@ -227,7 +227,7 @@ function highlightQuery() {
 			{{ end }}
 		</td>
 
-		<td class="rate numeric {{$category_class_name}}">
+		<td class="rate numeric {{$category_class_name}}" title="{{.Rate}}">
 			{{ HumanizeFloat .Rate }}/s
 		</td>
 	</tr>
@@ -289,7 +289,7 @@ function highlightQuery() {
 				<input type="hidden" name="errored" value="{{.Request.Filter.IsErrored}}" />
 			{{ end }}
 
-			<input id="search-button" type="submit" value="query" />
+			<input id="search-button" type="submit" value="search" />
 		</form>
 	</div>
 
@@ -548,8 +548,6 @@ function highlightQuery() {
 	});
 
 	updateDebugInfo();
-
-	onkeydown = function (e) { console.log("key down", e); };
 </script>
 
 <!-- -------------------- -->

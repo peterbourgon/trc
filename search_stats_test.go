@@ -8,7 +8,7 @@ import (
 	"github.com/peterbourgon/trc"
 )
 
-func TestStatsMerge(t *testing.T) {
+func TestSearchStatsMerge(t *testing.T) {
 	t.Parallel()
 
 	seed := int64(12345)
@@ -34,14 +34,14 @@ func TestStatsMerge(t *testing.T) {
 		tr.Finish()
 	}
 
-	responses := make([]*trc.SelectResponse, len(sources))
+	responses := make([]*trc.SearchResponse, len(sources))
 	for i := range sources {
-		res, err := sources[i].Select(ctx, &trc.SelectRequest{})
+		res, err := sources[i].Search(ctx, &trc.SearchRequest{})
 		AssertNoError(t, err)
 		responses[i] = res
 	}
 
-	var merged trc.SelectStats
+	var merged trc.SearchStats
 	for _, res := range responses {
 		merged.Merge(res.Stats)
 	}

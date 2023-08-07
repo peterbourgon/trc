@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/oklog/run"
 	"github.com/peterbourgon/ff/v3"
@@ -33,23 +35,29 @@ func main() {
 }
 
 func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args []string) error {
-	fs := flag.NewFlagSet("trc-stream", flag.ContinueOnError)
+	fs := flag.NewFlagSet("trc-query", flag.ContinueOnError)
 	var (
-		streamURI = fs.String("stream-uri", "http://localhost:8080/stream", "stream URI")
+		searchURI = fs.String("search-uri", "http://localhost:8080/traces", "search URI")
 		category  = fs.String("category", "", "trace category")
 		query     = fs.String("query", "", "query regexp")
+		interval  = fs.Duration("interval", 1*time.Second, "update interval")
 	)
 	if err := ff.Parse(fs, os.Args[1:]); err != nil {
 		return err
 	}
 
 	var (
-		httpClient   = http.DefaultClient
-		streamClient = trcweb.NewStreamClient(httpClient, *streamURI)
-		streamTraces = make(chan trc.Trace)
-		streamFilter = trc.Filter{
-			Category: *category,
-			Query:    *query,
+		httpClient    = http.DefaultClient
+		searchClient  = trcweb.NewSearchClient(httpClient, *searchURI)
+		searchRequest = &trc.SearchRequest{
+			Limit: 3,
+			Filter: trc.Filter{
+				Sources:    []string{"global"},
+				Category:   *category,
+				Query:      *query,
+				IsFinished: true,
+			},
+			StackDepth: -1,
 		}
 	)
 
@@ -58,24 +66,25 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	{
 		ctx, cancel := context.WithCancel(ctx)
 		g.Add(func() error {
-			ctx, tr := trc.NewLogTrace(ctx, "source", "stream", stderr)
-			defer tr.Finish()
-			return streamClient.Stream(ctx, streamFilter, streamTraces)
-		}, func(error) {
-			cancel()
-		})
-	}
-
-	{
-		ctx, cancel := context.WithCancel(ctx)
-		g.Add(func() error {
-			enc := json.NewEncoder(stdout)
+			ticker := time.NewTicker(*interval)
+			defer ticker.Stop()
 			for {
 				select {
-				case str := <-streamTraces:
-					enc.Encode(str)
+				case <-ticker.C:
+					res, err := searchClient.Search(ctx, searchRequest)
+					if err != nil {
+						return fmt.Errorf("search error: %w", err)
+					}
+
+					data, err := json.Marshal(res.Traces)
+					if err != nil {
+						return fmt.Errorf("marshal response: %w", err)
+					}
+
+					fmt.Fprintln(stdout, string(data))
+
 				case <-ctx.Done():
-					return ctx.Err()
+					return nil
 				}
 			}
 		}, func(error) {

@@ -4,9 +4,26 @@ import (
 	"net/http"
 	"sort"
 	"time"
+
+	"github.com/peterbourgon/trc"
 )
 
 const maxRequestBodySizeBytes = 1 * 1024 * 1024 // 1MB
+
+func parseFilter(r *http.Request) trc.Filter {
+	urlquery := r.URL.Query()
+	return trc.Filter{
+		Sources:     urlquery["source"],
+		IDs:         urlquery["id"],
+		Category:    urlquery.Get("category"),
+		IsActive:    urlquery.Has("active"),
+		IsFinished:  urlquery.Has("finished"),
+		MinDuration: parseDefault(urlquery.Get("min"), parseDurationPointer, nil),
+		IsSuccess:   urlquery.Has("success"),
+		IsErrored:   urlquery.Has("errored"),
+		Query:       urlquery.Get("q"),
+	}
+}
 
 func parseDefault[T any](s string, parse func(string) (T, error), def T) T {
 	if v, err := parse(s); err == nil {

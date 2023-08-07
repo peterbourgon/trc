@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-type SelectedTrace struct {
+type SearchTrace struct {
 	Source   string        `json:"source"`
 	ID       string        `json:"id"`
 	Category string        `json:"category"`
@@ -16,8 +16,8 @@ type SelectedTrace struct {
 	Events   []Event       `json:"events"`
 }
 
-func NewSelectedTrace(tr Trace) *SelectedTrace {
-	return &SelectedTrace{
+func NewSearchTrace(tr Trace) *SearchTrace {
+	return &SearchTrace{
 		Source:   tr.Source(),
 		ID:       tr.ID(),
 		Category: tr.Category(),
@@ -29,7 +29,7 @@ func NewSelectedTrace(tr Trace) *SelectedTrace {
 	}
 }
 
-func (st *SelectedTrace) TrimStacks(depth int) *SelectedTrace {
+func (st *SearchTrace) TrimStacks(depth int) *SearchTrace {
 	if depth == 0 {
 		return st // zero value (0) means don't do anything
 	}
@@ -44,7 +44,7 @@ func (st *SelectedTrace) TrimStacks(depth int) *SelectedTrace {
 	return st
 }
 
-func (st *SelectedTrace) Dump() string {
+func (st *SearchTrace) Dump() string {
 	buf, _ := json.MarshalIndent(st, "", "    ")
 	return string(buf)
 }

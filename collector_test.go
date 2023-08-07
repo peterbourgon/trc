@@ -7,7 +7,7 @@ import (
 	"github.com/peterbourgon/trc"
 )
 
-func TestSelectScenarios(t *testing.T) {
+func TestSearchScenarios(t *testing.T) {
 	ctx := context.Background()
 	src := trc.NewDefaultCollector()
 
@@ -40,7 +40,7 @@ func TestSelectScenarios(t *testing.T) {
 	}
 
 	{
-		res, err := src.Select(ctx, &trc.SelectRequest{})
+		res, err := src.Search(ctx, &trc.SearchRequest{})
 		AssertNoError(t, err)
 		AssertEqual(t, 3, res.TotalCount)
 		AssertEqual(t, 3, res.MatchCount)
@@ -51,7 +51,7 @@ func TestSelectScenarios(t *testing.T) {
 	}
 
 	{
-		res, err := src.Select(ctx, &trc.SelectRequest{Filter: trc.Filter{IsErrored: true}})
+		res, err := src.Search(ctx, &trc.SearchRequest{Filter: trc.Filter{IsErrored: true}})
 		AssertNoError(t, err)
 		AssertEqual(t, 3, res.TotalCount)
 		AssertEqual(t, 1, res.MatchCount)
@@ -60,7 +60,7 @@ func TestSelectScenarios(t *testing.T) {
 	}
 
 	{
-		res, err := src.Select(ctx, &trc.SelectRequest{Filter: trc.Filter{Query: "foo"}})
+		res, err := src.Search(ctx, &trc.SearchRequest{Filter: trc.Filter{Query: "foo"}})
 		AssertNoError(t, err)
 		AssertEqual(t, 3, res.TotalCount)
 		AssertEqual(t, 2, res.MatchCount)
@@ -70,7 +70,7 @@ func TestSelectScenarios(t *testing.T) {
 	}
 
 	{
-		res, err := src.Select(ctx, &trc.SelectRequest{Filter: trc.Filter{Query: "event (1|3)"}})
+		res, err := src.Search(ctx, &trc.SearchRequest{Filter: trc.Filter{Query: "event (1|3)"}})
 		AssertNoError(t, err)
 		AssertEqual(t, "event (1|3)", res.Request.Filter.Query)
 		AssertEqual(t, 3, res.TotalCount)
@@ -81,7 +81,7 @@ func TestSelectScenarios(t *testing.T) {
 	}
 
 	{
-		res, err := src.Select(ctx, &trc.SelectRequest{Filter: trc.Filter{Query: "event (1"}})
+		res, err := src.Search(ctx, &trc.SearchRequest{Filter: trc.Filter{Query: "event (1"}})
 		AssertNoError(t, err)
 		AssertEqual(t, 1, len(res.Problems))
 		AssertEqual(t, "", res.Request.Filter.Query)
@@ -105,7 +105,7 @@ func TestCollectorResize(t *testing.T) {
 	}
 
 	{
-		res, err := src.Select(ctx, &trc.SelectRequest{Limit: count}) // request all count traces
+		res, err := src.Search(ctx, &trc.SearchRequest{Limit: count}) // request all count traces
 		AssertNoError(t, err)                                         //
 		AssertEqual(t, count, res.TotalCount)                         // we get them all
 		AssertEqual(t, count, len(res.Traces))                        //
@@ -117,7 +117,7 @@ func TestCollectorResize(t *testing.T) {
 	src.SetCategorySize(fewer)
 
 	{
-		res, err := src.Select(ctx, &trc.SelectRequest{Limit: count})         // request the same count traces
+		res, err := src.Search(ctx, &trc.SearchRequest{Limit: count})         // request the same count traces
 		AssertNoError(t, err)                                                 //
 		AssertEqual(t, fewer, res.TotalCount)                                 // but we get fewer, since we truncated each category
 		AssertEqual(t, fewer, len(res.Traces))                                //

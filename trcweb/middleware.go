@@ -26,7 +26,12 @@ func Middleware(
 			defer tr.Finish()
 
 			tr.LazyTracef("%s %s %s", r.RemoteAddr, r.Method, r.URL.String())
-			tr.LazyTracef("User-Agent: %s", r.Header.Get("user-agent"))
+
+			for _, header := range []string{"User-Agent", "Accept", "Content-Type"} {
+				if val := r.Header.Get(header); val != "" {
+					tr.LazyTracef("%s: %s", header, val)
+				}
+			}
 
 			iw := newInterceptor(w)
 

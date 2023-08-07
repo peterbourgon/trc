@@ -1,4 +1,4 @@
-module trc-stream
+module trc-query
 
 go 1.20
 

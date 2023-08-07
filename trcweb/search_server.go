@@ -13,28 +13,28 @@ import (
 	"github.com/peterbourgon/trc"
 )
 
-type SelecterServer struct {
-	sel trc.Selecter
+type SearchServer struct {
+	src trc.Searcher
 }
 
-func NewSelecterServer(sel trc.Selecter) *SelecterServer {
-	return &SelecterServer{
-		sel: sel,
+func NewSearchServer(src trc.Searcher) *SearchServer {
+	return &SearchServer{
+		src: src,
 	}
 }
 
-type SelectData struct {
-	Request  trc.SelectRequest  `json:"request"`
-	Response trc.SelectResponse `json:"response"`
+type SearchData struct {
+	Request  trc.SearchRequest  `json:"request"`
+	Response trc.SearchResponse `json:"response"`
 	Problems []error            `json:"problems,omitempty"`
 }
 
-func (s *SelecterServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *SearchServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var (
 		ctx    = r.Context()
 		tr     = trc.Get(ctx)
 		isJSON = strings.Contains(r.Header.Get("content-type"), "application/json")
-		data   = SelectData{}
+		data   = SearchData{}
 	)
 
 	switch {
@@ -47,19 +47,9 @@ func (s *SelecterServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		urlquery := r.URL.Query()
-		data.Request = trc.SelectRequest{
-			Bucketing: parseBucketing(urlquery["b"]), // nil is OK
-			Filter: trc.Filter{
-				Sources:     urlquery["source"],
-				IDs:         urlquery["id"],
-				Category:    urlquery.Get("category"),
-				IsActive:    urlquery.Has("active"),
-				IsFinished:  urlquery.Has("finished"),
-				MinDuration: parseDefault(urlquery.Get("min"), parseDurationPointer, nil),
-				IsSuccess:   urlquery.Has("success"),
-				IsErrored:   urlquery.Has("errored"),
-				Query:       urlquery.Get("q"),
-			},
+		data.Request = trc.SearchRequest{
+			Bucketing:  parseBucketing(urlquery["b"]), // nil is OK
+			Filter:     parseFilter(r),
 			Limit:      parseRange(urlquery.Get("n"), strconv.Atoi, trc.SelectRequestLimitMin, trc.SelectRequestLimitDefault, trc.SelectRequestLimitMax),
 			StackDepth: parseDefault(urlquery.Get("stack"), strconv.Atoi, 0),
 		}
@@ -67,7 +57,9 @@ func (s *SelecterServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	data.Problems = append(data.Problems, data.Request.Normalize()...)
 
-	res, err := s.sel.Select(ctx, &data.Request)
+	tr.LazyTracef("search request %s", data.Request)
+
+	res, err := s.src.Search(ctx, &data.Request)
 	if err != nil {
 		data.Problems = append(data.Problems, fmt.Errorf("execute select request: %w", err))
 	} else {
@@ -85,21 +77,21 @@ func (s *SelecterServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //
 //
 
-type SelecterClient struct {
+type SearchClient struct {
 	client HTTPClient
 	uri    string
 }
 
-var _ trc.Selecter = (*SelecterClient)(nil)
+var _ trc.Searcher = (*SearchClient)(nil)
 
-func NewSelecterClient(client HTTPClient, remoteURI string) *SelecterClient {
-	return &SelecterClient{
+func NewSearchClient(client HTTPClient, remoteURI string) *SearchClient {
+	return &SearchClient{
 		client: client,
 		uri:    remoteURI,
 	}
 }
 
-func (c *SelecterClient) Select(ctx context.Context, req *trc.SelectRequest) (_ *trc.SelectResponse, err error) {
+func (c *SearchClient) Search(ctx context.Context, req *trc.SearchRequest) (_ *trc.SearchResponse, err error) {
 	tr := trc.Get(ctx)
 
 	defer func() {
@@ -133,7 +125,7 @@ func (c *SelecterClient) Select(ctx context.Context, req *trc.SelectRequest) (_ 
 		return nil, fmt.Errorf("HTTP response %d %s", httpRes.StatusCode, http.StatusText(httpRes.StatusCode))
 	}
 
-	var res SelectData
+	var res SearchData
 	if err := json.NewDecoder(httpRes.Body).Decode(&res); err != nil {
 		return nil, fmt.Errorf("decode select response: %w", err)
 	}

@@ -6,19 +6,19 @@ import (
 	"time"
 )
 
-type SelectStats struct {
+type SearchStats struct {
 	Bucketing  []time.Duration           `json:"bucketing"`
 	Categories map[string]*CategoryStats `json:"categories"`
 }
 
-func NewSelectStats(bucketing []time.Duration) *SelectStats {
-	return &SelectStats{
+func NewSearchStats(bucketing []time.Duration) *SearchStats {
+	return &SearchStats{
 		Bucketing:  bucketing,
 		Categories: map[string]*CategoryStats{},
 	}
 }
 
-func (ss *SelectStats) IsZero() bool {
+func (ss *SearchStats) IsZero() bool {
 	if ss == nil {
 		return true
 	}
@@ -34,7 +34,7 @@ func (ss *SelectStats) IsZero() bool {
 	return false
 }
 
-func (ss *SelectStats) Observe(trs ...Trace) {
+func (ss *SearchStats) Observe(trs ...Trace) {
 	for _, tr := range trs {
 		category := tr.Category()
 		cs, ok := ss.Categories[category]
@@ -71,7 +71,7 @@ func (ss *SelectStats) Observe(trs ...Trace) {
 	}
 }
 
-func (ss *SelectStats) Merge(other *SelectStats) {
+func (ss *SearchStats) Merge(other *SearchStats) {
 	if other.IsZero() {
 		return
 	}
@@ -96,7 +96,7 @@ func (ss *SelectStats) Merge(other *SelectStats) {
 	}
 }
 
-func (ss *SelectStats) Overall() *CategoryStats {
+func (ss *SearchStats) Overall() *CategoryStats {
 	overall := NewCategoryStats("overall", ss.Bucketing)
 	var rate float64
 	for _, sc := range ss.Categories {
@@ -107,7 +107,7 @@ func (ss *SelectStats) Overall() *CategoryStats {
 	return overall
 }
 
-func (ss *SelectStats) AllCategories() []*CategoryStats {
+func (ss *SearchStats) AllCategories() []*CategoryStats {
 	slice := make([]*CategoryStats, 0, len(ss.Categories)+1)
 	for _, cs := range ss.Categories {
 		slice = append(slice, cs)

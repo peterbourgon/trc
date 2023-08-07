@@ -10,12 +10,12 @@ import (
 
 type Broker struct {
 	mtx  sync.Mutex
-	subs map[chan<- *StreamTrace]*subscriber
+	subs map[chan<- trc.Trace]*subscriber
 }
 
 func NewBroker() *Broker {
 	return &Broker{
-		subs: map[chan<- *StreamTrace]*subscriber{},
+		subs: map[chan<- trc.Trace]*subscriber{},
 	}
 }
 
@@ -43,7 +43,7 @@ func (b *Broker) Publish(ctx context.Context, tr trc.Trace) {
 	}
 }
 
-func (b *Broker) Stream(ctx context.Context, f trc.Filter, ch chan<- *StreamTrace) (Stats, error) {
+func (b *Broker) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) (Stats, error) {
 	if err := func() error {
 		b.mtx.Lock()
 		defer b.mtx.Unlock()
@@ -72,7 +72,7 @@ func (b *Broker) Stream(ctx context.Context, f trc.Filter, ch chan<- *StreamTrac
 	return sub.stats, ctx.Err()
 }
 
-func (b *Broker) Stats(ctx context.Context, ch chan<- *StreamTrace) (Stats, error) {
+func (b *Broker) Stats(ctx context.Context, ch chan<- trc.Trace) (Stats, error) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
@@ -91,7 +91,7 @@ type Stats struct {
 }
 
 type subscriber struct {
-	traces chan<- *StreamTrace
+	traces chan<- trc.Trace
 	filter trc.Filter
 	stats  Stats
 }

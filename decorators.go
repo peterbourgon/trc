@@ -9,16 +9,19 @@ import (
 	"github.com/peterbourgon/trc/internal/trcutil"
 )
 
+// DecoratorFunc is a function that decorates a trace in some way. It's similar
+// to an HTTP middleware.
 type DecoratorFunc func(Trace) Trace
 
 //
 //
 //
 
-// PublishDecorator publishes the trace to the publisher when it's created, on
-// every event, and when it's finished. The published trace is a reduced form of
-// the full trace, containing only the core metadata and, in the case of trace
-// events, the single event that triggered the publish.
+// PublishDecorator returns a decorator that publishes the trace to the
+// publisher when it's created, on every event, and when the trace is finished.
+// The published trace is a reduced form of the full trace, containing only the
+// core metadata and, in the case of trace events, the single event that
+// triggered the publish.
 func PublishDecorator(p Publisher) DecoratorFunc {
 	return func(tr Trace) Trace {
 		ptr := &publishTrace{
@@ -30,6 +33,8 @@ func PublishDecorator(p Publisher) DecoratorFunc {
 	}
 }
 
+// Publisher is a consumer contract for the [PublishDecorator] which describes
+// anything that can publish a trace. It models the [trcstream.Broker].
 type Publisher interface {
 	Publish(ctx context.Context, tr Trace)
 }
@@ -68,10 +73,11 @@ func (ptr *publishTrace) Finish() {
 //
 //
 
-// LogDecorator logs a simple string to the provided destination when the trace
-// is created, on every event, and when it's finished. The logged string is a
-// reduced form of the full trace, containing only the trace ID, the event type,
-// and the single event that triggered the log.
+// LogDecorator returns a decorator that logs a simple string to the provided
+// destination when the trace is created, on every event, and when the trace is
+// finished. The logged string is a reduced form of the full trace, containing
+// only the trace ID, the event type, and the single event that triggered the
+// log.
 func LogDecorator(dst io.Writer) DecoratorFunc {
 	return func(tr Trace) Trace {
 		ltr := &logTrace{

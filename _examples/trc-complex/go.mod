@@ -3,7 +3,6 @@ module trc-complex
 go 1.20
 
 require (
-	github.com/NYTimes/gziphandler v1.1.1
 	github.com/felixge/fgprof v0.9.3
 	github.com/peterbourgon/trc v0.0.0-00010101000000-000000000000
 )

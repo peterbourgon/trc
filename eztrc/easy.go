@@ -31,7 +31,7 @@ import (
 
 var collector = trc.NewDefaultCollector()
 
-var handler = trcweb.NewSelecterServer(collector)
+var handler = trcweb.NewSearchServer(collector)
 
 // Collector returns the global [trc.Collector].
 func Collector() *trc.Collector {

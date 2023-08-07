@@ -16,6 +16,8 @@ type Collector struct {
 	categories *trcringbuf.RingBuffers[Trace]
 }
 
+var _ Searcher = (*Collector)(nil)
+
 type NewTraceFunc func(ctx context.Context, source string, category string) (context.Context, Trace)
 
 func NewDefaultCollector() *Collector {
@@ -77,19 +79,19 @@ func (c *Collector) NewTrace(ctx context.Context, category string) (context.Cont
 	return ctx, tr
 }
 
-func (c *Collector) Select(ctx context.Context, req *SelectRequest) (*SelectResponse, error) {
+func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
 	var (
 		tr            = Get(ctx)
 		begin         = time.Now()
 		normalizeErrs = req.Normalize()
-		stats         = NewSelectStats(req.Bucketing)
+		stats         = NewSearchStats(req.Bucketing)
 		totalCount    = 0
 		matchCount    = 0
-		traces        = []*SelectedTrace{}
+		traces        = []*SearchTrace{}
 	)
 
 	for _, ringBuf := range c.categories.GetAll() { // TODO: could do these concurrently
-		var categoryTraces []*SelectedTrace
+		var categoryTraces []*SearchTrace
 		ringBuf.Walk(func(candidate Trace) error {
 			// Every candidate trace should be observed.
 			stats.Observe(candidate)
@@ -108,7 +110,7 @@ func (c *Collector) Select(ctx context.Context, req *SelectRequest) (*SelectResp
 			}
 
 			// Otherwise, collect a static copy of the trace.
-			categoryTraces = append(categoryTraces, NewSelectedTrace(candidate).TrimStacks(req.StackDepth))
+			categoryTraces = append(categoryTraces, NewSearchTrace(candidate).TrimStacks(req.StackDepth))
 			matchCount++
 			return nil
 		})
@@ -125,9 +127,9 @@ func (c *Collector) Select(ctx context.Context, req *SelectRequest) (*SelectResp
 		traces = traces[:req.Limit]
 	}
 
-	tr.LazyTracef("%s -> total %d, matched %d, returned %d", req.String(), totalCount, matchCount, len(traces))
+	tr.LazyTracef("%s -> total %d, matched %d, returned %d", c.source, totalCount, matchCount, len(traces))
 
-	return &SelectResponse{
+	return &SearchResponse{
 		Request:    req,
 		Sources:    []string{c.source},
 		TotalCount: totalCount,

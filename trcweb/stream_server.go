@@ -54,16 +54,19 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		ctx  = r.Context()
-		tr   = trc.Get(ctx)
-		buf  = parseRange(r.URL.Query().Get("buf"), strconv.Atoi, 0, 100, 1000)
-		ch   = make(chan *trcstream.StreamTrace, buf)
-		body = http.MaxBytesReader(w, r.Body, maxRequestBodySizeBytes)
+		ctx = r.Context()
+		tr  = trc.Get(ctx)
 	)
 
 	var f trc.Filter
-	if err := json.NewDecoder(body).Decode(&f); err != nil {
-		tr.Errorf("decode filter error (%v), using default", err)
+	switch {
+	case strings.Contains(r.Header.Get("content-type"), "application/json"):
+		body := http.MaxBytesReader(w, r.Body, maxRequestBodySizeBytes)
+		if err := json.NewDecoder(body).Decode(&f); err != nil {
+			tr.Errorf("decode filter error (%v), using default", err)
+		}
+	default:
+		f = parseFilter(r)
 	}
 
 	if normalizeErrs := f.Normalize(); len(normalizeErrs) > 0 {
@@ -72,15 +75,21 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tr.Tracef("buffer %d", buf)
 	tr.Tracef("filter %s", f)
+
+	var (
+		buf    = parseRange(r.URL.Query().Get("buf"), strconv.Atoi, 0, 100, 1000)
+		tracec = make(chan trc.Trace, buf)
+		donec  = make(chan struct{})
+	)
+
+	tr.Tracef("buffer %d", buf)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	donec := make(chan struct{})
 	go func() {
-		stats, err := s.b.Stream(ctx, f, ch)
+		stats, err := s.b.Stream(ctx, f, tracec)
 		tr.Tracef("Stream finished (%v), skips %d, sends %d, drops %d", err, stats.Skips, stats.Sends, stats.Drops)
 		close(donec)
 	}()
@@ -100,15 +109,25 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 		for {
 			select {
 			case <-initc:
+				data, err := json.Marshal(map[string]any{
+					"filter": f,
+					"buffer": cap(tracec),
+				})
+				if err != nil {
+					tr.Errorf("JSON marshal init: %v", err)
+					continue
+				}
+
 				if err := encoder.Encode(eventsource.Event{
 					Type: "init",
+					Data: data,
 				}); err != nil {
 					tr.Errorf("encode init: %v", err)
 					continue
 				}
 
 			case <-stats.C:
-				stats, err := s.b.Stats(ctx, ch)
+				stats, err := s.b.Stats(ctx, tracec)
 				if err != nil {
 					tr.Errorf("get stats: %v", err)
 					continue
@@ -128,7 +147,7 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 
-			case recv := <-ch:
+			case recv := <-tracec:
 				if recv.ID() == tr.ID() {
 					continue // don't publish our own trace events
 				}
@@ -179,7 +198,7 @@ func NewStreamClient(client HTTPClient, uri string) *StreamClient {
 	}
 }
 
-func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- *trcstream.StreamTrace) (err error) {
+func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) (err error) {
 	tr := trc.Get(ctx)
 
 	defer func() {
@@ -193,16 +212,21 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- *trcs
 		return fmt.Errorf("encode filter: %w", err)
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "GET", c.uri, bytes.NewReader(body))
+	// Explicitly don't provide the context to the request, because EventSource
+	// (incorrectly) treats context cancelation as a recoverable error, which
+	// can cause Read to block for a single retry duration before returning
+	// ErrClosed.
+	req, err := http.NewRequest("GET", c.uri, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
+	req.Header.Set("content-type", "application/json; charset=utf-8")
 
 	es := eventsource.New(req, 1*time.Second)
-	go func() { <-ctx.Done(); es.Close() }()
+	go func() {
+		<-ctx.Done()
+		es.Close()
+	}()
 
 	for {
 		ev, err := es.Read()
@@ -214,6 +238,9 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- *trcs
 		}
 
 		switch ev.Type {
+		case "init":
+			continue
+
 		case "trace":
 			var str trcstream.StreamTrace
 			if err := json.Unmarshal(ev.Data, &str); err != nil {
