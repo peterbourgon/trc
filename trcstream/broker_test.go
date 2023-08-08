@@ -8,7 +8,7 @@ import (
 	"github.com/peterbourgon/trc/trcstream"
 )
 
-func BenchmarkBroker(b *testing.B) {
+func BenchmarkBrokerPublish(b *testing.B) {
 	ctx := context.Background()
 
 	b.Run("no subscribers", func(b *testing.B) {
