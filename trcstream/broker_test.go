@@ -9,62 +9,46 @@ import (
 )
 
 func BenchmarkBrokerPublish(b *testing.B) {
-	ctx := context.Background()
+	ctxbg := context.Background()
 
-	b.Run("no subscribers", func(b *testing.B) {
-		broker := trcstream.NewBroker()
+	fn := func(name string, fs ...trc.Filter) {
+		b.Run(name, func(b *testing.B) {
+			var (
+				ctx, cancel = context.WithCancel(ctxbg)
+				broker      = trcstream.NewBroker()
+			)
+			for _, f := range fs {
+				tracec := make(chan trc.Trace)
+				defer func() { <-tracec }()
+				go func(f trc.Filter) {
+					broker.Stream(ctx, f, tracec)
+					close(tracec)
+				}(f)
+			}
 
-		_, tr := trc.New(ctx, "source", "category")
-		defer tr.Finish()
+			_, tr := trc.New(ctxbg, "source", "category")
+			defer tr.Finish()
 
-		for i := 0; i < b.N; i++ {
-			broker.Publish(ctx, tr)
-		}
-	})
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				broker.Publish(ctxbg, tr)
+			}
 
-	b.Run("one skip subscriber", func(b *testing.B) {
-		var (
-			broker      = trcstream.NewBroker()
-			ctx, cancel = context.WithCancel(ctx)
-			tracec      = make(chan trc.Trace)
-		)
+			cancel()
+		})
+	}
 
-		go func() {
-			broker.Stream(ctx, trc.Filter{IsErrored: true}, tracec)
-			close(tracec)
-		}()
+	var (
+		isErrored = trc.Filter{IsErrored: true}
+		isActive  = trc.Filter{IsActive: true}
+	)
 
-		_, tr := trc.New(ctx, "source", "category")
-		defer tr.Finish()
-
-		for i := 0; i < b.N; i++ {
-			broker.Publish(ctx, tr)
-		}
-
-		cancel()
-		<-tracec
-	})
-
-	b.Run("one send subscriber", func(b *testing.B) {
-		var (
-			broker      = trcstream.NewBroker()
-			ctx, cancel = context.WithCancel(ctx)
-			tracec      = make(chan trc.Trace)
-		)
-
-		go func() {
-			broker.Stream(ctx, trc.Filter{IsActive: true}, tracec)
-			close(tracec)
-		}()
-
-		_, tr := trc.New(ctx, "source", "category")
-		defer tr.Finish()
-
-		for i := 0; i < b.N; i++ {
-			broker.Publish(ctx, tr)
-		}
-
-		cancel()
-		<-tracec
-	})
+	fn("no subscribers")
+	fn("1 skip subscriber", isErrored)
+	fn("10 skip subscribers", isErrored, isErrored, isErrored, isErrored, isErrored, isErrored, isErrored, isErrored, isErrored, isErrored)
+	fn("1 send subscriber", isActive)
+	fn("10 send subscribers", isActive, isActive, isActive, isActive, isActive, isActive, isActive, isActive, isActive, isActive)
+	fn("9 skip, 1 send", isErrored, isErrored, isErrored, isErrored, isErrored, isErrored, isErrored, isErrored, isErrored, isActive)
+	fn("1 skip, 9 send", isActive, isErrored, isErrored, isErrored, isErrored, isErrored, isErrored, isErrored, isErrored, isErrored)
 }
