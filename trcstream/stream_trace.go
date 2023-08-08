@@ -13,7 +13,7 @@ type StreamTrace struct {
 	TraceStarted     time.Time     `json:"started"`
 	TraceFinished    bool          `json:"finished,omitempty"`
 	TraceErrored     bool          `json:"errored,omitempty"`
-	TraceDuration    time.Duration `json:"-"`
+	TraceDuration    time.Duration `json:"duration"`
 	TraceDurationStr string        `json:"duration_str"`
 	TraceDurationSec float64       `json:"duration_sec"`
 	TraceEvents      []trc.Event   `json:"events,omitempty"`
