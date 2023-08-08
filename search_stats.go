@@ -27,10 +27,6 @@ func (ss *SearchStats) IsZero() bool {
 		return true
 	}
 
-	if len(ss.Categories) <= 0 {
-		return true
-	}
-
 	return false
 }
 

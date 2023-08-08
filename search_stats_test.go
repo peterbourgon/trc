@@ -52,3 +52,26 @@ func TestSearchStatsMerge(t *testing.T) {
 	AssertEqual(t, len(trc.DefaultBucketing), len(overall.BucketCounts))
 	AssertEqual(t, traceCount, overall.TotalCount())
 }
+
+func TestSearchStatsIsZero(t *testing.T) {
+	t.Parallel()
+
+	t.Run("zero value", func(t *testing.T) {
+		var ss trc.SearchStats
+		AssertEqual(t, true, ss.IsZero())
+	})
+
+	t.Run("only categories", func(t *testing.T) {
+		var ss trc.SearchStats
+		ss.Categories = map[string]*trc.CategoryStats{
+			"foo": trc.NewCategoryStats("foo", trc.DefaultBucketing),
+		}
+		AssertEqual(t, true, ss.IsZero())
+	})
+
+	t.Run("only bucketing", func(t *testing.T) {
+		var ss trc.SearchStats
+		ss.Bucketing = trc.DefaultBucketing
+		AssertEqual(t, false, ss.IsZero())
+	})
+}
