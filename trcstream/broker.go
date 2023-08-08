@@ -90,6 +90,10 @@ type Stats struct {
 	Drops int `json:"drops"`
 }
 
+func (s *Stats) DropRate() float64 {
+	return float64(s.Drops) / float64(s.Sends+s.Drops)
+}
+
 type subscriber struct {
 	traces chan<- trc.Trace
 	filter trc.Filter

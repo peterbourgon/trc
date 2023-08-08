@@ -90,7 +90,7 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		stats, err := s.b.Stream(ctx, f, tracec)
-		tr.Tracef("Stream finished (%v), skips %d, sends %d, drops %d", err, stats.Skips, stats.Sends, stats.Drops)
+		tr.Tracef("Stream finished (%v), skips %d, sends %d, drops %d (%.1f%%)", err, stats.Skips, stats.Sends, stats.Drops, 100*stats.DropRate())
 		close(donec)
 	}()
 	defer func() {
@@ -256,7 +256,7 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 			if err := json.Unmarshal(ev.Data, &stats); err != nil {
 				return fmt.Errorf("decode stats event: %w", err)
 			}
-			tr.LazyTracef("stream: skips %d, sends %d, drops %d", stats.Skips, stats.Sends, stats.Drops)
+			tr.LazyTracef("stream: skips %d, sends %d, drops %d (%.1f%%)", stats.Skips, stats.Sends, stats.Drops, 100*stats.DropRate())
 
 		default:
 			tr.LazyTracef("unknown event type %q", ev.Type)
