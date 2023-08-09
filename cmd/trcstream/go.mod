@@ -3,8 +3,8 @@ module github.com/peterbourgon/trc/cmd/trcstream
 go 1.20
 
 replace (
-	github.com/peterbourgon/trc => ../../
 	github.com/peterbourgon/ff/v4 => ../../../ff
+	github.com/peterbourgon/trc => ../../
 )
 
 require (
