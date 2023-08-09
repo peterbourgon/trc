@@ -61,8 +61,8 @@ func main() {
 	// We'll also trace each request to this endpoint.
 	tracesHandlers := make([]http.Handler, len(instanceCollectors))
 	for i := range tracesHandlers {
-		tracesHandlers[i] = trcweb.NewSearchServer(instanceCollectors[i])
-		tracesHandlers[i] = trcweb.Middleware(instanceCollectors[i].NewTrace, func(r *http.Request) string { return "traces" })(tracesHandlers[i])
+		tracesHandlers[i] = trcweb.NewTraceServer(instanceCollectors[i], instanceBrokers[i])
+		tracesHandlers[i] = trcweb.Middleware(instanceCollectors[i].NewTrace, trcweb.TraceServerCategory)(tracesHandlers[i])
 	}
 
 	// TODO
@@ -97,8 +97,8 @@ func main() {
 		// collector, and include that collector in the multi-searcher.
 		ms = append(ms, globalCollector)
 
-		globalHandler = trcweb.NewSearchServer(ms)
-		globalHandler = trcweb.Middleware(globalCollector.NewTrace, func(r *http.Request) string { return "traces" })(globalHandler)
+		globalHandler = trcweb.NewTraceServer(ms, globalBroker)
+		globalHandler = trcweb.Middleware(globalCollector.NewTrace, trcweb.TraceServerCategory)(globalHandler)
 	}
 
 	var streamHandler http.Handler
