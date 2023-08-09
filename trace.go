@@ -28,15 +28,15 @@ import (
 // resources claimed by the trace to an e.g. [sync.Pool]. This method, if it
 // exists, is called by the [Collector] when a trace is dropped.
 type Trace interface {
-	// Source returns a human-readable string representing the origin of the
-	// trace, which is typically the instance of the program where the trace was
-	// constructed.
-	Source() string
-
 	// ID returns an identifier for the trace which should be automatically
 	// generated during construction, and should be unique within a given
 	// instance.
 	ID() string
+
+	// Source returns a human-readable string representing the origin of the
+	// trace, which is typically the instance of the program where the trace was
+	// constructed.
+	Source() string
 
 	// Category returns the category of the trace, which should be provided by
 	// the caller when the trace is created.

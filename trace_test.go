@@ -22,6 +22,7 @@ func TraceTest(t *testing.T, constructor func(ctx context.Context, source, categ
 
 	t.Run("Unique ID", func(t *testing.T) {
 		t.Parallel()
+
 		index := map[string]bool{}
 		for i := 0; i < 10; i++ {
 			_, tr := constructor(ctx, "src", "foo")
@@ -34,6 +35,7 @@ func TraceTest(t *testing.T, constructor func(ctx context.Context, source, categ
 
 	t.Run("Errored", func(t *testing.T) {
 		t.Parallel()
+
 		_, tr := constructor(ctx, "src", "foo")
 		if want, have := false, tr.Errored(); want != have {
 			t.Errorf("Trace was marked Errored without error event")
@@ -50,6 +52,7 @@ func TraceTest(t *testing.T, constructor func(ctx context.Context, source, categ
 
 	t.Run("Finish prevents updates", func(t *testing.T) {
 		t.Parallel()
+
 		_, tr := constructor(ctx, "src", "foo")
 		tr.Tracef("first")
 		tr.LazyTracef("second")
@@ -90,6 +93,7 @@ func TraceTest(t *testing.T, constructor func(ctx context.Context, source, categ
 
 	t.Run("Normal events", func(t *testing.T) {
 		t.Parallel()
+
 		_, tr := constructor(ctx, "src", "foo")
 		a := []int{1, 2, 3}
 		tr.Tracef("a=%v", a)
@@ -102,6 +106,7 @@ func TraceTest(t *testing.T, constructor func(ctx context.Context, source, categ
 
 	t.Run("Lazy events", func(t *testing.T) {
 		t.Parallel()
+
 		_, tr := constructor(ctx, "src", "foo")
 		a := []int{1, 2, 3}
 		tr.LazyTracef("a=%v", a)
@@ -114,6 +119,7 @@ func TraceTest(t *testing.T, constructor func(ctx context.Context, source, categ
 
 	t.Run("Error event", func(t *testing.T) {
 		t.Parallel()
+
 		_, tr := constructor(ctx, "src", "foo")
 		tr.Errorf("this is an error")
 		tr.Finish()
@@ -122,6 +128,7 @@ func TraceTest(t *testing.T, constructor func(ctx context.Context, source, categ
 
 	t.Run("optional SetMaxEvents", func(t *testing.T) {
 		t.Parallel()
+
 		_, tr := constructor(ctx, "src", "foo")
 		defer tr.Finish()
 		m, ok := tr.(interface{ SetMaxEvents(int) })
@@ -143,6 +150,7 @@ func TraceTest(t *testing.T, constructor func(ctx context.Context, source, categ
 
 	t.Run("Concurrency", func(t *testing.T) {
 		t.Parallel()
+
 		workers := 100
 		_, tr := constructor(ctx, "src", "foo")
 		var wg sync.WaitGroup

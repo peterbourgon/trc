@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -192,6 +193,9 @@ type StreamClient struct {
 }
 
 func NewStreamClient(client HTTPClient, uri string) *StreamClient {
+	if !strings.HasPrefix(uri, "http") {
+		uri = "http://" + uri
+	}
 	return &StreamClient{
 		client: client,
 		uri:    uri,
@@ -206,6 +210,19 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 			tr.Errorf("error: %v", err)
 		}
 	}()
+
+	{
+		req, err := http.NewRequestWithContext(ctx, "GET", c.uri, nil)
+		if err != nil {
+			return err
+		}
+		res, err := c.client.Do(req)
+		if err != nil {
+			return err
+		}
+		io.Copy(io.Discard, res.Body)
+		res.Body.Close()
+	}
 
 	body, err := json.Marshal(f)
 	if err != nil {

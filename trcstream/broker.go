@@ -34,6 +34,7 @@ func (b *Broker) Publish(ctx context.Context, tr trc.Trace) {
 			sub.stats.Skips++
 			continue
 		}
+
 		select {
 		case sub.traces <- str:
 			sub.stats.Sends++
@@ -47,13 +48,16 @@ func (b *Broker) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) 
 	if err := func() error {
 		b.mtx.Lock()
 		defer b.mtx.Unlock()
+
 		if _, ok := b.subs[ch]; ok {
 			return fmt.Errorf("already subscribed")
 		}
+
 		b.subs[ch] = &subscriber{
 			filter: f,
 			traces: ch,
 		}
+
 		return nil
 	}(); err != nil {
 		return Stats{}, err
@@ -64,8 +68,10 @@ func (b *Broker) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) 
 	sub := func() *subscriber {
 		b.mtx.Lock()
 		defer b.mtx.Unlock()
+
 		sub := b.subs[ch]
 		delete(b.subs, ch)
+
 		return sub
 	}()
 
@@ -91,7 +97,14 @@ type Stats struct {
 }
 
 func (s *Stats) DropRate() float64 {
-	return float64(s.Drops) / float64(s.Sends+s.Drops)
+	var (
+		n = float64(s.Drops)
+		d = float64(s.Sends + s.Drops)
+	)
+	if d == 0 {
+		return 0
+	}
+	return n / d
 }
 
 type subscriber struct {

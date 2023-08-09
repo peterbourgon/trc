@@ -95,8 +95,8 @@ func newCoreTrace(source, category string) *coreTrace {
 	trcdebug.CoreTraceNewCount.Add(1)
 	now := time.Now().UTC()
 	tr := coreTracePool.Get().(*coreTrace)
-	tr.source = source
 	tr.id = ulid.MustNew(ulid.Timestamp(now), traceIDEntropy) // defer String computation
+	tr.source = source
 	tr.category = category
 	tr.start = now
 	tr.errored = false
@@ -116,12 +116,12 @@ func iff[T any](cond bool, yes, no T) T {
 	return no
 }
 
-func (tr *coreTrace) Source() string {
-	return tr.source // immutable
-}
-
 func (tr *coreTrace) ID() string {
 	return tr.id.String() // immutable
+}
+
+func (tr *coreTrace) Source() string {
+	return tr.source // immutable
 }
 
 func (tr *coreTrace) Category() string {

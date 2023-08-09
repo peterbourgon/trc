@@ -19,11 +19,6 @@ import (
 )
 
 func main() {
-	// TODO
-	broker := trcstream.NewBroker()
-	instanceDecorators := []trc.DecoratorFunc{trc.PublishDecorator(broker)}
-	globalDecorators := []trc.DecoratorFunc{trc.PublishDecorator(broker)}
-
 	// Open stack trace links in VS Code.
 	trcweb.FileLineURL = trcweb.FileLineURLVSCode
 
@@ -32,8 +27,10 @@ func main() {
 
 	// Create a trace collector for each instance.
 	instanceCollectors := make([]*trc.Collector, len(ports))
+	instanceBrokers := make([]*trcstream.Broker, len(ports))
 	for i := range instanceCollectors {
-		instanceCollectors[i] = trc.NewCollector(ports[i], trc.New, instanceDecorators...)
+		instanceBrokers[i] = trcstream.NewBroker()
+		instanceCollectors[i] = trc.NewCollector(ports[i], trc.New, trc.PublishDecorator(instanceBrokers[i]))
 	}
 
 	// Create a `kv` service for each instance.
@@ -69,9 +66,18 @@ func main() {
 	}
 
 	// TODO
+	streamHandlers := make([]http.Handler, len(instanceBrokers))
+	for i := range streamHandlers {
+		streamHandlers[i] = trcweb.NewStreamServer(instanceBrokers[i])
+		streamHandlers[i] = trcweb.Middleware(instanceCollectors[i].NewTrace, func(r *http.Request) string { return "stream" })(streamHandlers[i])
+	}
+
+	// TODO
+	var globalBroker *trcstream.Broker
 	var globalCollector *trc.Collector
 	{
-		globalCollector = trc.NewCollector("global", trc.New, globalDecorators...)
+		globalBroker = trcstream.NewBroker()
+		globalCollector = trc.NewCollector("global", trc.New, trc.PublishDecorator(globalBroker))
 	}
 
 	// We can also create a "global" traces handler, which serves aggregate
@@ -97,7 +103,7 @@ func main() {
 
 	var streamHandler http.Handler
 	{
-		streamHandler = trcweb.NewStreamServer(broker)
+		streamHandler = trcweb.NewStreamServer(globalBroker)
 		streamHandler = trcweb.Middleware(globalCollector.NewTrace, func(r *http.Request) string { return "stream" })(streamHandler)
 	}
 
@@ -108,6 +114,7 @@ func main() {
 		mux := http.NewServeMux()
 		mux.Handle("/api", http.StripPrefix("/api", apiHandlers[i])) // technically unnecessary as the loader calls the handler directly
 		mux.Handle("/traces", http.StripPrefix("/traces", tracesHandlers[i]))
+		mux.Handle("/stream", http.StripPrefix("/stream", streamHandlers[i]))
 		s := &http.Server{Addr: addr, Handler: mux}
 		go func() { log.Fatal(s.ListenAndServe()) }()
 		log.Printf("http://localhost:%s/traces", ports[i])
