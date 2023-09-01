@@ -26,11 +26,11 @@ func main() {
 	ports := []string{"8081", "8082", "8083"}
 
 	// Create a trace collector for each instance.
-	instanceCollectors := make([]*trc.Collector, len(ports))
 	instanceBrokers := make([]*trcstream.Broker, len(ports))
-	for i := range instanceCollectors {
+	instanceCollectors := make([]*trc.Collector, len(ports))
+	for i := range ports {
 		instanceBrokers[i] = trcstream.NewBroker()
-		instanceCollectors[i] = trc.NewCollector(ports[i], trc.New, trc.PublishDecorator(instanceBrokers[i]))
+		instanceCollectors[i] = trc.NewCollector(trc.CollectorConfig{Source: ports[i], Publisher: instanceBrokers[i]})
 	}
 
 	// Create a `kv` service for each instance.
@@ -77,7 +77,7 @@ func main() {
 	var globalCollector *trc.Collector
 	{
 		globalBroker = trcstream.NewBroker()
-		globalCollector = trc.NewCollector("global", trc.New, trc.PublishDecorator(globalBroker))
+		globalCollector = trc.NewCollector(trc.CollectorConfig{Source: "global", Publisher: globalBroker})
 	}
 
 	// We can also create a "global" traces handler, which serves aggregate
@@ -90,7 +90,7 @@ func main() {
 			// Each instance is modeled with an HTTP client querying the
 			// corresponding trace HTTP handler. This is usually how it would
 			// work, as different instances are usually on different hosts.
-			ms = append(ms, trcweb.NewSearchClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/traces", ports[i])))
+			ms = append(ms, trcweb.NewSearchClient(http.DefaultClient, fmt.Sprintf("localhost:%s/traces", ports[i])))
 		}
 
 		// Let's also trace requests to this global handler in a distinct trace
@@ -101,12 +101,6 @@ func main() {
 		globalHandler = trcweb.Middleware(globalCollector.NewTrace, trcweb.TraceServerCategory)(globalHandler)
 	}
 
-	var streamHandler http.Handler
-	{
-		streamHandler = trcweb.NewStreamServer(globalBroker)
-		streamHandler = trcweb.Middleware(globalCollector.NewTrace, func(r *http.Request) string { return "stream" })(streamHandler)
-	}
-
 	// Now we run HTTP servers for each instance.
 	httpServers := make([]*http.Server, len(ports))
 	for i := range httpServers {
@@ -114,7 +108,6 @@ func main() {
 		mux := http.NewServeMux()
 		mux.Handle("/api", http.StripPrefix("/api", apiHandlers[i])) // technically unnecessary as the loader calls the handler directly
 		mux.Handle("/traces", http.StripPrefix("/traces", tracesHandlers[i]))
-		mux.Handle("/stream", http.StripPrefix("/stream", streamHandlers[i]))
 		s := &http.Server{Addr: addr, Handler: mux}
 		go func() { log.Fatal(s.ListenAndServe()) }()
 		log.Printf("http://localhost:%s/traces", ports[i])
@@ -124,7 +117,6 @@ func main() {
 	// server for additional stuff like profiling endpoints.
 	go func() {
 		http.Handle("/traces", globalHandler)
-		http.Handle("/stream", streamHandler)
 		http.Handle("/debug/fgprof", fgprof.Handler())
 		log.Printf("http://localhost:8080/traces")
 		log.Fatal(http.ListenAndServe("localhost:8080", nil))

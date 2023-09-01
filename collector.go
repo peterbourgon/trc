@@ -21,14 +21,36 @@ var _ Searcher = (*Collector)(nil)
 type NewTraceFunc func(ctx context.Context, source string, category string) (context.Context, Trace)
 
 func NewDefaultCollector() *Collector {
-	return NewCollector("default", New)
+	return NewCollector(CollectorConfig{
+		Source:   "default",
+		NewTrace: New,
+	})
 }
 
-func NewCollector(source string, newTrace NewTraceFunc, decorators ...DecoratorFunc) *Collector {
+type CollectorConfig struct {
+	Source     string
+	NewTrace   NewTraceFunc
+	Publisher  Publisher
+	Decorators []DecoratorFunc
+}
+
+func NewCollector(cfg CollectorConfig) *Collector {
+	if cfg.Source == "" {
+		cfg.Source = "default"
+	}
+
+	if cfg.NewTrace == nil {
+		cfg.NewTrace = New
+	}
+
+	if cfg.Publisher != nil {
+		cfg.Decorators = append(cfg.Decorators, PublishDecorator(cfg.Publisher))
+	}
+
 	return &Collector{
-		source:     source,
-		newTrace:   newTrace,
-		decorators: decorators,
+		source:     cfg.Source,
+		newTrace:   cfg.NewTrace,
+		decorators: cfg.Decorators,
 		categories: trcringbuf.NewRingBuffers[Trace](defaultCategorySize),
 	}
 }

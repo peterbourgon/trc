@@ -84,10 +84,13 @@ type SearchClient struct {
 
 var _ trc.Searcher = (*SearchClient)(nil)
 
-func NewSearchClient(client HTTPClient, remoteURI string) *SearchClient {
+func NewSearchClient(client HTTPClient, uri string) *SearchClient {
+	if !strings.HasPrefix(uri, "http") {
+		uri = "http://" + uri
+	}
 	return &SearchClient{
 		client: client,
-		uri:    remoteURI,
+		uri:    uri,
 	}
 }
 

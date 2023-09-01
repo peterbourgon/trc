@@ -44,6 +44,8 @@ type publishTrace struct {
 	p Publisher
 }
 
+var _ interface{ Free() } = (*publishTrace)(nil)
+
 func (ptr *publishTrace) Tracef(format string, args ...any) {
 	ptr.Trace.Tracef(format, args...)
 	ptr.p.Publish(context.Background(), ptr.Trace)
@@ -69,6 +71,12 @@ func (ptr *publishTrace) Finish() {
 	ptr.p.Publish(context.Background(), ptr.Trace)
 }
 
+func (ptr *publishTrace) Free() {
+	if f, ok := ptr.Trace.(interface{ Free() }); ok {
+		f.Free()
+	}
+}
+
 //
 //
 //
@@ -85,7 +93,7 @@ func LogDecorator(dst io.Writer) DecoratorFunc {
 			id:    tr.ID(),
 			dst:   dst,
 		}
-		ltr.logEvent("BEGIN", "category '%s'", ltr.Trace.Category())
+		ltr.logEvent("BEGIN", "source '%s' category '%s'", ltr.Trace.Source(), ltr.Trace.Category())
 		return ltr
 	}
 }
@@ -95,6 +103,8 @@ type logTrace struct {
 	id  string
 	dst io.Writer
 }
+
+var _ interface{ Free() } = (*logTrace)(nil)
 
 func (ltr *logTrace) Tracef(format string, args ...any) {
 	ltr.logEvent("TRACE", format, args...)
@@ -124,4 +134,10 @@ func (ltr *logTrace) Finish() {
 func (ltr *logTrace) logEvent(what, format string, args ...any) {
 	format = ltr.id + " " + what + " " + strings.TrimSuffix(format, "\n") + "\n"
 	fmt.Fprintf(ltr.dst, format, args...)
+}
+
+func (ltr *logTrace) Free() {
+	if f, ok := ltr.Trace.(interface{ Free() }); ok {
+		f.Free()
+	}
 }

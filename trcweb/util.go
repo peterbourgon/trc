@@ -10,6 +10,38 @@ import (
 
 const maxRequestBodySizeBytes = 1 * 1024 * 1024 // 1MB
 
+func encodeFilter(f trc.Filter, r *http.Request) {
+	q := r.URL.Query()
+	for _, source := range f.Sources {
+		q.Add("source", source)
+	}
+	for _, id := range f.IDs {
+		q.Add("id", id)
+	}
+	if f.Category != "" {
+		q.Set("category", f.Category)
+	}
+	if f.IsActive {
+		q.Set("active", "true")
+	}
+	if f.IsFinished {
+		q.Set("finished", "true")
+	}
+	if f.MinDuration != nil {
+		q.Set("min", f.MinDuration.String())
+	}
+	if f.IsSuccess {
+		q.Set("success", "true")
+	}
+	if f.IsErrored {
+		q.Set("errored", "true")
+	}
+	if f.Query != "" {
+		q.Set("q", f.Query)
+	}
+	r.URL.RawQuery = q.Encode()
+}
+
 func parseFilter(r *http.Request) trc.Filter {
 	urlquery := r.URL.Query()
 	return trc.Filter{
@@ -32,7 +64,7 @@ func parseDefault[T any](s string, parse func(string) (T, error), def T) T {
 	return def
 }
 
-func parseRange[T int](s string, parse func(string) (T, error), min, def, max T) T {
+func parseRange[T int | time.Duration](s string, parse func(string) (T, error), min, def, max T) T {
 	v, err := parse(s)
 	switch {
 	case err != nil:

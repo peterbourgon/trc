@@ -12,10 +12,10 @@
 // events over the course of the operation. The trace is marked as finished when
 // the operation completes.
 //
-// Traces are collected into per-category ring buffers, which are exposed via an
-// HTTP interface that operators can query. That interface is fairly rich,
-// allowing traces to be selected by category, minimum duration, successful vs.
-// errored, and so on.
+// [Collector] collects traces into per-category ring buffers. Collected traces
+// can be queried over HTTP via [trcweb.NewServer]. That interface is fairly
+// rich, allowing traces to be selected by category, minimum duration,
+// successful vs. errored, and so on.
 //
 // There are a few caveats. This approach is only suitable for applications that
 // do their work in the context of a trace-related operation, and which reliably

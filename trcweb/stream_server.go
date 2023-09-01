@@ -1,13 +1,12 @@
 package trcweb
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -69,26 +68,28 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 	default:
 		f = parseFilter(r)
 	}
-
 	if normalizeErrs := f.Normalize(); len(normalizeErrs) > 0 {
 		err := fmt.Errorf("bad request: %s", strings.Join(trcutil.FlattenErrors(normalizeErrs...), "; "))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	tr.Tracef("filter %s", f)
-
 	var (
 		buf    = parseRange(r.URL.Query().Get("buf"), strconv.Atoi, 0, 100, 1000)
-		tracec = make(chan trc.Trace, buf)
-		donec  = make(chan struct{})
+		report = parseRange(r.URL.Query().Get("report"), time.ParseDuration, time.Second, 10*time.Second, time.Minute)
 	)
 
-	tr.Tracef("buffer %d", buf)
+	tr.Tracef("filter %s", f)
+	tr.Tracef("buf %d", buf)
+	tr.Tracef("report %s", report)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	var (
+		tracec = make(chan trc.Trace, buf)
+		donec  = make(chan struct{})
+	)
 	go func() {
 		stats, err := s.b.Stream(ctx, f, tracec)
 		tr.Tracef("Stream finished (%v), skips %d, sends %d, drops %d (%.1f%%)", err, stats.Skips, stats.Sends, stats.Drops, 100*stats.DropRate())
@@ -99,9 +100,9 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	eventsource.Handler(func(lastId string, encoder *eventsource.Encoder, stop <-chan bool) {
-		tr.Tracef("event source handler started, last ID %q", lastId)
+		tr.Tracef("event source handler started")
 
-		stats := time.NewTicker(10 * time.Second)
+		stats := time.NewTicker(report)
 		defer stats.Stop()
 
 		initc := make(chan struct{}, 1)
@@ -113,6 +114,7 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 				data, err := json.Marshal(map[string]any{
 					"filter": f,
 					"buffer": cap(tracec),
+					"stats":  report.String(),
 				})
 				if err != nil {
 					tr.Errorf("JSON marshal init: %v", err)
@@ -188,21 +190,54 @@ func (s *StreamServer) handleHTML(w http.ResponseWriter, r *http.Request) {
 //
 
 type StreamClient struct {
-	client HTTPClient
-	uri    string
+	HTTPClient    HTTPClient
+	URI           string
+	RemoteBuffer  int
+	OnRead        func(eventType string, eventData []byte)
+	RetryInterval time.Duration
+	StatsInterval time.Duration
+}
+
+func (c *StreamClient) initialize() {
+	if c.HTTPClient == nil {
+		c.HTTPClient = http.DefaultClient
+	}
+
+	if c.URI != "" && !strings.HasPrefix(c.URI, "http") {
+		c.URI = "http://" + c.URI
+	}
+
+	if c.OnRead == nil {
+		c.OnRead = func(eventType string, eventData []byte) {}
+	}
+
+	if c.RetryInterval == 0 {
+		c.RetryInterval = time.Second
+	}
+
+	if c.StatsInterval == 0 {
+		c.StatsInterval = 10 * time.Second
+	}
 }
 
 func NewStreamClient(client HTTPClient, uri string) *StreamClient {
+	return NewStreamClientCallback(client, uri, nil)
+}
+
+func NewStreamClientCallback(client HTTPClient, uri string, onRead func(eventType string, eventData []byte)) *StreamClient {
 	if !strings.HasPrefix(uri, "http") {
 		uri = "http://" + uri
 	}
 	return &StreamClient{
-		client: client,
-		uri:    uri,
+		HTTPClient: client,
+		URI:        uri,
+		OnRead:     onRead,
 	}
 }
 
 func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) (err error) {
+	c.initialize()
+
 	tr := trc.Get(ctx)
 
 	defer func() {
@@ -211,35 +246,39 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 		}
 	}()
 
-	{
-		req, err := http.NewRequestWithContext(ctx, "GET", c.uri, nil)
-		if err != nil {
-			return err
-		}
-		res, err := c.client.Do(req)
-		if err != nil {
-			return err
-		}
-		io.Copy(io.Discard, res.Body)
-		res.Body.Close()
-	}
-
-	body, err := json.Marshal(f)
-	if err != nil {
-		return fmt.Errorf("encode filter: %w", err)
-	}
-
 	// Explicitly don't provide the context to the request, because EventSource
-	// (incorrectly) treats context cancelation as a recoverable error, which
-	// can cause Read to block for a single retry duration before returning
-	// ErrClosed.
-	req, err := http.NewRequest("GET", c.uri, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("content-type", "application/json; charset=utf-8")
+	// (incorrectly) treats context cancelation as a recoverable error, in which
+	// case Read can block for a single retry duration before returning.
+	//
+	// Also, EventSource directly re-uses this request over reconnect attempts,
+	// which prevents the use of a body, and means we have to encode the filter
+	// in the URL.
+	var req *http.Request
+	{
+		uri, err := url.Parse(c.URI)
+		if err != nil {
+			return err
+		}
 
-	es := eventsource.New(req, 1*time.Second)
+		query := uri.Query()
+		if c.RemoteBuffer > 0 {
+			query.Set("buf", strconv.Itoa(c.RemoteBuffer))
+		}
+		if c.StatsInterval > 0 {
+			query.Set("report", c.StatsInterval.String())
+		}
+		uri.RawQuery = query.Encode()
+
+		r, err := http.NewRequest("GET", uri.String(), nil)
+		if err != nil {
+			return err
+		}
+		encodeFilter(f, r)
+
+		req = r
+	}
+
+	es := eventsource.New(req, c.RetryInterval)
 	go func() {
 		<-ctx.Done()
 		es.Close()
@@ -253,6 +292,8 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 		if err != nil {
 			return fmt.Errorf("read server-sent event: %w", err)
 		}
+
+		c.OnRead(ev.Type, ev.Data)
 
 		switch ev.Type {
 		case "init":
@@ -270,10 +311,11 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 
 		case "stats":
 			var stats trcstream.Stats
-			if err := json.Unmarshal(ev.Data, &stats); err != nil {
-				return fmt.Errorf("decode stats event: %w", err)
+			if err := json.Unmarshal(ev.Data, &stats); err == nil {
+				tr.LazyTracef("%s", stats)
+			} else {
+				return fmt.Errorf("invalid stats event: %w", err)
 			}
-			tr.LazyTracef("stream: skips %d, sends %d, drops %d (%.1f%%)", stats.Skips, stats.Sends, stats.Drops, 100*stats.DropRate())
 
 		default:
 			tr.LazyTracef("unknown event type %q", ev.Type)

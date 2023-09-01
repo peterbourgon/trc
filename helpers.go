@@ -2,7 +2,6 @@ package trc
 
 import (
 	"context"
-	"io"
 	"runtime/trace"
 	"strings"
 	"time"
@@ -30,6 +29,19 @@ func Get(ctx context.Context) Trace {
 func MaybeGet(ctx context.Context) (Trace, bool) {
 	tr, ok := ctx.Value(traceContextVal).(Trace)
 	return tr, ok
+}
+
+// SetMaxEvents tries to set the max events for a specific trace, by checking if
+// the trace implements the method SetMaxEvents(int), and, if so, calling that
+// method with the given max events value. Returns the given trace, and a
+// boolean representing whether or not the call was successful.
+func SetMaxEvents(tr Trace, maxEvents int) (Trace, bool) {
+	m, ok := tr.(interface{ SetMaxEvents(int) })
+	if !ok {
+		return tr, false
+	}
+	m.SetMaxEvents(maxEvents)
+	return tr, true
 }
 
 // Region provides more detailed tracing of regions of code, usually functions,
@@ -115,32 +127,4 @@ func (ptr *prefixTrace) Errorf(format string, args ...any) {
 
 func (ptr *prefixTrace) LazyErrorf(format string, args ...any) {
 	ptr.Trace.LazyErrorf(ptr.format+format, append(ptr.args, args...)...)
-}
-
-// SetMaxEvents tries to set the max events for a specific trace, by checking if
-// the trace implements the method SetMaxEvents(int), and, if so, calling that
-// method with the given max events value. Returns the given trace, and a
-// boolean representing whether or not the call was successful.
-func SetMaxEvents(tr Trace, maxEvents int) (Trace, bool) {
-	m, ok := tr.(interface{ SetMaxEvents(int) })
-	if !ok {
-		return tr, false
-	}
-	m.SetMaxEvents(maxEvents)
-	return tr, true
-}
-
-//
-//
-//
-
-// NewLogTrace creates a new trace in the provided context, which logs to the
-// provided writer. This can be useful when you don't have a pre-existing trace
-// infrastructure, and you just want to see the trace events produced by a
-// function or method.
-func NewLogTrace(ctx context.Context, source, category string, dst io.Writer) (context.Context, Trace) {
-	var tr Trace
-	ctx, tr = New(ctx, source, category)
-	ctx, tr = Put(ctx, LogDecorator(dst)(tr))
-	return ctx, tr
 }

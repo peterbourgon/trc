@@ -4,20 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/oklog/run"
 	"github.com/peterbourgon/ff/v4"
+	"github.com/peterbourgon/ff/v4/ffhelp"
+	"github.com/peterbourgon/ff/v4/ffval"
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trcstream"
-	"github.com/peterbourgon/trc/trcweb"
 )
 
 func main() {
@@ -41,87 +38,111 @@ func main() {
 }
 
 func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args []string) error {
-	fs := ff.NewFlags("trc-stream")
-	flagURIs := stringset{}
-	flagSources := stringset{}
-	flagIDs := stringset{}
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'u', LongName: "uri", Value: &flagURIs, Usage: "trace server stream URI (repeatable)"})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 's', LongName: "source", Value: &flagSources, Usage: "filter for this source (repeatable)"})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'i', LongName: "id", Value: &flagIDs, Usage: "filter for this ID (repeatable)"})
-	flagCategory := fs.String('c', "category", "", "filter for this category")
-	flagQuery := fs.String('q', "query", "", "filter for this query regexp")
-	flagMinDuration := fs.Duration('d', "duration", 0, "filter for finished traces of at least this duration")
-	flagIsSuccess := fs.Bool('y', "success", false, "filter for successful traces")
-	flagIsErrored := fs.Bool('n', "errored", false, "filter for errored traces")
-	flagBuffer := fs.IntLong("buffer", 100, "receive buffer size")
-	flagDebug := fs.BoolLong("debug", false, "log debug information")
-	flagEvents := fs.BoolLong("events", false, "stream individual events instead of complete traces")
-
-	err := ff.Parse(fs, args)
-	if errors.Is(err, ff.ErrHelp) {
-		fmt.Fprintf(stderr, "\n%s\n\n", usageFunc(fs))
-		return nil
+	var flags struct {
+		uris          []string
+		sources       []string
+		ids           []string
+		category      string
+		query         string
+		minDuration   time.Duration
+		isSuccess     bool
+		isErrored     bool
+		recvBuf       int
+		sendBuf       int
+		statsInterval time.Duration
+		retryInterval time.Duration
+		debug         bool
+		events        bool
 	}
-	if err != nil {
+
+	fs := ff.NewFlags("trcstream")
+	{
+		fs.AddFlag(ff.CoreFlagConfig{ShortName: 'u', LongName: "uri", Value: ffval.NewUniqueList(&flags.uris), Usage: "trace server stream URI (repeatable, required)"})
+		fs.AddFlag(ff.CoreFlagConfig{ShortName: 's', LongName: "source", Value: ffval.NewUniqueList(&flags.sources), Usage: "filter for this source (repeatable)"})
+		fs.AddFlag(ff.CoreFlagConfig{ShortName: 'i', LongName: "id", Value: ffval.NewUniqueList(&flags.ids), Usage: "filter for this ID (repeatable)"})
+		fs.AddFlag(ff.CoreFlagConfig{ShortName: 'c', LongName: "category", Value: ffval.NewValue(&flags.category), Usage: "filter for this category"})
+		fs.AddFlag(ff.CoreFlagConfig{ShortName: 'q', LongName: "query", Value: ffval.NewValue(&flags.query), Usage: "filter for this query regexp"})
+		fs.AddFlag(ff.CoreFlagConfig{ShortName: 'd', LongName: "duration", Value: ffval.NewValue(&flags.minDuration), Usage: "filter for finished traces of at least this duration", NoDefault: true})
+		fs.AddFlag(ff.CoreFlagConfig{ShortName: 'y', LongName: "success", Value: ffval.NewValue(&flags.isSuccess), Usage: "filter for finished and successful traces", NoDefault: true})
+		fs.AddFlag(ff.CoreFlagConfig{ShortName: 'n', LongName: "errored", Value: ffval.NewValue(&flags.isErrored), Usage: "filter for finished and errored traces", NoDefault: true})
+		fs.AddFlag(ff.CoreFlagConfig{ /*          */ LongName: "recvbuf", Value: ffval.NewValueDefault(&flags.recvBuf, 100), Usage: "local receive buffer size"})
+		fs.AddFlag(ff.CoreFlagConfig{ /*          */ LongName: "sendbuf", Value: ffval.NewValueDefault(&flags.sendBuf, 100), Usage: "remote send buffer size"})
+		fs.AddFlag(ff.CoreFlagConfig{ /*          */ LongName: "stats", Value: ffval.NewValueDefault(&flags.statsInterval, 10*time.Second), Usage: "debug stats reporting interval"})
+		fs.AddFlag(ff.CoreFlagConfig{ /*          */ LongName: "retry", Value: ffval.NewValueDefault(&flags.retryInterval, 1*time.Second), Usage: "stream connection retry interval"})
+		fs.AddFlag(ff.CoreFlagConfig{ /*          */ LongName: "events", Value: ffval.NewValue(&flags.events), Usage: "stream individual events for matching traces", NoDefault: true})
+		fs.AddFlag(ff.CoreFlagConfig{ /*          */ LongName: "debug", Value: ffval.NewValue(&flags.debug), Usage: "log debug information", NoDefault: true})
+	}
+
+	if err := ff.Parse(fs, args); err != nil {
+		fmt.Fprintf(stderr, "%s\n", ffhelp.Flags(fs, usage))
+		if errors.Is(err, ff.ErrHelp) {
+			err = nil
+		}
 		return err
 	}
 
-	if len(flagURIs) <= 0 {
+	if len(flags.uris) <= 0 {
+		fmt.Fprintf(stderr, "%s\n", ffhelp.Flags(fs, usage))
 		return fmt.Errorf("-u, --uri is required")
 	}
 
-	var debug *log.Logger
+	var info, debug *log.Logger
 	{
-		debugWriter := io.Discard
-		if *flagDebug {
-			debugWriter = stderr
+		info = log.New(stderr, "", log.LstdFlags)
+		if flags.debug {
+			debug = log.New(stderr, "[DEBUG] ", log.LstdFlags|log.Lmsgprefix)
+		} else {
+			debug = log.New(io.Discard, "", 0)
 		}
-		debug = log.New(debugWriter, "[DEBUG] ", 0)
 	}
 
 	var minDuration *time.Duration
 	{
 		if f, ok := fs.GetFlag("duration"); ok && f.IsSet() {
-			debug.Printf("using --duration %s", *flagMinDuration)
-			minDuration = flagMinDuration
+			debug.Printf("using --duration %s", flags.minDuration)
+			minDuration = &flags.minDuration
 		}
 	}
 
 	var (
-		httpClient   = &http.Client{}
-		streamTraces = make(chan trc.Trace, *flagBuffer)
+		streamTraces = make(chan trc.Trace, flags.recvBuf)
 		streamFilter = trc.Filter{
-			Sources:     flagSources,
-			IDs:         flagIDs,
-			Category:    *flagCategory,
+			Sources:     flags.sources,
+			IDs:         flags.ids,
+			Category:    flags.category,
 			IsActive:    false,
-			IsFinished:  !*flagEvents,
+			IsFinished:  !flags.events,
 			MinDuration: minDuration,
-			IsSuccess:   *flagIsSuccess,
-			IsErrored:   *flagIsErrored,
-			Query:       *flagQuery,
+			IsSuccess:   flags.isSuccess,
+			IsErrored:   flags.isErrored,
+			Query:       flags.query,
 		}
 	)
 
 	debug.Printf("filter %s", streamFilter)
+	debug.Printf("recvbuf %d", flags.recvBuf)
+	debug.Printf("sendbuf %d", flags.sendBuf)
+	debug.Printf("stats %s", flags.statsInterval)
+	debug.Printf("retry %s", flags.retryInterval)
 
 	var g run.Group
 
 	{
-		for _, uri := range flagURIs {
-			debug.Printf("URI %s", uri)
-			streamClient := trcweb.NewStreamClient(httpClient, uri)
-			streamManager := &streamManager{client: streamClient, filter: streamFilter, traces: streamTraces}
-			streamCategory := uri
-			ctx, cancel := context.WithCancel(ctx)
-			g.Add(func() error {
-				ctx, tr := newLoggerTrace(ctx, streamCategory, debug)
-				defer tr.Finish()
-				return streamManager.run(ctx)
-			}, func(error) {
-				cancel()
+		ctx, cancel := context.WithCancel(ctx)
+		g.Add(func() error {
+			return runStreams(ctx, streamsConfig{
+				URIs:          flags.uris,
+				Filter:        streamFilter,
+				Traces:        streamTraces,
+				RemoteBuffer:  flags.sendBuf,
+				StatsInterval: flags.statsInterval,
+				RetryInterval: flags.retryInterval,
+				Info:          info,
+				Debug:         debug,
 			})
-		}
+		}, func(error) {
+			cancel()
+		})
 	}
 
 	{
@@ -131,12 +152,6 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 			for {
 				select {
 				case tr := <-streamTraces:
-					// Optimization for --events.
-					if *flagEvents && tr.Finished() {
-						if str, ok := tr.(*trcstream.StreamTrace); ok {
-							str.TraceEvents = nil
-						}
-					}
 					enc.Encode(tr)
 				case <-ctx.Done():
 					return ctx.Err()
@@ -154,103 +169,4 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	return g.Run()
 }
 
-//
-//
-//
-
-type streamManager struct {
-	client *trcweb.StreamClient
-	filter trc.Filter
-	traces chan trc.Trace
-}
-
-func (sm *streamManager) run(ctx context.Context) error {
-	tr := trc.Get(ctx)
-	tr.Tracef("starting stream...")
-
-	for {
-		var (
-			subctx, cancel = context.WithCancel(ctx)
-			errc           = make(chan error, 1)
-		)
-		go func() {
-			errc <- sm.client.Stream(subctx, sm.filter, sm.traces)
-		}()
-
-		select {
-		case <-ctx.Done():
-			cancel()
-			err := <-errc
-			tr.Tracef("client stream stopped (%v) -- returning", err)
-			return ctx.Err()
-
-		case err := <-errc:
-			tr.Errorf("client stream error (%v) -- giving up", err)
-			cancel()
-			<-ctx.Done()
-			return ctx.Err()
-		}
-	}
-}
-
-//
-//
-//
-
-type stringset []string
-
-var _ flag.Value = (*stringset)(nil)
-
-func (ss *stringset) Set(val string) error {
-	for _, s := range *ss {
-		if s == val {
-			return nil
-		}
-	}
-	(*ss) = append(*ss, val)
-	return nil
-}
-
-func (ss *stringset) String() string {
-	return strings.Join(*ss, ", ")
-}
-
-func (ss *stringset) Placeholder() string {
-	return "STRING"
-}
-
-//
-//
-//
-
-func newLoggerTrace(ctx context.Context, category string, logger *log.Logger) (context.Context, trc.Trace) {
-	ctx, tr := trc.New(ctx, "source", category)
-	tr = &loggerTrace{Trace: tr, category: category, logger: logger}
-	return trc.Put(ctx, tr)
-}
-
-type loggerTrace struct {
-	trc.Trace
-	category string
-	logger   *log.Logger
-}
-
-func (ltr *loggerTrace) Tracef(format string, args ...any) {
-	ltr.logger.Printf("TRACE ["+ltr.category+"] "+format, args...)
-	ltr.Trace.Tracef(format, args...)
-}
-
-func (ltr *loggerTrace) LazyTracef(format string, args ...any) {
-	ltr.logger.Printf("TRACE ["+ltr.category+"] "+format, args...)
-	ltr.Trace.LazyTracef(format, args...)
-}
-
-func (ltr *loggerTrace) Errorf(format string, args ...any) {
-	ltr.logger.Printf("ERROR ["+ltr.category+"] "+format, args...)
-	ltr.Trace.Errorf(format, args...)
-}
-
-func (ltr *loggerTrace) LazyErrorf(format string, args ...any) {
-	ltr.logger.Printf("ERROR ["+ltr.category+"] "+format, args...)
-	ltr.Trace.LazyErrorf(format, args...)
-}
+const usage = "Stream trace events from one or more instances to the terminal."

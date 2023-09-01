@@ -429,12 +429,12 @@ function highlightQuery() {
 						{{ range $i, $c := .Stack }}
 						<tr>
 							<td style="text-align: right;">
-								<span class="searchable">
+								<span>
 									{{ $href := FileLineURL $c.FileLine }}
 									{{ if $href }}
 										<a class="searchable" href="{{$href}}">{{$c.CompactFileLine}}</a>
 									{{ else }}
-										{{ $c.CompactFileLine }}
+										<span class="searchable">{{$c.CompactFileLine}}</span>
 									{{ end }}
 								</span>
 							</td>
@@ -496,7 +496,6 @@ function highlightQuery() {
 		for (let j = 0; j < eventChild.length; j++) {
 			eventChild[j].style.cursor = "pointer";
 			eventChild[j].addEventListener("click", function() {
-				console.log("click");
 				eventDetails.open = !eventDetails.open;
 			});
 		}

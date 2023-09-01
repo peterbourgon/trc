@@ -127,6 +127,12 @@ func (s *TraceServer) handleStream(w http.ResponseWriter, r *http.Request) {
 
 	tr.Tracef("buffer %d", buf)
 
+	var (
+		statsInterval = parseDefault(r.URL.Query().Get("stats"), time.ParseDuration, 10*time.Second)
+	)
+
+	tr.Tracef("stats %s", statsInterval)
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -140,9 +146,9 @@ func (s *TraceServer) handleStream(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	eventsource.Handler(func(lastId string, encoder *eventsource.Encoder, stop <-chan bool) {
-		tr.Tracef("event source handler started, last ID %q", lastId)
+		tr.Tracef("event source handler started")
 
-		stats := time.NewTicker(10 * time.Second)
+		stats := time.NewTicker(statsInterval)
 		defer stats.Stop()
 
 		initc := make(chan struct{}, 1)

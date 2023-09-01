@@ -75,6 +75,10 @@ func (b *Broker) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) 
 		return sub
 	}()
 
+	if sub == nil {
+		return Stats{}, fmt.Errorf("not subscribed")
+	}
+
 	return sub.stats, ctx.Err()
 }
 
@@ -105,6 +109,10 @@ func (s *Stats) DropRate() float64 {
 		return 0
 	}
 	return n / d
+}
+
+func (s Stats) String() string {
+	return fmt.Sprintf("skips %d, sends %d, drops %d, drop rate %.1f%%", s.Skips, s.Sends, s.Drops, s.DropRate()*100)
 }
 
 type subscriber struct {

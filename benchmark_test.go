@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/trcstream"
 )
 
 func BenchmarkTraceEvents(b *testing.B) {
@@ -61,6 +62,81 @@ func BenchmarkTraceEvents(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_, tr := trc.New(ctx, "source", "category")
 			tr.LazyTracef("format string %d %d %d %d %d", i, i, i, i, i)
+			tr.Finish()
+		}
+	})
+}
+
+func BenchmarkCollector(b *testing.B) {
+	ctx := context.Background()
+	category := "category"
+
+	b.Run("baseline", func(b *testing.B) {
+		collector := trc.NewDefaultCollector()
+
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			_, tr := collector.NewTrace(ctx, category)
+			tr.Tracef("trace event")
+			tr.Finish()
+		}
+	})
+
+	b.Run("publish no subscribers", func(b *testing.B) {
+		collector := trc.NewDefaultCollector()
+		broker := trcstream.NewBroker()
+		collector.SetDecorators(trc.PublishDecorator(broker))
+
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			_, tr := collector.NewTrace(ctx, category)
+			tr.Tracef("trace event")
+			tr.Finish()
+		}
+	})
+
+	b.Run("publish one skip subscriber", func(b *testing.B) {
+		collector := trc.NewDefaultCollector()
+		broker := trcstream.NewBroker()
+		collector.SetDecorators(trc.PublishDecorator(broker))
+
+		ctx, cancel := context.WithCancel(ctx)
+		ch := make(chan trc.Trace)
+		errc := make(chan error, 1)
+		go func() { _, err := broker.Stream(ctx, trc.Filter{IsErrored: true}, ch); errc <- err }()
+		defer func() { cancel(); <-errc }()
+
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			_, tr := collector.NewTrace(ctx, category)
+			tr.Tracef("trace event")
+			tr.Finish()
+		}
+	})
+
+	b.Run("publish one drop subscriber", func(b *testing.B) {
+		collector := trc.NewDefaultCollector()
+		broker := trcstream.NewBroker()
+		collector.SetDecorators(trc.PublishDecorator(broker))
+
+		ctx, cancel := context.WithCancel(ctx)
+		ch := make(chan trc.Trace)
+		errc := make(chan error, 1)
+		go func() { _, err := broker.Stream(ctx, trc.Filter{}, ch); errc <- err }()
+		defer func() { cancel(); <-errc }()
+
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			_, tr := collector.NewTrace(ctx, category)
+			tr.Tracef("trace event")
 			tr.Finish()
 		}
 	})
