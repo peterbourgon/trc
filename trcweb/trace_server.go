@@ -1,34 +1,26 @@
 package trcweb
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
-	"time"
 
-	"github.com/bernerdschaefer/eventsource"
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/internal/trcutil"
-	"github.com/peterbourgon/trc/trcstream"
 )
 
 type TraceServer struct {
 	searcher trc.Searcher
 	streamer Streamer
-}
 
-type Streamer interface {
-	Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) (trcstream.Stats, error)
-	Stats(ctx context.Context, ch chan<- trc.Trace) (trcstream.Stats, error)
+	search http.Handler
+	stream http.Handler
 }
 
 func NewTraceServer(searcher trc.Searcher, streamer Streamer) *TraceServer {
 	return &TraceServer{
 		searcher: searcher,
 		streamer: streamer,
+
+		search: NewSearchServer(searcher),
+		stream: NewStreamServer(streamer),
 	}
 }
 
@@ -44,12 +36,13 @@ func TraceServerCategory(r *http.Request) string {
 func (s *TraceServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case requestExplicitlyAccepts(r, "text/event-stream"):
-		s.handleStream(w, r)
+		s.stream.ServeHTTP(w, r)
 	default:
-		s.handleTraces(w, r)
+		s.search.ServeHTTP(w, r)
 	}
 }
 
+/*
 func (s *TraceServer) handleTraces(w http.ResponseWriter, r *http.Request) {
 	var (
 		ctx    = r.Context()
@@ -225,3 +218,4 @@ func (s *TraceServer) handleStream(w http.ResponseWriter, r *http.Request) {
 		}
 	}).ServeHTTP(w, r)
 }
+*/

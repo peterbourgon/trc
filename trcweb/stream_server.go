@@ -18,12 +18,17 @@ import (
 )
 
 type StreamServer struct {
-	b *trcstream.Broker
+	streamer Streamer
 }
 
-func NewStreamServer(b *trcstream.Broker) *StreamServer {
+type Streamer interface {
+	Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) (trcstream.Stats, error)
+	Stats(ctx context.Context, ch chan<- trc.Trace) (trcstream.Stats, error)
+}
+
+func NewStreamServer(s Streamer) *StreamServer {
 	return &StreamServer{
-		b: b,
+		streamer: s,
 	}
 }
 
@@ -75,24 +80,27 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tr.Tracef("filter %s", f)
+
 	var (
-		sendBuffer    = parseRange(r.URL.Query().Get("buf"), strconv.Atoi, 0, 100, 1000)
-		statsInterval = parseRange(r.URL.Query().Get("stats"), time.ParseDuration, time.Second, 10*time.Second, time.Minute)
+		buf    = parseRange(r.URL.Query().Get("buf"), strconv.Atoi, 0, 100, 1000)
+		tracec = make(chan trc.Trace, buf)
+		donec  = make(chan struct{})
 	)
 
-	tr.Tracef("filter %s", f)
-	tr.Tracef("send buffer %d", sendBuffer)
-	tr.Tracef("stats interval %s", statsInterval)
+	tr.Tracef("buffer %d", buf)
+
+	var (
+		statsInterval = parseDefault(r.URL.Query().Get("stats"), time.ParseDuration, 10*time.Second)
+	)
+
+	tr.Tracef("stats %s", statsInterval)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	var (
-		tracec = make(chan trc.Trace, sendBuffer)
-		donec  = make(chan struct{})
-	)
 	go func() {
-		stats, err := s.b.Stream(ctx, f, tracec)
+		stats, err := s.streamer.Stream(ctx, f, tracec)
 		tr.Tracef("Stream finished (%v), skips %d, sends %d, drops %d (%.1f%%)", err, stats.Skips, stats.Sends, stats.Drops, 100*stats.DropRate())
 		close(donec)
 	}()
@@ -114,8 +122,7 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 			case <-initc:
 				data, err := json.Marshal(map[string]any{
 					"filter": f,
-					"buf":    cap(tracec),
-					"stats":  statsInterval.String(),
+					"buffer": cap(tracec),
 				})
 				if err != nil {
 					tr.Errorf("JSON marshal init: %v", err)
@@ -131,7 +138,7 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 				}
 
 			case <-stats.C:
-				stats, err := s.b.Stats(ctx, tracec)
+				stats, err := s.streamer.Stats(ctx, tracec)
 				if err != nil {
 					tr.Errorf("get stats: %v", err)
 					continue
@@ -280,7 +287,7 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 			query.Set("buf", strconv.Itoa(c.SendBuffer))
 		}
 		if c.StatsInterval > 0 {
-			query.Set("report", c.StatsInterval.String())
+			query.Set("stats", c.StatsInterval.String())
 		}
 		uri.RawQuery = query.Encode()
 
