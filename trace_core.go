@@ -74,8 +74,11 @@ var _ Trace = (*coreTrace)(nil)
 // New creates a new core trace with the given source and category, and injects
 // it into the given context. It returns a new context containing that trace,
 // and the trace itself.
-func New(ctx context.Context, source, category string) (context.Context, Trace) {
-	tr := newCoreTrace(source, category)
+func New(ctx context.Context, source, category string, decorators ...DecoratorFunc) (context.Context, Trace) {
+	tr := Trace(newCoreTrace(source, category))
+	for _, d := range decorators {
+		tr = d(tr)
+	}
 	return Put(ctx, tr)
 }
 

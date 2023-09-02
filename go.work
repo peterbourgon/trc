@@ -1,8 +1,0 @@
-go 1.20
-
-use (
-	./_examples/trc-basic
-	./_examples/trc-complex
-	./_examples/trc-query
-	./cmd/trcstream
-)

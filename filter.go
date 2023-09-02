@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+// Filter is a set of rules that can be applied to an individual trace, which
+// will either be allowed (pass) or rejected (fail).
 type Filter struct {
 	Sources     []string       `json:"sources,omitempty"`
 	IDs         []string       `json:"ids,omitempty"`
@@ -20,6 +22,7 @@ type Filter struct {
 	regexp      *regexp.Regexp
 }
 
+// Normalize must be called before the filter can be used.
 func (f *Filter) Normalize() []error {
 	var errs []error
 
@@ -30,19 +33,20 @@ func (f *Filter) Normalize() []error {
 	return errs
 }
 
+// String returns an operator-readable representation of the filter.
 func (f Filter) String() string {
 	var elems []string
 
 	if len(f.Sources) > 0 {
-		elems = append(elems, fmt.Sprintf("Sources:%v", f.Sources))
+		elems = append(elems, fmt.Sprintf("Sources=%v", f.Sources))
 	}
 
 	if len(f.IDs) > 0 {
-		elems = append(elems, fmt.Sprintf("IDs:%v", f.Sources))
+		elems = append(elems, fmt.Sprintf("IDs=%v", f.Sources))
 	}
 
 	if f.Category != "" {
-		elems = append(elems, fmt.Sprintf("Category:'%s'", f.Category))
+		elems = append(elems, fmt.Sprintf("Category='%s'", f.Category))
 	}
 
 	if f.IsActive {
@@ -54,7 +58,7 @@ func (f Filter) String() string {
 	}
 
 	if f.MinDuration != nil {
-		elems = append(elems, fmt.Sprintf("MinDuration:%s", f.MinDuration.String()))
+		elems = append(elems, fmt.Sprintf("MinDuration=%s", f.MinDuration.String()))
 	}
 
 	if f.IsSuccess {
@@ -66,12 +70,18 @@ func (f Filter) String() string {
 	}
 
 	if f.Query != "" {
-		elems = append(elems, fmt.Sprintf("Query:'%s'", f.Query))
+		elems = append(elems, fmt.Sprintf("Query='%s'", f.Query))
 	}
 
-	return fmt.Sprintf("[%s]", strings.Join(elems, " "))
+	if len(elems) <= 0 {
+		return "(allow all)"
+	}
+
+	return strings.Join(elems, " ")
 }
 
+// Allow returns true if the provided trace satisfies all of the conditions in
+// the filter.
 func (f *Filter) Allow(tr Trace) bool {
 	if len(f.Sources) > 0 {
 		var found bool

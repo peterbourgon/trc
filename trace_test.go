@@ -13,7 +13,7 @@ import (
 )
 
 // TraceTest performs basic validation of trace implementations.
-func TraceTest(t *testing.T, constructor func(ctx context.Context, source, category string) (context.Context, trc.Trace)) {
+func TraceTest(t *testing.T, constructor trc.NewTraceFunc) {
 	t.Parallel()
 
 	t.Helper()

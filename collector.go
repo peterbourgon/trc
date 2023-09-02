@@ -18,7 +18,7 @@ type Collector struct {
 
 var _ Searcher = (*Collector)(nil)
 
-type NewTraceFunc func(ctx context.Context, source string, category string) (context.Context, Trace)
+type NewTraceFunc func(ctx context.Context, source string, category string, decorators ...DecoratorFunc) (context.Context, Trace)
 
 func NewDefaultCollector() *Collector {
 	return NewCollector(CollectorConfig{

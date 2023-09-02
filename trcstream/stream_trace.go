@@ -24,12 +24,18 @@ var _ trc.Trace = (*StreamTrace)(nil) // needs to be passed to Filter.Allow
 func NewStreamTrace(tr trc.Trace) *StreamTrace {
 	events := tr.Events()
 
-	// Active stream traces include only the most recent event.
+	// Active stream traces include only the most recent event. This is to allow
+	// subscribers to stream complete traces with all trace events, by filtering
+	// for IsFinished true; or to stream individual events as they occur, by not
+	// filtering for IsFinished. In both cases, the final stream trace for a
+	// given trace ID will always include all events.
 	if !tr.Finished() && len(events) > 0 {
 		events = events[len(events)-1:]
 	}
 
-	// All stream trace events have no stacks.
+	// Stream trace events don't include stacks. This is an optimization to
+	// reduce stream trace size, based on the assumption that stacks are far
+	// less useful to stream subscribers.
 	for i := range events {
 		events[i].Stack = events[i].Stack[:0]
 	}

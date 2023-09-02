@@ -68,6 +68,7 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 	default:
 		f = parseFilter(r)
 	}
+
 	if normalizeErrs := f.Normalize(); len(normalizeErrs) > 0 {
 		err := fmt.Errorf("bad request: %s", strings.Join(trcutil.FlattenErrors(normalizeErrs...), "; "))
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -75,19 +76,19 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		buf    = parseRange(r.URL.Query().Get("buf"), strconv.Atoi, 0, 100, 1000)
-		report = parseRange(r.URL.Query().Get("report"), time.ParseDuration, time.Second, 10*time.Second, time.Minute)
+		sendBuffer    = parseRange(r.URL.Query().Get("buf"), strconv.Atoi, 0, 100, 1000)
+		statsInterval = parseRange(r.URL.Query().Get("stats"), time.ParseDuration, time.Second, 10*time.Second, time.Minute)
 	)
 
 	tr.Tracef("filter %s", f)
-	tr.Tracef("buf %d", buf)
-	tr.Tracef("report %s", report)
+	tr.Tracef("send buffer %d", sendBuffer)
+	tr.Tracef("stats interval %s", statsInterval)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	var (
-		tracec = make(chan trc.Trace, buf)
+		tracec = make(chan trc.Trace, sendBuffer)
 		donec  = make(chan struct{})
 	)
 	go func() {
@@ -102,7 +103,7 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 	eventsource.Handler(func(lastId string, encoder *eventsource.Encoder, stop <-chan bool) {
 		tr.Tracef("event source handler started")
 
-		stats := time.NewTicker(report)
+		stats := time.NewTicker(statsInterval)
 		defer stats.Stop()
 
 		initc := make(chan struct{}, 1)
@@ -113,8 +114,8 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 			case <-initc:
 				data, err := json.Marshal(map[string]any{
 					"filter": f,
-					"buffer": cap(tracec),
-					"stats":  report.String(),
+					"buf":    cap(tracec),
+					"stats":  statsInterval.String(),
 				})
 				if err != nil {
 					tr.Errorf("JSON marshal init: %v", err)
@@ -189,12 +190,28 @@ func (s *StreamServer) handleHTML(w http.ResponseWriter, r *http.Request) {
 //
 //
 
+// StreamClient streams trace data from a [StreamServer].
 type StreamClient struct {
-	HTTPClient    HTTPClient
-	URI           string
-	RemoteBuffer  int
-	OnRead        func(eventType string, eventData []byte)
+	// HTTPClient used to make the stream request. If not provided,
+	// [http.DefaultClient] is used.
+	HTTPClient HTTPClient
+
+	// URI of the remote stream server. Required.
+	URI string
+
+	// SendBuffer sent to the remote stream server. Optional.
+	SendBuffer int
+
+	// OnRead is called for every stream event received by the client.
+	// Implementations must not block.
+	OnRead func(ctx context.Context, eventType string, eventData []byte)
+
+	// RetryInterval is the delay between stream reconnection attempts. The
+	// default value is 1s.
 	RetryInterval time.Duration
+
+	// StatsInterval is how often stream stats are sent from the server to the
+	// client. The default value is 10s.
 	StatsInterval time.Duration
 }
 
@@ -208,7 +225,7 @@ func (c *StreamClient) initialize() {
 	}
 
 	if c.OnRead == nil {
-		c.OnRead = func(eventType string, eventData []byte) {}
+		c.OnRead = func(ctx context.Context, eventType string, eventData []byte) {}
 	}
 
 	if c.RetryInterval == 0 {
@@ -220,21 +237,19 @@ func (c *StreamClient) initialize() {
 	}
 }
 
-func NewStreamClient(client HTTPClient, uri string) *StreamClient {
-	return NewStreamClientCallback(client, uri, nil)
-}
-
-func NewStreamClientCallback(client HTTPClient, uri string, onRead func(eventType string, eventData []byte)) *StreamClient {
+// NewStreamClient constructs a stream client connecting to the provided URI.
+func NewStreamClient(uri string) *StreamClient {
 	if !strings.HasPrefix(uri, "http") {
 		uri = "http://" + uri
 	}
 	return &StreamClient{
-		HTTPClient: client,
-		URI:        uri,
-		OnRead:     onRead,
+		URI: uri,
 	}
 }
 
+// Stream trace data from the remote server, filtered by the provided filter, to
+// the provided channel. The stream stops when the context is canceled, or a
+// non-recoverable error occurs.
 func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) (err error) {
 	c.initialize()
 
@@ -261,8 +276,8 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 		}
 
 		query := uri.Query()
-		if c.RemoteBuffer > 0 {
-			query.Set("buf", strconv.Itoa(c.RemoteBuffer))
+		if c.SendBuffer > 0 {
+			query.Set("buf", strconv.Itoa(c.SendBuffer))
 		}
 		if c.StatsInterval > 0 {
 			query.Set("report", c.StatsInterval.String())
@@ -293,7 +308,7 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 			return fmt.Errorf("read server-sent event: %w", err)
 		}
 
-		c.OnRead(ev.Type, ev.Data)
+		c.OnRead(ctx, ev.Type, ev.Data)
 
 		switch ev.Type {
 		case "init":

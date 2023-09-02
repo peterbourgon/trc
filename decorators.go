@@ -89,9 +89,10 @@ func (ptr *publishTrace) Free() {
 func LogDecorator(dst io.Writer) DecoratorFunc {
 	return func(tr Trace) Trace {
 		ltr := &logTrace{
-			Trace: tr,
-			id:    tr.ID(),
-			dst:   dst,
+			Trace:    tr,
+			id:       tr.ID(),
+			category: tr.Category(),
+			dst:      dst,
 		}
 		ltr.logEvent("BEGIN", "source '%s' category '%s'", ltr.Trace.Source(), ltr.Trace.Category())
 		return ltr
@@ -100,8 +101,9 @@ func LogDecorator(dst io.Writer) DecoratorFunc {
 
 type logTrace struct {
 	Trace
-	id  string
-	dst io.Writer
+	id       string
+	category string
+	dst      io.Writer
 }
 
 var _ interface{ Free() } = (*logTrace)(nil)
@@ -128,11 +130,21 @@ func (ltr *logTrace) LazyErrorf(format string, args ...any) {
 
 func (ltr *logTrace) Finish() {
 	ltr.Trace.Finish()
-	ltr.logEvent("FINIS", "%s", trcutil.HumanizeDuration(ltr.Trace.Duration()))
+	var (
+		outcome  = "unknown"
+		duration = trcutil.HumanizeDuration(ltr.Trace.Duration())
+	)
+	switch {
+	case ltr.Errored():
+		outcome = "errored"
+	default:
+		outcome = "success"
+	}
+	ltr.logEvent("FINIS", "%s %s", outcome, duration)
 }
 
 func (ltr *logTrace) logEvent(what, format string, args ...any) {
-	format = ltr.id + " " + what + " " + strings.TrimSuffix(format, "\n") + "\n"
+	format = "[" + ltr.category + "] " + ltr.id + " " + what + " " + strings.TrimSuffix(format, "\n") + "\n"
 	fmt.Fprintf(ltr.dst, format, args...)
 }
 
