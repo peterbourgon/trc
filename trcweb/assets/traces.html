@@ -81,7 +81,7 @@ function highlightQuery() {
 	let re = new RegExp('('+{{.Request.Filter.Query}}+')');
 	document.getElementById("traces").querySelectorAll(".searchable").forEach(elem => {
 		if (re.test(elem.innerHTML)) {
-			let oldText = elem.textContent.replace(/(<mark class="highlight">|<\/mark>)/gim, '');
+			let oldText = elem.textContent.replace(/(<mark class="highlight">|<\/mark>)/gim, ' ');
 			let newText = oldText.replace(re, '<mark class="highlight">$&</mark>');
 			elem.innerHTML = newText;
 			let details = elem.closest("details");
@@ -368,7 +368,7 @@ function highlightQuery() {
 		<strong><a href="?{{$href}}">{{ .ID }}</a></strong> (<a href="?{{$href}}&json">JSON</a>)
 
 		&middot;
-		<a href="?category={{.Category}}">{{.Category}}</a>
+		category <a href="?category={{.Category}}">{{.Category}}</a>
 
 		{{ if .Source }}
 			&middot;

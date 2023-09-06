@@ -85,19 +85,19 @@ func main() {
 	var globalHandler http.Handler
 	{
 		// MultiSearcher allows multiple sources to be treated as one.
-		var ms trc.MultiSearcher
+		var globalSearcher trc.MultiSearcher
 		for i := range ports {
 			// Each instance is modeled with an HTTP client querying the
 			// corresponding trace HTTP handler. This is usually how it would
 			// work, as different instances are usually on different hosts.
-			ms = append(ms, trcweb.NewSearchClient(http.DefaultClient, fmt.Sprintf("localhost:%s/traces", ports[i])))
+			globalSearcher = append(globalSearcher, trcweb.NewSearchClient(http.DefaultClient, fmt.Sprintf("localhost:%s/traces", ports[i])))
 		}
 
 		// Let's also trace requests to this global handler in a distinct trace
 		// collector, and include that collector in the multi-searcher.
-		ms = append(ms, globalCollector)
+		globalSearcher = append(globalSearcher, globalCollector)
 
-		globalHandler = trcweb.NewTraceServer(ms, globalBroker)
+		globalHandler = trcweb.NewTraceServer(globalSearcher, globalBroker)
 		globalHandler = trcweb.Middleware(globalCollector.NewTrace, trcweb.TraceServerCategory)(globalHandler)
 	}
 

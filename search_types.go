@@ -64,18 +64,18 @@ func (req SearchRequest) String() string {
 		for i := range req.Bucketing {
 			buckets[i] = req.Bucketing[i].String()
 		}
-		elems = append(elems, fmt.Sprintf("Bucketing=[%s]", strings.Join(buckets, " ")))
+		elems = append(elems, fmt.Sprintf("Bucketing:[%s]", strings.Join(buckets, " ")))
 	}
 
-	elems = append(elems, fmt.Sprintf("Filter=%s", req.Filter.String()))
+	elems = append(elems, fmt.Sprintf("Filter:[%s]", req.Filter))
 
-	elems = append(elems, fmt.Sprintf("Limit=%d", req.Limit))
+	elems = append(elems, fmt.Sprintf("Limit:%d", req.Limit))
 
 	if req.StackDepth != 0 {
-		elems = append(elems, fmt.Sprintf("StackDepth=%d", req.StackDepth))
+		elems = append(elems, fmt.Sprintf("StackDepth:%d", req.StackDepth))
 	}
 
-	return fmt.Sprintf("[%s]", strings.Join(elems, " "))
+	return strings.Join(elems, " ")
 }
 
 const (

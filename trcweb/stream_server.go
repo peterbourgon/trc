@@ -246,12 +246,11 @@ func (c *StreamClient) initialize() {
 
 // NewStreamClient constructs a stream client connecting to the provided URI.
 func NewStreamClient(uri string) *StreamClient {
-	if !strings.HasPrefix(uri, "http") {
-		uri = "http://" + uri
-	}
-	return &StreamClient{
+	c := &StreamClient{
 		URI: uri,
 	}
+	c.initialize()
+	return c
 }
 
 // Stream trace data from the remote server, filtered by the provided filter, to
@@ -295,6 +294,7 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 		if err != nil {
 			return err
 		}
+
 		encodeFilter(f, r)
 
 		req = r
