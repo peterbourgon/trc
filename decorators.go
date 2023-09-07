@@ -84,47 +84,44 @@ func (ptr *publishTrace) Free() {
 // LogDecorator returns a decorator that logs a simple string to the provided
 // destination when the trace is created, on every event, and when the trace is
 // finished. The logged string is a reduced form of the full trace, containing
-// only the trace ID, the event type, and the single event that triggered the
-// log.
+// only the trace ID and the single event that triggered the log.
 func LogDecorator(dst io.Writer) DecoratorFunc {
 	return func(tr Trace) Trace {
 		ltr := &logTrace{
-			Trace:    tr,
-			id:       tr.ID(),
-			category: tr.Category(),
-			dst:      dst,
+			Trace: tr,
+			id:    tr.ID(),
+			dst:   dst,
 		}
-		ltr.logEvent("BEGIN", "source '%s' category '%s'", ltr.Trace.Source(), ltr.Trace.Category())
+		ltr.logEvent("started, source '%s', category '%s'", tr.Source(), tr.Category())
 		return ltr
 	}
 }
 
 type logTrace struct {
 	Trace
-	id       string
-	category string
-	dst      io.Writer
+	id  string
+	dst io.Writer
 }
 
 var _ interface{ Free() } = (*logTrace)(nil)
 
 func (ltr *logTrace) Tracef(format string, args ...any) {
-	ltr.logEvent("TRACE", format, args...)
+	ltr.logEvent(format, args...)
 	ltr.Trace.Tracef(format, args...)
 }
 
 func (ltr *logTrace) LazyTracef(format string, args ...any) {
-	ltr.logEvent("TRACE", format, args...)
+	ltr.logEvent(format, args...)
 	ltr.Trace.LazyTracef(format, args...)
 }
 
 func (ltr *logTrace) Errorf(format string, args ...any) {
-	ltr.logEvent("ERROR", format, args...)
+	ltr.logEvent("ERROR: "+format, args...)
 	ltr.Trace.Errorf(format, args...)
 }
 
 func (ltr *logTrace) LazyErrorf(format string, args ...any) {
-	ltr.logEvent("ERROR", format, args...)
+	ltr.logEvent("ERROR: "+format, args...)
 	ltr.Trace.LazyErrorf(format, args...)
 }
 
@@ -140,11 +137,11 @@ func (ltr *logTrace) Finish() {
 	default:
 		outcome = "success"
 	}
-	ltr.logEvent("FINIS", "%s %s", outcome, duration)
+	ltr.logEvent("done, %s, %s", outcome, duration)
 }
 
-func (ltr *logTrace) logEvent(what, format string, args ...any) {
-	format = "[" + ltr.category + "] " + ltr.id + " " + what + " " + strings.TrimSuffix(format, "\n") + "\n"
+func (ltr *logTrace) logEvent(format string, args ...any) {
+	format = ltr.id + " " + strings.TrimSuffix(format, "\n") + "\n"
 	fmt.Fprintf(ltr.dst, format, args...)
 }
 

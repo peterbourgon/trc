@@ -100,12 +100,12 @@ var DefaultBucketing = []time.Duration{
 //
 
 type SearchResponse struct {
-	Request    *SearchRequest `json:"request"`
+	Request    *SearchRequest `json:"request,omitempty"`
 	Sources    []string       `json:"sources"`
 	TotalCount int            `json:"total_count"`
 	MatchCount int            `json:"match_count"`
 	Traces     []*SearchTrace `json:"traces"`
-	Stats      *SearchStats   `json:"stats"`
+	Stats      *SearchStats   `json:"stats,omitempty"`
 	Problems   []string       `json:"problems,omitempty"`
 	Duration   time.Duration  `json:"duration"`
 }
@@ -194,7 +194,16 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	tr.Tracef("total %d, matched %d, returned %d", aggregate.TotalCount, aggregate.MatchCount, len(aggregate.Traces))
 
 	// Fix up the sources.
-	sort.Strings(aggregate.Sources)
+	sourceIndex := make(map[string]struct{}, len(aggregate.Sources))
+	for _, source := range aggregate.Sources {
+		sourceIndex[source] = struct{}{}
+	}
+	sourceList := make([]string, 0, len(sourceIndex))
+	for source := range sourceIndex {
+		sourceList = append(sourceList, source)
+	}
+	sort.Strings(sourceList)
+	aggregate.Sources = sourceList
 
 	// Duration is defined across all individual requests.
 	aggregate.Duration = time.Since(begin)

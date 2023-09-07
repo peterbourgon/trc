@@ -368,11 +368,11 @@ function highlightQuery() {
 		<strong><a href="?{{$href}}">{{ .ID }}</a></strong> (<a href="?{{$href}}&json">JSON</a>)
 
 		&middot;
-		category <a href="?category={{.Category}}">{{.Category}}</a>
+		category <a href="?category={{.Category}}"><strong>{{.Category}}</strong></a>
 
 		{{ if .Source }}
 			&middot;
-			via {{.Source}}
+			source <a href="?source={{.Source}}"><strong>{{.Source}}</strong></a>
 		{{ end }}
 
 		<span class="right">

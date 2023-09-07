@@ -100,19 +100,8 @@ type Stats struct {
 	Drops int `json:"drops"`
 }
 
-func (s *Stats) DropRate() float64 {
-	var (
-		n = float64(s.Drops)
-		d = float64(s.Sends + s.Drops)
-	)
-	if d == 0 {
-		return 0
-	}
-	return n / d
-}
-
 func (s Stats) String() string {
-	return fmt.Sprintf("skips %d, sends %d, drops %d, drop rate %.1f%%", s.Skips, s.Sends, s.Drops, s.DropRate()*100)
+	return fmt.Sprintf("skips %d, sends %d, drops %d", s.Skips, s.Sends, s.Drops)
 }
 
 type subscriber struct {

@@ -101,7 +101,7 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		stats, err := s.streamer.Stream(ctx, f, tracec)
-		tr.Tracef("Stream finished (%v), skips %d, sends %d, drops %d (%.1f%%)", err, stats.Skips, stats.Sends, stats.Drops, 100*stats.DropRate())
+		tr.Tracef("Stream finished (%v), skips %d, sends %d, drops %d", err, stats.Skips, stats.Sends, stats.Drops)
 		close(donec)
 	}()
 	defer func() {

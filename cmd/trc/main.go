@@ -8,7 +8,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -42,89 +44,121 @@ func main() {
 }
 
 func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args []string) (err error) {
-	// Definitions.
-
+	// Config for `trc`.
 	rootConfig := &rootConfig{
 		stdin:  stdin,
 		stdout: stdout,
 		stderr: stderr,
 	}
-	rootFlags := ff.NewFlags("trc")
-	rootConfig.register(rootFlags)
-	rootCommand := &ff.Command{
+
+	baseFlags := ff.NewFlags("base")
+	rootConfig.registerBaseFlags(baseFlags)
+
+	queryFlags := ff.NewFlags("query").SetParent(baseFlags)
+	rootConfig.registerQueryFlags(queryFlags)
+
+	trcFlags := queryFlags
+	trcCommand := &ff.Command{
 		Name:      "trc",
-		ShortHelp: "query one or more trace endpoints for trace data",
-		Usage:     "trc --uri=U [--uri=U ...] [<FLAGS>] <SUBCOMMAND> ...",
-		Flags:     rootFlags,
+		ShortHelp: "query trace data from one or more instances",
+		Usage:     "trc -u URI [-u URI...] [FLAGS] SUBCOMMAND...",
+		Flags:     trcFlags,
 	}
 
+	// Config for `trc search`.
 	searchConfig := &searchConfig{rootConfig: rootConfig}
-	searchFlags := ff.NewFlags("search").SetParent(rootFlags)
+	searchFlags := ff.NewFlags("search").SetParent(trcFlags)
 	searchConfig.register(searchFlags)
 	searchCommand := &ff.Command{
 		Name:      "search",
 		ShortHelp: "search for trace data",
-		Usage:     "trc search [<FLAGS>]",
+		LongHelp:  "Fetch traces that match the provided query flags.",
 		Flags:     searchFlags,
 		Exec:      searchConfig.Exec,
 	}
-	rootCommand.Subcommands = append(rootCommand.Subcommands, searchCommand)
+	trcCommand.Subcommands = append(trcCommand.Subcommands, searchCommand)
 
+	// Config for `trc stream`.
 	streamConfig := &streamConfig{rootConfig: rootConfig}
-	streamFlags := ff.NewFlags("stream").SetParent(rootFlags)
+	streamFlags := ff.NewFlags("stream").SetParent(trcFlags)
 	streamConfig.register(streamFlags)
 	streamCommand := &ff.Command{
 		Name:      "stream",
 		ShortHelp: "stream trace data to the terminal",
-		Usage:     "trc stream [<FLAGS>]",
+		LongHelp:  "Stream traces, or trace events, that match the provided query flags.",
 		Flags:     streamFlags,
 		Exec:      streamConfig.Exec,
 	}
-	rootCommand.Subcommands = append(rootCommand.Subcommands, streamCommand)
+	trcCommand.Subcommands = append(trcCommand.Subcommands, streamCommand)
 
+	// Errors should show help only in some cases.
 	showHelp := true
 	defer func() {
 		if showHelp {
-			fmt.Fprintf(stderr, "\n%s\n", ffhelp.Command(rootCommand))
+			fmt.Fprintf(stderr, "\n%s\n", ffhelp.Command(trcCommand))
 		}
 		if errors.Is(err, ff.ErrHelp) || errors.Is(err, ff.ErrNoExec) {
 			err = nil
 		}
 	}()
 
-	// Root command parsing.
-
-	if err := rootCommand.Parse(args, ff.WithEnvVarPrefix("TRC")); err != nil {
+	// Initial parsing.
+	if err := trcCommand.Parse(args, ff.WithEnvVarPrefix("TRC")); err != nil {
 		return err
+	}
+
+	// Validation and set-up.
+	{
+		var infodst, debugdst, tracedst io.Writer
+		switch rootConfig.logLevel {
+		case "n", "none":
+			infodst, debugdst, tracedst = io.Discard, io.Discard, io.Discard
+		case "i", "info":
+			infodst, debugdst, tracedst = stderr, io.Discard, io.Discard
+		case "d", "debug":
+			infodst, debugdst, tracedst = stderr, stderr, io.Discard
+		case "t", "trace":
+			infodst, debugdst, tracedst = stderr, stderr, stderr
+		default:
+			return fmt.Errorf("invalid log level %q", rootConfig.logLevel)
+		}
+		rootConfig.info = log.New(infodst, "", 0)
+		rootConfig.debug = log.New(debugdst, "[DEBUG] ", log.Lmsgprefix)
+		rootConfig.trace = log.New(tracedst, "[TRACE] ", log.Lmsgprefix)
 	}
 
 	if len(rootConfig.uris) <= 0 {
 		return fmt.Errorf("at least one URI is required")
 	}
 
-	{
-		var infodst, debugdst, tracedst io.Writer
-		switch rootConfig.logging {
-		case "none":
-			infodst, debugdst, tracedst = io.Discard, io.Discard, io.Discard
-		case "info":
-			infodst, debugdst, tracedst = stderr, io.Discard, io.Discard
-		case "debug":
-			infodst, debugdst, tracedst = stderr, stderr, io.Discard
-		case "trace":
-			infodst, debugdst, tracedst = stderr, stderr, stderr
-		default:
-			return fmt.Errorf("invalid logging value %q", rootConfig.logging)
+	for i, uri := range rootConfig.uris {
+		uri = strings.TrimSpace(uri)
+		if uri == "" {
+			continue
 		}
-		rootConfig.info = log.New(infodst, "", 0)
-		rootConfig.debug = log.New(debugdst, "[DEBUG] ", log.Lmsgprefix)
-		rootConfig.trace = log.New(tracedst, "[TRACE] ", log.Lmsgprefix)
 
+		if !strings.HasPrefix(uri, "http") {
+			uri = "http://" + uri
+		}
+
+		u, err := url.ParseRequestURI(uri)
+		if err != nil {
+			return fmt.Errorf("%s: invalid: %w", uri, err)
+		}
+
+		if rootConfig.uriPath != "" {
+			u.Path = rootConfig.uriPath
+		}
+
+		uri = u.String()
+		rootConfig.uris[i] = uri
+
+		rootConfig.debug.Printf("URI: %s", uri)
 	}
 
 	{
 		var minDuration *time.Duration
-		if f, ok := rootFlags.GetFlag("duration"); ok && f.IsSet() {
+		if f, ok := queryFlags.GetFlag("duration"); ok && f.IsSet() {
 			rootConfig.debug.Printf("using --duration %s", rootConfig.minDuration)
 			minDuration = &rootConfig.minDuration
 		}
@@ -142,13 +176,11 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 		}
 	}
 
-	// Selected command parsing.
-
-	// Running.
-
+	// Past this point, errors are from the command, and shouldn't show help.
 	showHelp = false
 
-	if err := rootCommand.Run(ctx); err != nil {
+	// Run the selected command.
+	if err := trcCommand.Run(ctx); err != nil {
 		return err
 	}
 
@@ -160,7 +192,13 @@ type rootConfig struct {
 	stdout io.Writer
 	stderr io.Writer
 
-	uris        []string
+	uris     []string
+	uriPath  string
+	logLevel string
+	output   string
+
+	info, debug, trace *log.Logger
+
 	sources     []string
 	ids         []string
 	category    string
@@ -170,64 +208,151 @@ type rootConfig struct {
 	minDuration time.Duration
 	isSuccess   bool
 	isErrored   bool
-	logging     string
-	output      string
 
 	filter trc.Filter
-
-	info, debug, trace *log.Logger
 }
 
-func (cfg *rootConfig) register(fs *ff.CoreFlags) {
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'u', LongName: "uri" /*        */, Value: ffval.NewUniqueList(&cfg.uris) /*                                */, Usage: "trace server URI (repeatable, required)"})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "source" /*     */, Value: ffval.NewUniqueList(&cfg.sources) /*                             */, Usage: "filter for this source (repeatable)"})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'i', LongName: "id" /*         */, Value: ffval.NewUniqueList(&cfg.ids) /*                                 */, Usage: "filter for this ID (repeatable)"})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'c', LongName: "category" /*   */, Value: ffval.NewValue(&cfg.category) /*                                 */, Usage: "filter for this category"})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'q', LongName: "query" /*      */, Value: ffval.NewValue(&cfg.query) /*                                    */, Usage: "filter for this query regexp"})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'a', LongName: "active" /*     */, Value: ffval.NewValue(&cfg.isActive) /*                                 */, Usage: "filter for active traces", NoDefault: true})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'f', LongName: "finished" /*   */, Value: ffval.NewValue(&cfg.isFinished) /*                               */, Usage: "filter for finished traces", NoDefault: true})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'd', LongName: "duration" /*   */, Value: ffval.NewValue(&cfg.minDuration) /*                              */, Usage: "filter for finished traces of at least this duration", NoDefault: true})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "success" /*    */, Value: ffval.NewValue(&cfg.isSuccess) /*                                */, Usage: "filter for successful (non-errored) traces", NoDefault: true})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "errored" /*    */, Value: ffval.NewValue(&cfg.isErrored) /*                                */, Usage: "filter for errored traces", NoDefault: true})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'l', LongName: "log" /*        */, Value: ffval.NewEnum(&cfg.logging, "info", "debug", "trace", "none") /* */, Usage: "log level: info, debug, trace, none"})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'o', LongName: "output" /*     */, Value: ffval.NewEnum(&cfg.output, "ndjson", "prettyjson") /*            */, Usage: "output format: ndjson, prettyjson"})
+func (cfg *rootConfig) registerBaseFlags(fs *ff.CoreFlags) {
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'u', LongName: "uri" /*      */, Value: ffval.NewUniqueList(&cfg.uris) /*                                                     */, Usage: "trace server URI (repeatable, required)" /*     */, Placeholder: "URI"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "uri-path" /* */, Value: ffval.NewValue(&cfg.uriPath) /*                                                       */, Usage: "path that will be applied to every URI" /*      */, Placeholder: "PATH"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'l', LongName: "log" /*      */, Value: ffval.NewEnum(&cfg.logLevel, "info", "i", "debug", "d", "trace", "t", "none", "n") /* */, Usage: "log level: i/info, d/debug, t/trace, n/none" /* */, Placeholder: "LEVEL"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'o', LongName: "output" /*   */, Value: ffval.NewEnum(&cfg.output, "ndjson", "prettyjson") /*                                 */, Usage: "output format: ndjson, prettyjson" /*           */, Placeholder: "FORMAT"})
 }
+
+func (cfg *rootConfig) registerQueryFlags(fs *ff.CoreFlags) {
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "source" /*   */, Value: ffval.NewUniqueList(&cfg.sources) /* */, NoDefault: true, Usage: "source (repeatable)"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'i', LongName: "id" /*       */, Value: ffval.NewUniqueList(&cfg.ids) /*     */, NoDefault: true, Usage: "trace ID (repeatable)"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'c', LongName: "category" /* */, Value: ffval.NewValue(&cfg.category) /*     */, NoDefault: true, Usage: "trace category"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'q', LongName: "query" /*    */, Value: ffval.NewValue(&cfg.query) /*        */, NoDefault: true, Usage: "query expression", Placeholder: "REGEX"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'a', LongName: "active" /*   */, Value: ffval.NewValue(&cfg.isActive) /*     */, NoDefault: true, Usage: "only active traces"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'f', LongName: "finished" /* */, Value: ffval.NewValue(&cfg.isFinished) /*   */, NoDefault: true, Usage: "only finished traces"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'd', LongName: "duration" /* */, Value: ffval.NewValue(&cfg.minDuration) /*  */, NoDefault: true, Usage: "only finished traces of at least this duration"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "success" /*  */, Value: ffval.NewValue(&cfg.isSuccess) /*    */, NoDefault: true, Usage: "only successful (non-errored) traces"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "errored" /*  */, Value: ffval.NewValue(&cfg.isErrored) /*    */, NoDefault: true, Usage: "only errored traces"})
+}
+
+func (cfg *rootConfig) newTrace(ctx context.Context, category string) (context.Context, trc.Trace) {
+	ctx, tr := trc.New(ctx, "trc", category)
+	tr = trc.LogDecorator(&logWriter{Logger: cfg.trace})(tr)
+	ctx, tr = trc.Put(ctx, tr)
+	return ctx, tr
+}
+
+//
+//
+//
 
 type searchConfig struct {
 	*rootConfig
 
-	//
+	limit          int
+	stackDepth     int
+	includeRequest bool
+	includeStats   bool
 }
 
 func (cfg *searchConfig) register(fs *ff.CoreFlags) {
-	//
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'n', LongName: "limit" /*            */, Value: ffval.NewValueDefault(&cfg.limit, 10) /*  */, Usage: "maximum number of traces to return"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "stack-depth" /*      */, Value: ffval.NewValue(&cfg.stackDepth) /*        */, Usage: "number of stack frames to include with each event"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "include-request" /*  */, Value: ffval.NewValue(&cfg.includeRequest) /*    */, Usage: "include search request in output", NoDefault: true})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "include-stats" /*    */, Value: ffval.NewValue(&cfg.includeStats) /*      */, Usage: "include search statistics in output", NoDefault: true})
+}
+
+func (cfg *searchConfig) writeResult(ctx context.Context, res *trc.SearchResponse) error {
+	enc := json.NewEncoder(cfg.stdout)
+	switch cfg.output {
+	case "prettyjson":
+		enc.SetIndent("", "    ")
+	case "ndjson":
+		//
+	default:
+		//
+	}
+	if err := enc.Encode(res); err != nil {
+		return fmt.Errorf("marshal response: %w", err)
+	}
+	return nil
 }
 
 func (cfg *searchConfig) Exec(ctx context.Context, args []string) error {
-	return fmt.Errorf("not implemented")
+	ctx, tr := cfg.newTrace(ctx, "search")
+	defer tr.Finish()
+
+	var searcher trc.MultiSearcher
+	for _, uri := range cfg.uris {
+		searcher = append(searcher, trcweb.NewSearchClient(http.DefaultClient, uri))
+	}
+
+	if cfg.stackDepth == 0 {
+		cfg.stackDepth = -1 // 0 means all available stacks, -1 means no stacks
+	}
+
+	req := &trc.SearchRequest{
+		Filter:     cfg.filter,
+		Limit:      cfg.limit,
+		StackDepth: cfg.stackDepth,
+	}
+
+	cfg.debug.Printf("request: filter: %s", cfg.filter)
+	cfg.debug.Printf("request: limit: %d", cfg.limit)
+	cfg.debug.Printf("request: stack depth: %d", cfg.stackDepth)
+
+	res, err := searcher.Search(ctx, req)
+	if err != nil {
+		return fmt.Errorf("execute search: %w", err)
+	}
+
+	cfg.debug.Printf("response: sources: %d (%s)", len(res.Sources), strings.Join(res.Sources, " "))
+	cfg.debug.Printf("response: total: %d", res.TotalCount)
+	cfg.debug.Printf("response: matched: %d", res.MatchCount)
+	cfg.debug.Printf("response: returned: %d", len(res.Traces))
+	cfg.debug.Printf("response: duration: %s", res.Duration)
+
+	if !cfg.includeRequest {
+		cfg.debug.Printf("removing request from response")
+		res.Request = nil
+	}
+
+	if !cfg.includeStats {
+		cfg.debug.Printf("removing stats from response")
+		res.Stats = nil
+	}
+
+	if err := cfg.writeResult(ctx, res); err != nil {
+		return err
+	}
+
+	return nil
 }
+
+//
+//
+//
 
 type streamConfig struct {
 	*rootConfig
 
-	recvBuf       int
+	streamEvents  bool
 	sendBuf       int
+	recvBuf       int
 	statsInterval time.Duration
 	retryInterval time.Duration
-	streamEvents  bool
 
 	traces chan trc.Trace
 }
 
 func (cfg *streamConfig) register(fs *ff.CoreFlags) {
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "recvbuf" /* */, Value: ffval.NewValueDefault(&cfg.recvBuf, 100) /*                  */, Usage: "local receive buffer size"})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "sendbuf" /* */, Value: ffval.NewValueDefault(&cfg.sendBuf, 100) /*                  */, Usage: "remote send buffer size"})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "stats" /*   */, Value: ffval.NewValueDefault(&cfg.statsInterval, 10*time.Second) /* */, Usage: "stream stats reporting interval"})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "retry" /*   */, Value: ffval.NewValueDefault(&cfg.retryInterval, 1*time.Second) /*  */, Usage: "stream connection retry interval"})
-	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'e', LongName: "events" /*  */, Value: ffval.NewValue(&cfg.streamEvents) /*                         */, Usage: "stream events instead of traces (overrides --active and --finished)", NoDefault: true})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 'e', LongName: "events" /*         */, Value: ffval.NewValue(&cfg.streamEvents) /*                         */, Usage: "stream individual events rather than complete traces", NoDefault: true})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "send-buffer" /*    */, Value: ffval.NewValueDefault(&cfg.sendBuf, 100) /*                  */, Usage: "remote send buffer size"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "recv-buffer" /*    */, Value: ffval.NewValueDefault(&cfg.recvBuf, 100) /*                  */, Usage: "local receive buffer size"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "stats-interval" /* */, Value: ffval.NewValueDefault(&cfg.statsInterval, 10*time.Second) /* */, Usage: "stats reporting interval"})
+	fs.AddFlag(ff.CoreFlagConfig{ShortName: 0x0, LongName: "retry-interval" /* */, Value: ffval.NewValueDefault(&cfg.retryInterval, 1*time.Second) /*  */, Usage: "connection retry interval"})
 }
 
 func (cfg *streamConfig) Exec(ctx context.Context, args []string) error {
+	ctx, tr := cfg.newTrace(ctx, "stream")
+	defer tr.Finish()
+
 	cfg.traces = make(chan trc.Trace, cfg.recvBuf)
 
 	var streaming string
@@ -245,12 +370,12 @@ func (cfg *streamConfig) Exec(ctx context.Context, args []string) error {
 		}
 	}
 	{
-		cfg.info.Printf("streaming %s with %s", streaming, cfg.filter)
+		cfg.info.Printf("streaming: %s", streaming)
+		cfg.info.Printf("filter: %s", cfg.filter)
 		cfg.debug.Printf("send buffer: %d", cfg.sendBuf)
 		cfg.debug.Printf("recv buffer: %d", cfg.recvBuf)
 		cfg.debug.Printf("stats interval: %s", cfg.statsInterval)
 		cfg.debug.Printf("retry interval: %s", cfg.retryInterval)
-		cfg.debug.Printf("output format: %s", cfg.output)
 	}
 
 	cfg.debug.Printf("starting streams")
@@ -300,8 +425,7 @@ func (cfg *streamConfig) runStreams(ctx context.Context) error {
 }
 
 func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
-	ctx, tr := trc.New(ctx, "stream", uri, trc.LogDecorator(&logWriter{cfg.trace}))
-	defer tr.Finish()
+	ctx, _ = trc.Prefix(ctx, "<%s>", uri)
 
 	var lastData atomic.Value
 	onRead := func(ctx context.Context, eventType string, eventData []byte) {
@@ -333,8 +457,8 @@ func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 		<-reporterDone
 	}()
 
-	cfg.info.Printf("%s: starting", uri)
-	defer cfg.info.Printf("%s: stopped", uri)
+	cfg.debug.Printf("%s: starting", uri)
+	defer cfg.debug.Printf("%s: stopped", uri)
 
 	c := &trcweb.StreamClient{
 		HTTPClient:    http.DefaultClient,
@@ -352,16 +476,16 @@ func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 
 		select {
 		case <-subctx.Done():
-			cfg.debug.Printf("%s: done", uri) // parent context was canceled, so we should stop
-			cancel()                          // signal the Stream goroutine to stop
-			<-errc                            // wait for it to stop
-			return                            // we're done
+			cfg.debug.Printf("%s: stream done", uri) // parent context was canceled, so we should stop
+			cancel()                                 // signal the Stream goroutine to stop
+			<-errc                                   // wait for it to stop
+			return                                   // we're done
 
 		case err := <-errc:
-			cfg.debug.Printf("%s: retry (%v)", uri, err) // our stream failed (usually) independently, so we try again
-			cancel()                                     // just to be safe
-			contextSleep(subctx, cfg.retryInterval)      // can be interrupted by parent context
-			continue                                     // try again
+			cfg.debug.Printf("%s: stream error, will retry (%v)", uri, err) // our stream failed (usually) independently, so we try again
+			cancel()                                                        // just to be safe, but note this means contextSleep needs ctx, not subctx
+			contextSleep(ctx, cfg.retryInterval)                            // can be interrupted by parent context
+			continue                                                        // try again
 		}
 	}
 }
@@ -380,11 +504,14 @@ func (cfg *streamConfig) writeTraces(ctx context.Context) error {
 		encode = func(tr trc.Trace) {}
 	}
 
+	var count uint64
 	for {
 		select {
 		case tr := <-cfg.traces:
+			count++
 			encode(tr)
 		case <-ctx.Done():
+			cfg.debug.Printf("emitted trace count: %d", count)
 			return ctx.Err()
 		}
 	}
