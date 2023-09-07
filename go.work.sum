@@ -1,5 +1,0 @@
-github.com/google/go-cmp v0.5.9/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
-github.com/oklog/run v1.1.0 h1:GEenZ1cK0+q0+wsJew9qUg/DyD8k3JzYsZAi5gYi2mA=
-github.com/oklog/run v1.1.0/go.mod h1:sVPdnTZT1zYwAJeCMu2Th4T21pA3FPOQRfWjQlk7DVU=
-github.com/peterbourgon/ff/v4 v4.0.0-alpha.1 h1:5bjYyalrJBdVzeURjY1zGjrHKo+8KUreashB/VAGOcA=
-github.com/peterbourgon/ff/v4 v4.0.0-alpha.1/go.mod h1:H/13DK46DKXy7EaIxPhk2Y0EC8aubKm35nBjBe8AAGc=
