@@ -1,6 +1,6 @@
 module github.com/peterbourgon/trc
 
-go 1.19
+go 1.20
 
 require (
 	github.com/google/go-cmp v0.5.9
@@ -13,4 +13,4 @@ require (
 	github.com/peterbourgon/ff/v4 v4.0.0-alpha.1
 )
 
-replace github.com/peterbourgon/ff/v4 => ../ff
+replace github.com/peterbourgon/ff/v4 => /Users/pb/src/peterbourgon/ff

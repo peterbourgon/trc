@@ -329,9 +329,9 @@ div.stack a:visited {
  */
 
 div#debug-info {
-	position: absolute;
-	top: 1em;
-	right: 1em;
+	position: fixed;
+	bottom: 2em;
+	right: 2em;
 	max-width: 33%;
 	color: #666;
 	background-color: #eee;

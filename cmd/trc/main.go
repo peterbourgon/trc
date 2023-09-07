@@ -33,9 +33,7 @@ func main() {
 	)
 	err := exec(ctx, stdin, stdout, stderr, args)
 	switch {
-	case err == nil:
-		os.Exit(0)
-	case errors.As(err, &(run.SignalError{})):
+	case err == nil, errors.Is(err, context.Canceled), errors.As(err, &(run.SignalError{})):
 		os.Exit(0)
 	case err != nil:
 		fmt.Fprintf(stderr, "error: %v\n", err)
@@ -61,7 +59,6 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	trcCommand := &ff.Command{
 		Name:      "trc",
 		ShortHelp: "query trace data from one or more instances",
-		Usage:     "trc -u URI [-u URI...] [FLAGS] SUBCOMMAND...",
 		Flags:     trcFlags,
 	}
 
@@ -180,11 +177,7 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	showHelp = false
 
 	// Run the selected command.
-	if err := trcCommand.Run(ctx); err != nil {
-		return err
-	}
-
-	return nil
+	return trcCommand.Run(ctx)
 }
 
 type rootConfig struct {

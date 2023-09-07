@@ -37,8 +37,7 @@ Traces can be viewed, queried, etc. through a web UI.
 
 <kbd><img src="/ui.png"/></kbd>
 
-See the [examples dir](https://github.com/peterbourgon/trc/tree/main/_examples)
-for more complete example applications.
+See the examples directory for more complete example applications.
 
 The current API is experimental and unstable. Breaking changes are guaranteed.
 Use at your own risk.

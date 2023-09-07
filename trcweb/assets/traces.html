@@ -365,15 +365,17 @@ function highlightQuery() {
 	<div class="metadata">
 		{{ $href := printf "id=%s" .ID | SafeURL }}
 
-		<strong><a href="?{{$href}}">{{ .ID }}</a></strong> (<a href="?{{$href}}&json">JSON</a>)
+		<strong><a href="?{{$href}}">{{ .ID }}</a></strong>
 
-		&middot;
-		category <a href="?category={{.Category}}"><strong>{{.Category}}</strong></a>
+		(<a href="?{{$href}}&json">JSON</a>)
 
 		{{ if .Source }}
 			&middot;
 			source <a href="?source={{.Source}}"><strong>{{.Source}}</strong></a>
 		{{ end }}
+
+		&middot;
+		category <a href="?category={{.Category}}"><strong>{{.Category}}</strong></a>
 
 		<span class="right">
 			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks" onclick="showStacks({{.ID}});">

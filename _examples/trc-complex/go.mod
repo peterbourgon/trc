@@ -1,6 +1,6 @@
 module trc-complex
 
-go 1.20
+go 1.21
 
 require (
 	github.com/felixge/fgprof v0.9.3

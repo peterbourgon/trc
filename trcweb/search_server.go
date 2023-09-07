@@ -26,7 +26,7 @@ func NewSearchServer(src trc.Searcher) *SearchServer {
 type SearchData struct {
 	Request  trc.SearchRequest  `json:"request"`
 	Response trc.SearchResponse `json:"response"`
-	Problems []error            `json:"problems,omitempty"`
+	Problems []error            `json:"-"`
 }
 
 func (s *SearchServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -105,7 +105,7 @@ func (c *SearchClient) Search(ctx context.Context, req *trc.SearchRequest) (_ *t
 
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("encode select request: %w", err)
+		return nil, fmt.Errorf("encode search request: %w", err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", c.uri, bytes.NewReader(body))
@@ -130,7 +130,7 @@ func (c *SearchClient) Search(ctx context.Context, req *trc.SearchRequest) (_ *t
 
 	var res SearchData
 	if err := json.NewDecoder(httpRes.Body).Decode(&res); err != nil {
-		return nil, fmt.Errorf("decode select response: %w", err)
+		return nil, fmt.Errorf("decode search response: %w", err)
 	}
 
 	tr.Tracef("%s -> total %d, matched %d, returned %d", c.uri, res.Response.TotalCount, res.Response.MatchCount, len(res.Response.Traces))
