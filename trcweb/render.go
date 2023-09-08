@@ -138,6 +138,12 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 	tr.LazyTracef("template.ParseFS OK")
 
 	{
+		for _, x := range templateRoot.Templates() {
+			tr.LazyTracef(" default template: %s", x.Name())
+		}
+	}
+
+	{
 		var (
 			localPath  = filepath.Clean(os.Getenv(AssetsDirEnvKey)) // pwd by default
 			localFiles []string
@@ -208,37 +214,38 @@ func FileLineURLVSCode(fileline string) template.URL {
 //
 
 var templateFuncs = template.FuncMap{
-	"FileLineURL":         func(fileline string) template.URL { return FileLineURL(fileline) },
-	"AddInt":              func(i, j int) int { return i + j },
-	"AddFloat":            func(i, j float64) float64 { return i + j },
-	"PercentInt":          func(n, d int) int { return int(100 * float64(n) / float64(d)) },
-	"PercentUint64":       func(n, d uint64) int { return int(100 * float64(n) / float64(d)) },
-	"PercentDuration":     func(n, d time.Duration) int { return int(100 * float64(n) / float64(d)) },
-	"TimeNow":             func() time.Time { return time.Now().UTC() },
-	"TimeSince":           func(t time.Time) time.Duration { return time.Since(t) },
-	"TimeDiff":            func(a, b time.Time) time.Duration { return a.Sub(b) },
-	"TimeAdd":             func(t time.Time, d time.Duration) time.Time { return t.Add(d) },
-	"TimeTrunc":           func(t time.Time) string { return t.Format(timeFormat) },
-	"TimeRFC3339":         func(t time.Time) string { return t.Format(time.RFC3339) },
-	"QueryEscape":         func(s string) string { return url.QueryEscape(s) },
-	"PathEscape":          func(s string) string { return url.PathEscape(s) },
-	"HTMLEscape":          func(s string) string { return template.HTMLEscapeString(s) },
-	"InsertBreaks":        func(s string) template.HTML { return template.HTML(breaksReplacer.Replace(s)) },
-	"URLEncode":           func(s string) template.URL { return template.URL(url.QueryEscape(s)) },
-	"SafeURL":             func(s string) template.URL { return template.URL(s) },
-	"DefaultBucketing":    func() []time.Duration { return trc.DefaultBucketing },
-	"StringsJoinNewline":  func(a []string) string { return strings.Join(a, string([]byte{0xa})) },
-	"ReflectDeepEqual":    func(a, b any) bool { return reflect.DeepEqual(a, b) },
-	"PositiveDuration":    func(d time.Duration) time.Duration { return iff(d > 0, d, 0) },
-	"RateCalc":            func(n int, d time.Duration) float64 { return iff(d > 0, float64(n)/float64(d.Seconds()), 0) },
-	"StringSliceContains": func(ss []string, s string) bool { return contains(ss, s) },
-	"TruncateDuration":    trcutil.TruncateDuration,
-	"HumanizeDuration":    trcutil.HumanizeDuration,
-	"HumanizeFloat":       trcutil.HumanizeFloat,
-	"HumanizeBytes":       trcutil.HumanizeBytes[int],
-	"CategoryClass":       categoryClass,
-	"HighlightClasses":    highlightClasses,
-	"DebugInfo":           debugInfo,
+	"FileLineURL":          func(fileline string) template.URL { return FileLineURL(fileline) },
+	"AddInt":               func(i, j int) int { return i + j },
+	"AddFloat":             func(i, j float64) float64 { return i + j },
+	"PercentInt":           func(n, d int) int { return int(100 * float64(n) / float64(d)) },
+	"PercentUint64":        func(n, d uint64) int { return int(100 * float64(n) / float64(d)) },
+	"PercentDuration":      func(n, d time.Duration) int { return int(100 * float64(n) / float64(d)) },
+	"PercentDurationFloat": func(n, d time.Duration) float64 { return 100 * float64(n) / float64(d) },
+	"TimeNow":              func() time.Time { return time.Now().UTC() },
+	"TimeSince":            func(t time.Time) time.Duration { return time.Since(t) },
+	"TimeDiff":             func(a, b time.Time) time.Duration { return a.Sub(b) },
+	"TimeAdd":              func(t time.Time, d time.Duration) time.Time { return t.Add(d) },
+	"TimeTrunc":            func(t time.Time) string { return t.Format(timeFormat) },
+	"TimeRFC3339":          func(t time.Time) string { return t.Format(time.RFC3339) },
+	"QueryEscape":          func(s string) string { return url.QueryEscape(s) },
+	"PathEscape":           func(s string) string { return url.PathEscape(s) },
+	"HTMLEscape":           func(s string) string { return template.HTMLEscapeString(s) },
+	"InsertBreaks":         func(s string) template.HTML { return template.HTML(breaksReplacer.Replace(s)) },
+	"URLEncode":            func(s string) template.URL { return template.URL(url.QueryEscape(s)) },
+	"SafeURL":              func(s string) template.URL { return template.URL(s) },
+	"DefaultBucketing":     func() []time.Duration { return trc.DefaultBucketing },
+	"StringsJoinNewline":   func(a []string) string { return strings.Join(a, string([]byte{0xa})) },
+	"ReflectDeepEqual":     func(a, b any) bool { return reflect.DeepEqual(a, b) },
+	"PositiveDuration":     func(d time.Duration) time.Duration { return iff(d > 0, d, 0) },
+	"RateCalc":             func(n int, d time.Duration) float64 { return iff(d > 0, float64(n)/float64(d.Seconds()), 0) },
+	"StringSliceContains":  func(ss []string, s string) bool { return contains(ss, s) },
+	"TruncateDuration":     trcutil.TruncateDuration,
+	"HumanizeDuration":     trcutil.HumanizeDuration,
+	"HumanizeFloat":        trcutil.HumanizeFloat,
+	"HumanizeBytes":        trcutil.HumanizeBytes[int],
+	"CategoryClass":        categoryClass,
+	"HighlightClasses":     highlightClasses,
+	"DebugInfo":            debugInfo,
 }
 
 func categoryClass(category string) string {

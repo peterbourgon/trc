@@ -229,15 +229,16 @@ div.event:last-child {
 /* first cell is timestamp, fixed width */
 div#traces .trace .events div.event div.timestamp {
 	text-align: left;
-	width: 10em;
-	min-width: 10em;
+	width: 15ch;
+	min-width: 15ch;
+	margin-right: 1ch;
 }
 
 /* next cell is delta, also fixed width, with progress bar */
 div#traces .trace .events div.event div.delta {
 	text-align: left;
-	width: 5em;
-	min-width: 5em;
+	width: 7ch;
+	min-width: 7ch;
 	position: relative;
 	z-index: 1;
 }
@@ -247,11 +248,12 @@ div#traces .trace .events div.event div.delta .progress-bar {
 	top: 0;
 	bottom: 0;
 	left: 0;
-	min-width: 1%;
+	min-width: 1px;
 	max-width: 99%;
 	background-color: rgba(0, 0, 0, 0.10);
 	z-index: -1;
 }
+
 
 /* last cell is the text, should fill the rest of the page */
 div#traces .trace .events div.event div.what {
@@ -268,6 +270,36 @@ div#traces .trace .events div.event div.what.error {
 
 div#traces .trace .events div.event div.what.meta {
 	font-style: italic;
+}
+
+/*
+ * event timelines
+ */
+
+.event-timeline {
+	position: absolute;
+	top: 0;
+	left: calc(15ch);
+	height: calc(100% - 1px);
+	margin-top: 1px;
+	width: 1ch;
+	z-index: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+.event-timeline:has(.highlight) {
+	background-color: rgba(0, 0, 255, 0.10);
+}
+
+.event-timeline-element {
+	min-height: 3px;
+	opacity: 50%;
+}
+
+.event-timeline>.highlight {
+	opacity: 100%;
+	background-color: rgba(0, 0, 255, 0.60);
 }
 
 /*

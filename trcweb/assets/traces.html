@@ -37,7 +37,8 @@ table#summary tr:last-child td {
 
 <script>
 function showStacks(id) {
-	let targetElem = document.getElementById(id);
+	let targetElem = document.getElementById(`trace-${id}`);
+	console.log("id", id, "targetElem", targetElem);
 	let stacksLinkElem = document.getElementById(id+"-stacks");
 	let doExpand = stacksLinkElem.title == "Show stacks";
 	let stackDetails = targetElem.getElementsByClassName("stack-details");
@@ -354,14 +355,30 @@ function highlightQuery() {
 
 <!-- --------------------------------- -->
 
+<script type="text/javascript">
+function highlightEvent(traceID, eventIndex) {
+	console.log(`highlightEvent(${traceID}, ${eventIndex})`);
+	document.querySelectorAll(`div#trace-${traceID} .event-${eventIndex}`).forEach(elem => {
+		console.log("highlight event", elem);
+		elem.classList.toggle("highlight");
+	});
+}
+</script>
+
+<!-- --------------------------------- -->
+
 <div id="traces">
 {{ if not .Response.Traces }}
 <p>No matching traces found.</p>
 {{ end }}
 
 {{ range .Response.Traces }}
+{{ $traceid := .ID }}
 <a class="trace-anchor" name="{{.ID}}"> </a>
-<div id="{{.ID}}" class="trace">
+
+<div id="trace-{{.ID}}" class="trace">
+
+	<!-- Trace top line -->
 	<div class="metadata">
 		{{ $href := printf "id=%s" .ID | SafeURL }}
 
@@ -384,105 +401,124 @@ function highlightQuery() {
 		</span>
 	</div>
 
-	<div class="events">
-		<div class="event start">
-			<div class="timestamp">
-				{{TimeTrunc .Started}}
+	<!-- Trace event block -->
+ 	<div class="events"> <!-- events -->
+
+		<div style="position: relative;"> <!-- inner events -->
+
+			<div class="event event-main" onmouseover="highlightEvent({{$traceid}}, 0);" onmouseout="highlightEvent({{$traceid}}, 0);">
+				<div class="timestamp">
+					{{TimeTrunc .Started}}
+				</div>
+
+				<div class="delta">
+					<div class="progress-bar" style="width:1%;"></div>
+					+0
+				</div>
+
+				<div class="what meta">
+					start (<span class="time-since" title="{{.Started | TimeRFC3339 }}"></span> ago)
+				</div>
 			</div>
 
-			<div class="delta">
-				<div class="progress-bar" style="width:1%;"></div>
-				+0
+			{{ $start      := .Started    }}
+			{{ $duration   := .Duration   }}
+			{{ $prev_ts    := .Started    }}
+
+			{{ range $i, $ev := .Events }}
+			<div class="event event-main" onmouseover="highlightEvent({{$traceid}}, {{$i}});" onmouseout="highlightEvent({{$traceid}}, {{$i}});">
+				{{ $delta   := TimeDiff $ev.When $prev_ts          }}
+				{{ $overall := TimeDiff $ev.When $start            }}
+				{{ $percent := PercentDuration $delta $duration }}
+
+				<div class="timestamp">
+					{{TimeTrunc $ev.When}}
+				</div>
+
+				<div class="delta" title="+{{$delta}} = {{$overall}}">
+					<div class="progress-bar event-{{$i}} highlightable" style="width:{{$percent}}%;"></div>
+					+{{$delta | HumanizeDuration}}
+					{{ $prev_ts = $ev.When }}
+				</div>
+
+				<div class="what {{if $ev.IsError}}error{{end}}">
+					<span class="searchable">{{ $ev.What | HTMLEscape | InsertBreaks }}</span>
+				</div>
+
+				<div class="stack">
+					<details class="stack-details">
+						<summary></summary>
+						<table class="stack-table">
+							{{ range $i, $c := $ev.Stack }}
+							<tr>
+								<td style="text-align: right;">
+									<span>
+										{{ $href := FileLineURL $c.FileLine }}
+										{{ if $href }}
+											<a class="searchable" href="{{$href}}">{{$c.CompactFileLine}}</a>
+										{{ else }}
+											<span class="searchable">{{$c.CompactFileLine}}</span>
+										{{ end }}
+									</span>
+								</td>
+								<td style="width: 1ch;"></td>
+								<td style="text-align: left;">
+									<span class="searchable">
+										{{$c.Function}}
+									</span>
+								</td>
+							</tr>
+							{{ else }}
+							<tr>
+								<td colspan=3>(no stack)</td>
+							</tr>
+							{{ end }}
+						</table>
+					</details>
+				</div>
+			</div>
+			{{ end }}
+
+			<div class="event event-main" onmouseover="highlightEvent({{$traceid}}, {{len .Events}});" onmouseout="highlightEvent({{$traceid}}, {{len .Events}});" >
+				{{ $ts      := TimeAdd .Started .Duration }}
+				{{ $delta   := TimeDiff $ts $prev_ts | PositiveDuration }}
+				{{ $percent := PercentDuration $delta $duration }}
+
+				<div class="timestamp" title="{{$ts}}">
+					{{TimeTrunc $ts}}
+				</div>
+
+				<div class="delta" title="+{{ $delta }} = {{.Duration}}">
+					{{ if .Finished }}<div class="progress-bar" style="width:{{$percent}}%;"></div>{{ end }}
+					+{{ HumanizeDuration $delta }}
+				</div>
+
+				<div class="what meta">
+					{{ if .Finished }}end{{ else }}active...{{ end }}
+				</div>
 			</div>
 
-			<div class="what meta">
-				start (<span class="time-since" title="{{.Started | TimeRFC3339 }}"></span> ago)
-			</div>
-		</div>
-
-		{{ $start     := .Started  }}
-		{{ $duration  := .Duration }}
-		{{ $prev_ts   := .Started  }}
-
-		{{ range .Events }}
-		<div class="event">
-			{{ $delta   := TimeDiff .When $prev_ts          }}
-			{{ $overall := TimeDiff .When $start            }}
-			{{ $percent := PercentDuration $delta $duration }}
-
-			<div class="timestamp">
-				{{TimeTrunc .When}}
+			<div class="event-timeline">
+				{{ $prev_ts = .Started }}
+				{{ range $i, $ev := .Events }}
+					{{ $delta   := TimeDiff $ev.When $prev_ts               }}
+					{{ $overall := TimeDiff $ev.When $start                 }}
+					{{ $percent := PercentDurationFloat $delta $duration    }}
+					{{ $prev_ts  = $ev.When                                 }}
+					<div class="event-timeline-element event-{{$i}} highlightable" style="flex-grow: {{$percent}};" title="{{HumanizeDuration $delta}}, {{HumanizeFloat $percent}}%"></div>
+				{{ end }}
+				<div class="event-timeline-element event-{{len .Events}} highlightable" style="flex-grow: {{$percent}};"></div>
 			</div>
 
-			<div class="delta" title="+{{$delta}} = {{$overall}}">
-				<div class="progress-bar" style="width:{{$percent}}%;"></div>
-				+{{$delta | HumanizeDuration}}
-				{{ $prev_ts = .When }}
-			</div>
-
-			<div class="what {{if .IsError}}error{{end}}">
-				<span class="searchable">{{ .What | HTMLEscape | InsertBreaks }}</span>
-			</div>
-
-			<div class="stack">
-				<details class="stack-details">
-					<summary></summary>
-					<table class="stack-table">
-						{{ range $i, $c := .Stack }}
-						<tr>
-							<td style="text-align: right;">
-								<span>
-									{{ $href := FileLineURL $c.FileLine }}
-									{{ if $href }}
-										<a class="searchable" href="{{$href}}">{{$c.CompactFileLine}}</a>
-									{{ else }}
-										<span class="searchable">{{$c.CompactFileLine}}</span>
-									{{ end }}
-								</span>
-							</td>
-							<td style="width: 1ch;"></td>
-							<td style="text-align: left;">
-								<span class="searchable">
-									{{$c.Function}}
-								</span>
-							</td>
-						</tr>
-						{{ else }}
-						<tr>
-							<td colspan=3>(no stack)</td>
-						</tr>
-						{{ end }}
-					</table>
-				</details>
-			</div>
-		</div>
-		{{ end }}
-
-		<div class="event end">
-			{{ $ts      := TimeAdd .Started .Duration }}
-			{{ $delta   := TimeDiff $ts $prev_ts | PositiveDuration }}
-			{{ $percent := PercentDuration $delta $duration }}
-
-			<div class="timestamp" title="{{$ts}}">
-				{{TimeTrunc $ts}}
-			</div>
-
-			<div class="delta" title="+{{ $delta }} = {{.Duration}}">
-				{{ if .Finished }}<div class="progress-bar" style="width:{{$percent}}%;"></div>{{ end }}
-				+{{ HumanizeDuration $delta }}
-			</div>
-
-			<div class="what meta">
-				{{ if .Finished }}end{{ else }}active...{{ end }}
-			</div>
-		</div>
+		</div> <!-- inner events -->
 
 		<div class="event summary">
 			<div class="timestamp"></div>
 			<div class="duration" title="{{.Duration}}">&nbsp;{{ if .Finished }}<strong>{{ HumanizeDuration .Duration }}</strong>{{ else }}<em>{{ HumanizeDuration .Duration }}</em>{{ end }}</div>
 			<div class="what"></div>
 		</div>
-	</div>
+
+	</div> <!-- events -->
 
 </div>
 {{ end }}
