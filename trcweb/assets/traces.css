@@ -289,7 +289,7 @@ div#traces .trace .events div.event div.what.meta {
 }
 
 .event-timeline:has(.highlight) {
-	background-color: rgba(0, 0, 255, 0.10);
+	background-color: rgba(0, 0, 0, 0.10);
 }
 
 .event-timeline-element {
@@ -299,7 +299,7 @@ div#traces .trace .events div.event div.what.meta {
 
 .event-timeline>.highlight {
 	opacity: 100%;
-	background-color: rgba(0, 0, 255, 0.60);
+	background-color: rgba(0, 0, 0, 0.25);
 }
 
 /*
@@ -388,4 +388,8 @@ div#debug-info {
 
 .text {
 	text-align: left !important;
+}
+
+.soft {
+	/* color: #999; */
 }

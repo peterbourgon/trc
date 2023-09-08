@@ -138,12 +138,6 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 	tr.LazyTracef("template.ParseFS OK")
 
 	{
-		for _, x := range templateRoot.Templates() {
-			tr.LazyTracef(" default template: %s", x.Name())
-		}
-	}
-
-	{
 		var (
 			localPath  = filepath.Clean(os.Getenv(AssetsDirEnvKey)) // pwd by default
 			localFiles []string
@@ -158,7 +152,6 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 				continue
 			}
 			localFiles = append(localFiles, assetName)
-			tr.LazyTracef("using local asset file %s", assetName)
 		}
 		if len(localFiles) > 0 {
 			tt, err := templateRoot.ParseFiles(localFiles...)
@@ -166,6 +159,7 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 				return nil, fmt.Errorf("parse local files: %w", err)
 			}
 			templateRoot = tt
+			tr.LazyTracef("local files %v", localFiles)
 		}
 	}
 

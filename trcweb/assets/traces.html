@@ -38,7 +38,6 @@ table#summary tr:last-child td {
 <script>
 function showStacks(id) {
 	let targetElem = document.getElementById(`trace-${id}`);
-	console.log("id", id, "targetElem", targetElem);
 	let stacksLinkElem = document.getElementById(id+"-stacks");
 	let doExpand = stacksLinkElem.title == "Show stacks";
 	let stackDetails = targetElem.getElementsByClassName("stack-details");
@@ -357,9 +356,7 @@ function highlightQuery() {
 
 <script type="text/javascript">
 function highlightEvent(traceID, eventIndex) {
-	console.log(`highlightEvent(${traceID}, ${eventIndex})`);
 	document.querySelectorAll(`div#trace-${traceID} .event-${eventIndex}`).forEach(elem => {
-		console.log("highlight event", elem);
 		elem.classList.toggle("highlight");
 	});
 }
@@ -388,11 +385,11 @@ function highlightEvent(traceID, eventIndex) {
 
 		{{ if .Source }}
 			&middot;
-			source <a href="?source={{.Source}}"><strong>{{.Source}}</strong></a>
+			<span class="soft">src</span> <a href="?source={{.Source}}"><strong>{{.Source}}</strong></a>
 		{{ end }}
 
 		&middot;
-		category <a href="?category={{.Category}}"><strong>{{.Category}}</strong></a>
+		<span class="soft">cat</span> <a href="?category={{.Category}}"><strong>{{.Category}}</strong></a>
 
 		<span class="right">
 			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks" onclick="showStacks({{.ID}});">
