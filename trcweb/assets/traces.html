@@ -426,14 +426,14 @@ function highlightEvent(traceID, eventIndex) {
 			<div class="event event-main" onmouseover="highlightEvent({{$traceid}}, {{$i}});" onmouseout="highlightEvent({{$traceid}}, {{$i}});">
 				{{ $delta   := TimeDiff $ev.When $prev_ts          }}
 				{{ $overall := TimeDiff $ev.When $start            }}
-				{{ $percent := PercentDuration $delta $duration }}
+				{{ $percent := PercentDuration $delta $duration    }}
 
 				<div class="timestamp">
 					{{TimeTrunc $ev.When}}
 				</div>
 
-				<div class="delta" title="+{{$delta}} = {{$overall}}">
-					<div class="progress-bar event-{{$i}} highlightable" style="width:{{$percent}}%;"></div>
+				<div class="delta" title="+{{$delta}} = {{$overall}}, {{PercentDurationFloat $delta $duration | HumanizeFloat}}% of total">
+					<div class="progress-bar" style="width:{{$percent}}%;"></div>
 					+{{$delta | HumanizeDuration}}
 					{{ $prev_ts = $ev.When }}
 				</div>
@@ -485,7 +485,7 @@ function highlightEvent(traceID, eventIndex) {
 					{{TimeTrunc $ts}}
 				</div>
 
-				<div class="delta" title="+{{ $delta }} = {{.Duration}}">
+				<div class="delta" title="+{{ $delta }} = {{.Duration}}, {{PercentDurationFloat $delta $duration | HumanizeFloat}}% of total">
 					{{ if .Finished }}<div class="progress-bar" style="width:{{$percent}}%;"></div>{{ end }}
 					+{{ HumanizeDuration $delta }}
 				</div>
@@ -502,9 +502,9 @@ function highlightEvent(traceID, eventIndex) {
 					{{ $overall := TimeDiff $ev.When $start                 }}
 					{{ $percent := PercentDurationFloat $delta $duration    }}
 					{{ $prev_ts  = $ev.When                                 }}
-					<div class="event-timeline-element event-{{$i}} highlightable" style="flex-grow: {{$percent}};" title="{{HumanizeDuration $delta}}, {{HumanizeFloat $percent}}%"></div>
+					<div class="event-timeline-element event-{{$i}}" style="flex-grow: {{$percent}};" title="{{HumanizeDuration $delta}}, {{HumanizeFloat $percent}}%"></div>
 				{{ end }}
-				<div class="event-timeline-element event-{{len .Events}} highlightable" style="flex-grow: {{$percent}};"></div>
+				<div class="event-timeline-element event-{{len .Events}}" style="flex-grow: {{$percent}};"></div>
 			</div>
 
 		</div> <!-- inner events -->
