@@ -88,13 +88,14 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	}
 	trcCommand.Subcommands = append(trcCommand.Subcommands, streamCommand)
 
-	// Errors should show help only in some cases.
+	// Errors should always show help in some cases.
 	showHelp := true
 	defer func() {
-		if showHelp {
+		errHelp := errors.Is(err, ff.ErrHelp) || errors.Is(err, ff.ErrNoExec)
+		if showHelp || errHelp {
 			fmt.Fprintf(stderr, "\n%s\n", ffhelp.Command(trcCommand))
 		}
-		if errors.Is(err, ff.ErrHelp) || errors.Is(err, ff.ErrNoExec) {
+		if errHelp {
 			err = nil
 		}
 	}()
@@ -173,7 +174,7 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 		}
 	}
 
-	// Past this point, errors are from the command, and shouldn't show help.
+	// Past this point, errors are from the command.
 	showHelp = false
 
 	// Run the selected command.
@@ -509,6 +510,10 @@ func (cfg *streamConfig) writeTraces(ctx context.Context) error {
 		}
 	}
 }
+
+//
+//
+//
 
 func contextSleep(ctx context.Context, d time.Duration) {
 	select {

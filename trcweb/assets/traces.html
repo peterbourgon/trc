@@ -290,7 +290,10 @@ function highlightQuery() {
 			{{ end }}
 
 			<input id="search-button" type="submit" value="search" />
+
+			<input id="reset-button" type="submit" value="reset" form="none" onclick="window.location.href = window.location.pathname;" />
 		</form>
+
 	</div>
 
 	<script>
@@ -486,7 +489,8 @@ function highlightEvent(traceID, eventIndex) {
 				</div>
 
 				<div class="delta" title="+{{ $delta }} = {{.Duration}}, {{PercentDurationFloat $delta $duration | HumanizeFloat}}% of total">
-					{{ if .Finished }}<div class="progress-bar" style="width:{{$percent}}%;"></div>{{ end }}
+					<!-- {{ if .Finished }}<div class="progress-bar" style="width:{{$percent}}%;"></div>{{ end }} -->
+					<div class="progress-bar" style="width:{{$percent}}%;"></div>
 					+{{ HumanizeDuration $delta }}
 				</div>
 

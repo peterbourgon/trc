@@ -4,7 +4,8 @@ body {
 
 form,
 input,
-select {
+select,
+button {
 	font-family: monospace;
 }
 
@@ -250,7 +251,7 @@ div#traces .trace .events div.event div.delta {
 	bottom: 0;
 	left: 0;
 	min-width: 3px;
-	max-width: 99%;
+	max-width: calc(100% - 1px);
 	background-color: rgba(0, 0, 0, 0.10);
 	z-index: -1;
 }
