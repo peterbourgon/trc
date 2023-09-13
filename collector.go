@@ -194,11 +194,7 @@ func (c *Collector) Publish(ctx context.Context, tr Trace) {
 }
 
 func (c *Collector) Stream(ctx context.Context, f Filter, ch chan<- Trace) (Stats, error) {
-	tr := Get(ctx)
-	tr.Tracef("stream starting, filter: %s, buffer: %d", f, cap(ch))
-	stats, err := c.broker.Stream(ctx, f, ch)
-	tr.Tracef("stream ended, stats: %s, err: %v", stats, err)
-	return stats, err
+	return c.broker.Stream(ctx, f, ch)
 }
 
 func (c *Collector) StreamStats(ctx context.Context, ch chan<- Trace) (Stats, error) {

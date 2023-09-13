@@ -358,9 +358,9 @@ function highlightQuery() {
 <!-- --------------------------------- -->
 
 <script type="text/javascript">
-function highlightEvent(traceID, eventIndex) {
+function hoverEvent(traceID, eventIndex) {
 	document.querySelectorAll(`div#trace-${traceID} .event-${eventIndex}`).forEach(elem => {
-		elem.classList.toggle("highlight");
+		elem.classList.toggle("hover");
 	});
 }
 </script>
@@ -388,11 +388,11 @@ function highlightEvent(traceID, eventIndex) {
 
 		{{ if .Source }}
 			&middot;
-			<span class="soft">src</span> <a href="?source={{.Source}}"><strong>{{.Source}}</strong></a>
+			src <a href="?source={{.Source}}"><strong>{{.Source}}</strong></a>
 		{{ end }}
 
 		&middot;
-		<span class="soft">cat</span> <a href="?category={{.Category}}"><strong>{{.Category}}</strong></a>
+		cat <a href="?category={{.Category}}"><strong>{{.Category}}</strong></a>
 
 		<span class="right">
 			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks" onclick="showStacks({{.ID}});">
@@ -406,7 +406,7 @@ function highlightEvent(traceID, eventIndex) {
 
 		<div style="position: relative;"> <!-- inner events -->
 
-			<div class="event event-main" onmouseover="highlightEvent({{$traceid}}, 0);" onmouseout="highlightEvent({{$traceid}}, 0);">
+			<div class="event event-main" onmouseover="hoverEvent({{$traceid}}, 0);" onmouseout="hoverEvent({{$traceid}}, 0);">
 				<div class="timestamp">
 					{{TimeTrunc .Started}}
 				</div>
@@ -426,7 +426,7 @@ function highlightEvent(traceID, eventIndex) {
 			{{ $prev_ts    := .Started    }}
 
 			{{ range $i, $ev := .Events }}
-			<div class="event event-main" onmouseover="highlightEvent({{$traceid}}, {{$i}});" onmouseout="highlightEvent({{$traceid}}, {{$i}});">
+			<div class="event event-main" onmouseover="hoverEvent({{$traceid}}, {{$i}});" onmouseout="hoverEvent({{$traceid}}, {{$i}});">
 				{{ $delta   := TimeDiff $ev.When $prev_ts          }}
 				{{ $overall := TimeDiff $ev.When $start            }}
 				{{ $percent := PercentDuration $delta $duration    }}
@@ -479,7 +479,7 @@ function highlightEvent(traceID, eventIndex) {
 			</div>
 			{{ end }}
 
-			<div class="event event-main" onmouseover="highlightEvent({{$traceid}}, {{len .Events}});" onmouseout="highlightEvent({{$traceid}}, {{len .Events}});" >
+			<div class="event event-main" onmouseover="hoverEvent({{$traceid}}, {{len .Events}});" onmouseout="hoverEvent({{$traceid}}, {{len .Events}});" >
 				{{ $ts      := TimeAdd .Started .Duration }}
 				{{ $delta   := TimeDiff $ts $prev_ts | PositiveDuration }}
 				{{ $percent := PercentDuration $delta $duration }}

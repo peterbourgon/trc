@@ -28,7 +28,7 @@ import (
 
 var collector = trc.NewDefaultCollector()
 
-var handler = trcweb.NewCollectorServer(trcweb.CollectorServerConfig{Collector: collector})
+var handler = trcweb.NewTraceServer(collector)
 
 // Collector returns the global [trc.Collector].
 func Collector() *trc.Collector {

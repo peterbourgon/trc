@@ -15,10 +15,10 @@ import (
 func TestE2E(t *testing.T) {
 	ctx := context.Background()
 	collector := trc.NewDefaultCollector()
-	collectorServer := trcweb.NewCollectorServer(trcweb.CollectorServerConfig{Collector: collector})
+	collectorServer := trcweb.NewTraceServer(collector)
 	httpServer := httptest.NewServer(collectorServer)
 	defer httpServer.Close()
-	traceClient := trcweb.NewTraceClient(http.DefaultClient, httpServer.URL)
+	traceClient := trcweb.NewSearchClient(http.DefaultClient, httpServer.URL)
 
 	for _, tuple := range []struct {
 		category string

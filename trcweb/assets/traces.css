@@ -74,8 +74,8 @@ table#summary td.progress div.progress-bar {
 	position: absolute;
 	top: 0;
 	bottom: 0;
-	min-width: 1%;
-	max-width: 99%;
+	min-width: 1px;
+	max-width: calc(100% - 1px);
 	background-color: rgba(0, 0, 0, 0.10);
 	z-index: -1;
 }
@@ -244,8 +244,7 @@ div#traces .trace .events div.event div.delta {
 	z-index: 1;
 }
 
-/* div#traces .trace .events div.event div.delta .progress-bar { */
-.progress-bar {
+div#traces .progress-bar {
 	position: absolute;
 	top: 0;
 	bottom: 0;
@@ -258,7 +257,7 @@ div#traces .trace .events div.event div.delta {
 
 
 /* last cell is the text, should fill the rest of the page */
-div#traces .trace .events div.event div.what {
+div#traces div.event div.what {
 	flex: 10 0px;
 	min-width: 25%;
 	padding-left: 2em;
@@ -266,11 +265,11 @@ div#traces .trace .events div.event div.what {
 	overflow: scroll;
 }
 
-div#traces .trace .events div.event div.what.error {
+div#traces div.event div.what.error {
 	color: rgb(224, 0, 0);
 }
 
-div#traces .trace .events div.event div.what.meta {
+div#traces div.event div.what.meta {
 	font-style: italic;
 }
 
@@ -291,13 +290,13 @@ div#traces .trace .events div.event div.what.meta {
 }
 
 .event-timeline-element {
-	min-height: 3px;
+	min-height: 2px;
 	opacity: 50%;
 }
 
-.event-timeline>.highlight {
+.event-timeline>.hover {
 	opacity: 100%;
-	background-color: #ddd;
+	background-color: rgba(0, 0, 0, 0.10);
 }
 
 /*
@@ -354,13 +353,17 @@ div.stack a:visited {
 	text-decoration: underline;
 }
 
+table.stack-table {
+	border-spacing: 0;
+}
+
 /*
  * debug info
  */
 
 div#debug-info {
 	position: fixed;
-	bottom: 2em;
+	top: 2em;
 	right: 2em;
 	max-width: 33%;
 	color: #666;
@@ -377,7 +380,7 @@ div#debug-info {
  */
 
 .highlight {
-	background-color: yellow;
+	background-color: yellow !important;
 }
 
 .numeric {

@@ -244,7 +244,7 @@ func (tr *coreTrace) Events() []Event {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
-	events := snapshotEvents(tr.events)
+	events := snapshotEvents(tr.events, true)
 
 	if tr.truncated > 0 {
 		events = append(events, Event{
@@ -253,6 +253,30 @@ func (tr *coreTrace) Events() []Event {
 			Stack:   nil,
 			IsError: false,
 		})
+	}
+
+	return events
+}
+
+func (tr *coreTrace) EventsDetail(n int, stacks bool) []Event {
+	tr.mtx.Lock()
+	defer tr.mtx.Unlock()
+
+	if n <= 0 || n > len(tr.events) {
+		n = len(tr.events)
+	}
+
+	latest := tr.events[len(tr.events)-n:]
+	events := snapshotEvents(latest, stacks)
+
+	if tr.truncated > 0 {
+		events = append(events, Event{
+			When:    time.Now().UTC(),
+			What:    fmt.Sprintf("(truncated event count %d)", tr.truncated),
+			Stack:   nil,
+			IsError: false,
+		})
+		events = events[1:]
 	}
 
 	return events
@@ -381,13 +405,17 @@ func (cev *coreEvent) free() {
 	coreEventPool.Put(cev)
 }
 
-func snapshotEvents(cevs []*coreEvent) []Event {
+func snapshotEvents(cevs []*coreEvent, stacks bool) []Event {
 	res := make([]Event, len(cevs))
 	for i, cev := range cevs {
+		var stack []Frame
+		if stacks {
+			stack = cev.getStack()
+		}
 		res[i] = Event{
 			When:    cev.when,
 			What:    cev.what.String(),
-			Stack:   cev.getStack(),
+			Stack:   stack,
 			IsError: cev.iserr,
 		}
 	}

@@ -58,7 +58,7 @@ func main() {
 	// We'll also trace each request to this endpoint.
 	instanceHandlers := make([]http.Handler, len(instanceCollectors))
 	for i := range instanceHandlers {
-		instanceHandlers[i] = trcweb.NewCollectorServer(trcweb.CollectorServerConfig{Collector: instanceCollectors[i]})
+		instanceHandlers[i] = trcweb.NewTraceServer(instanceCollectors[i])
 		instanceHandlers[i] = trcweb.Middleware(instanceCollectors[i].NewTrace, trcweb.TraceServerCategory)(instanceHandlers[i])
 	}
 
@@ -78,14 +78,14 @@ func main() {
 			// Each instance is modeled with an HTTP client querying the
 			// corresponding trace HTTP handler. This is usually how it would
 			// work, as different instances are usually on different hosts.
-			globalSearcher = append(globalSearcher, trcweb.NewTraceClient(http.DefaultClient, fmt.Sprintf("localhost:%s/traces", ports[i])))
+			globalSearcher = append(globalSearcher, trcweb.NewSearchClient(http.DefaultClient, fmt.Sprintf("localhost:%s/traces", ports[i])))
 		}
 
 		// Let's also trace requests to this global handler in a distinct trace
 		// collector, and include that collector in the multi-searcher.
 		globalSearcher = append(globalSearcher, globalCollector)
 
-		globalHandler = trcweb.NewCollectorServer(trcweb.CollectorServerConfig{Collector: globalCollector, Searcher: globalSearcher})
+		globalHandler = &trcweb.TraceServer{Collector: globalCollector, Searcher: globalSearcher}
 		globalHandler = trcweb.Middleware(globalCollector.NewTrace, trcweb.TraceServerCategory)(globalHandler)
 	}
 
