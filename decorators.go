@@ -17,12 +17,12 @@ type DecoratorFunc func(Trace) Trace
 //
 //
 
-// PublishDecorator returns a decorator that publishes the trace to the
-// publisher when it's created, on every event, and when the trace is finished.
-// The published trace is a reduced form of the full trace, containing only the
-// core metadata and, in the case of trace events, the single event that
-// triggered the publish.
-func PublishDecorator(p Publisher) DecoratorFunc {
+// publishDecorator returns a decorator that publishes the trace to the
+// publisher when it's created, with each trace event, and when the trace is
+// finished. The published trace is a reduced form of the full trace, containing
+// only the core metadata and, in the case of trace events, the single event
+// that triggered the publish.
+func publishDecorator(p publisher) DecoratorFunc {
 	return func(tr Trace) Trace {
 		ptr := &publishTrace{
 			Trace: tr,
@@ -33,15 +33,13 @@ func PublishDecorator(p Publisher) DecoratorFunc {
 	}
 }
 
-// Publisher is a consumer contract for the [PublishDecorator] which describes
-// anything that can publish a trace. It models the [trcstream.Broker].
-type Publisher interface {
+type publisher interface {
 	Publish(ctx context.Context, tr Trace)
 }
 
 type publishTrace struct {
 	Trace
-	p Publisher
+	p publisher
 }
 
 var _ interface{ Free() } = (*publishTrace)(nil)

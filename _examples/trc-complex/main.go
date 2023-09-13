@@ -14,7 +14,6 @@ import (
 	"github.com/felixge/fgprof"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trcstream"
 	"github.com/peterbourgon/trc/trcweb"
 )
 
@@ -26,11 +25,9 @@ func main() {
 	ports := []string{"8081", "8082", "8083"}
 
 	// Create a trace collector for each instance.
-	instanceBrokers := make([]*trcstream.Broker, len(ports))
 	instanceCollectors := make([]*trc.Collector, len(ports))
 	for i := range ports {
-		instanceBrokers[i] = trcstream.NewBroker()
-		instanceCollectors[i] = trc.NewCollector(trc.CollectorConfig{Source: ports[i], Publisher: instanceBrokers[i]})
+		instanceCollectors[i] = trc.NewCollector(trc.CollectorConfig{Source: ports[i]})
 	}
 
 	// Create a `kv` service for each instance.
@@ -59,25 +56,16 @@ func main() {
 
 	// Create a traces HTTP handler for each instance.
 	// We'll also trace each request to this endpoint.
-	tracesHandlers := make([]http.Handler, len(instanceCollectors))
-	for i := range tracesHandlers {
-		tracesHandlers[i] = trcweb.NewTraceServer(instanceCollectors[i], instanceBrokers[i])
-		tracesHandlers[i] = trcweb.Middleware(instanceCollectors[i].NewTrace, trcweb.TraceServerCategory)(tracesHandlers[i])
+	instanceHandlers := make([]http.Handler, len(instanceCollectors))
+	for i := range instanceHandlers {
+		instanceHandlers[i] = trcweb.NewCollectorServer(trcweb.CollectorServerConfig{Collector: instanceCollectors[i]})
+		instanceHandlers[i] = trcweb.Middleware(instanceCollectors[i].NewTrace, trcweb.TraceServerCategory)(instanceHandlers[i])
 	}
 
 	// TODO
-	streamHandlers := make([]http.Handler, len(instanceBrokers))
-	for i := range streamHandlers {
-		streamHandlers[i] = trcweb.NewStreamServer(instanceBrokers[i])
-		streamHandlers[i] = trcweb.Middleware(instanceCollectors[i].NewTrace, func(r *http.Request) string { return "stream" })(streamHandlers[i])
-	}
-
-	// TODO
-	var globalBroker *trcstream.Broker
 	var globalCollector *trc.Collector
 	{
-		globalBroker = trcstream.NewBroker()
-		globalCollector = trc.NewCollector(trc.CollectorConfig{Source: "global", Publisher: globalBroker})
+		globalCollector = trc.NewCollector(trc.CollectorConfig{Source: "global"})
 	}
 
 	// We can also create a "global" traces handler, which serves aggregate
@@ -90,14 +78,14 @@ func main() {
 			// Each instance is modeled with an HTTP client querying the
 			// corresponding trace HTTP handler. This is usually how it would
 			// work, as different instances are usually on different hosts.
-			globalSearcher = append(globalSearcher, trcweb.NewSearchClient(http.DefaultClient, fmt.Sprintf("localhost:%s/traces", ports[i])))
+			globalSearcher = append(globalSearcher, trcweb.NewTraceClient(http.DefaultClient, fmt.Sprintf("localhost:%s/traces", ports[i])))
 		}
 
 		// Let's also trace requests to this global handler in a distinct trace
 		// collector, and include that collector in the multi-searcher.
 		globalSearcher = append(globalSearcher, globalCollector)
 
-		globalHandler = trcweb.NewTraceServer(globalSearcher, globalBroker)
+		globalHandler = trcweb.NewCollectorServer(trcweb.CollectorServerConfig{Collector: globalCollector, Searcher: globalSearcher})
 		globalHandler = trcweb.Middleware(globalCollector.NewTrace, trcweb.TraceServerCategory)(globalHandler)
 	}
 
@@ -106,8 +94,7 @@ func main() {
 	for i := range httpServers {
 		addr := "localhost:" + ports[i]
 		mux := http.NewServeMux()
-		mux.Handle("/api", http.StripPrefix("/api", apiHandlers[i])) // technically unnecessary as the loader calls the handler directly
-		mux.Handle("/traces", http.StripPrefix("/traces", tracesHandlers[i]))
+		mux.Handle("/traces", http.StripPrefix("/traces", instanceHandlers[i]))
 		s := &http.Server{Addr: addr, Handler: mux}
 		go func() { log.Fatal(s.ListenAndServe()) }()
 		log.Printf("http://localhost:%s/traces", ports[i])

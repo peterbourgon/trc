@@ -1,17 +1,6 @@
 package trcweb
 
-import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"strconv"
-	"strings"
-
-	"github.com/peterbourgon/trc"
-)
+/*
 
 type SearchServer struct {
 	src trc.Searcher
@@ -137,3 +126,4 @@ func (c *SearchClient) Search(ctx context.Context, req *trc.SearchRequest) (_ *t
 
 	return &res.Response, nil
 }
+*/

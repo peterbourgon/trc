@@ -1,29 +1,13 @@
 package trcweb
 
-import (
-	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"net/http"
-	"net/url"
-	"strconv"
-	"strings"
-	"time"
-
-	"github.com/bernerdschaefer/eventsource"
-	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/internal/trcutil"
-	"github.com/peterbourgon/trc/trcstream"
-)
-
+/*
 type StreamServer struct {
 	streamer Streamer
 }
 
 type Streamer interface {
-	Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) (trcstream.Stats, error)
-	Stats(ctx context.Context, ch chan<- trc.Trace) (trcstream.Stats, error)
+	Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) (trc.Stats, error)
+	StreamStats(ctx context.Context, ch chan<- trc.Trace) (trc.Stats, error)
 }
 
 func NewStreamServer(s Streamer) *StreamServer {
@@ -138,7 +122,7 @@ func (s *StreamServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 				}
 
 			case <-stats.C:
-				stats, err := s.streamer.Stats(ctx, tracec)
+				stats, err := s.streamer.StreamStats(ctx, tracec)
 				if err != nil {
 					tr.Errorf("get stats: %v", err)
 					continue
@@ -197,6 +181,7 @@ func (s *StreamServer) handleHTML(w http.ResponseWriter, r *http.Request) {
 //
 //
 
+/*
 // StreamClient streams trace data from a [StreamServer].
 type StreamClient struct {
 	// HTTPClient used to make the stream request. If not provided,
@@ -344,3 +329,4 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 		}
 	}
 }
+*/

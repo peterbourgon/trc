@@ -1,11 +1,6 @@
 package trcweb
 
-import (
-	"net/http"
-
-	"github.com/peterbourgon/trc"
-)
-
+/*
 type TraceServer struct {
 	search http.Handler
 	stream http.Handler
@@ -35,3 +30,4 @@ func (s *TraceServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.search.ServeHTTP(w, r)
 	}
 }
+*/

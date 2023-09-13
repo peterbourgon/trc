@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trcstream"
 )
 
 func BenchmarkTraceEvents(b *testing.B) {
@@ -86,8 +85,6 @@ func BenchmarkCollector(b *testing.B) {
 
 	b.Run("publish no subscribers", func(b *testing.B) {
 		collector := trc.NewDefaultCollector()
-		broker := trcstream.NewBroker()
-		collector.SetDecorators(trc.PublishDecorator(broker))
 
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -101,13 +98,11 @@ func BenchmarkCollector(b *testing.B) {
 
 	b.Run("publish one skip subscriber", func(b *testing.B) {
 		collector := trc.NewDefaultCollector()
-		broker := trcstream.NewBroker()
-		collector.SetDecorators(trc.PublishDecorator(broker))
 
 		ctx, cancel := context.WithCancel(ctx)
 		ch := make(chan trc.Trace)
 		errc := make(chan error, 1)
-		go func() { _, err := broker.Stream(ctx, trc.Filter{IsErrored: true}, ch); errc <- err }()
+		go func() { _, err := collector.DebugGetBroker().Stream(ctx, trc.Filter{IsErrored: true}, ch); errc <- err }()
 		defer func() { cancel(); <-errc }()
 
 		b.ResetTimer()
@@ -122,13 +117,11 @@ func BenchmarkCollector(b *testing.B) {
 
 	b.Run("publish one drop subscriber", func(b *testing.B) {
 		collector := trc.NewDefaultCollector()
-		broker := trcstream.NewBroker()
-		collector.SetDecorators(trc.PublishDecorator(broker))
 
 		ctx, cancel := context.WithCancel(ctx)
 		ch := make(chan trc.Trace)
 		errc := make(chan error, 1)
-		go func() { _, err := broker.Stream(ctx, trc.Filter{}, ch); errc <- err }()
+		go func() { _, err := collector.DebugGetBroker().Stream(ctx, trc.Filter{}, ch); errc <- err }()
 		defer func() { cancel(); <-errc }()
 
 		b.ResetTimer()

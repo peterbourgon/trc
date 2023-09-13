@@ -9,17 +9,24 @@ import (
 	"github.com/peterbourgon/trc/internal/trcutil"
 )
 
+// Collector maintains a set of traces in memory, grouped by category.
 type Collector struct {
 	source     string
 	newTrace   NewTraceFunc
+	broker     *Broker
 	decorators []DecoratorFunc
 	categories *trcringbuf.RingBuffers[Trace]
 }
 
 var _ Searcher = (*Collector)(nil)
 
+// NewTraceFunc describes a function that produces a new trace with a specific
+// source and category, and which is decorated by the given decorators. It
+// returns a context containing the new trace, as well as the new trace itself.
 type NewTraceFunc func(ctx context.Context, source string, category string, decorators ...DecoratorFunc) (context.Context, Trace)
 
+// NewDefaultCollector returns a new collector with the source "default" and
+// using [New] to produce new traces.
 func NewDefaultCollector() *Collector {
 	return NewCollector(CollectorConfig{
 		Source:   "default",
@@ -27,11 +34,22 @@ func NewDefaultCollector() *Collector {
 	})
 }
 
+// CollectorConfig captures the configuration parameters for a collector.
 type CollectorConfig struct {
-	Source     string
-	NewTrace   NewTraceFunc
-	Publisher  Publisher
+	// Source is used as the source for all traces created within the collector.
+	// If not provided, the "default" source is used.
+	Source string
+
+	// NewTrace is used to construct the traces in the collector. If not
+	// provided, the [New] function is used.
+	NewTrace NewTraceFunc
+
+	// Decorators are applied to every new trace created in the collector.
 	Decorators []DecoratorFunc
+
+	// Broker is used for streaming traces and events. If not provided, a new
+	// broker will be constructed and used.
+	Broker *Broker
 }
 
 func NewCollector(cfg CollectorConfig) *Collector {
@@ -43,13 +61,14 @@ func NewCollector(cfg CollectorConfig) *Collector {
 		cfg.NewTrace = New
 	}
 
-	if cfg.Publisher != nil {
-		cfg.Decorators = append(cfg.Decorators, PublishDecorator(cfg.Publisher))
+	if cfg.Broker == nil {
+		cfg.Broker = NewBroker()
 	}
 
 	return &Collector{
 		source:     cfg.Source,
 		newTrace:   cfg.NewTrace,
+		broker:     cfg.Broker,
 		decorators: cfg.Decorators,
 		categories: trcringbuf.NewRingBuffers[Trace](defaultCategorySize),
 	}
@@ -85,20 +104,21 @@ func (c *Collector) NewTrace(ctx context.Context, category string) (context.Cont
 		return ctx, tr
 	}
 
-	ctx, tr := c.newTrace(ctx, c.source, category)
+	ctx, tr := c.newTrace(ctx, c.source, category, publishDecorator(c.broker))
 
-	if len(c.decorators) > 0 {
-		for _, d := range c.decorators {
-			tr = d(tr)
-		}
-		ctx, tr = Put(ctx, tr)
+	for _, d := range c.decorators {
+		tr = d(tr)
 	}
 
 	if droppedTrace, didDrop := c.categories.GetOrCreate(category).Add(tr); didDrop {
 		maybeFree(droppedTrace)
 	}
 
-	return ctx, tr
+	return Put(ctx, tr)
+}
+
+func (c *Collector) DebugGetBroker() *Broker {
+	return c.broker
 }
 
 func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
@@ -167,4 +187,20 @@ func maybeFree(tr Trace) {
 	if f, ok := tr.(interface{ Free() }); ok {
 		f.Free()
 	}
+}
+
+func (c *Collector) Publish(ctx context.Context, tr Trace) {
+	c.broker.Publish(ctx, tr)
+}
+
+func (c *Collector) Stream(ctx context.Context, f Filter, ch chan<- Trace) (Stats, error) {
+	tr := Get(ctx)
+	tr.Tracef("stream starting, filter: %s, buffer: %d", f, cap(ch))
+	stats, err := c.broker.Stream(ctx, f, ch)
+	tr.Tracef("stream ended, stats: %s, err: %v", stats, err)
+	return stats, err
+}
+
+func (c *Collector) StreamStats(ctx context.Context, ch chan<- Trace) (Stats, error) {
+	return c.broker.StreamStats(ctx, ch)
 }

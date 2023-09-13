@@ -14,11 +14,11 @@ import (
 
 func TestE2E(t *testing.T) {
 	ctx := context.Background()
-	source := trc.NewDefaultCollector()
-	traceServer := trcweb.NewSearchServer(source)
-	httpServer := httptest.NewServer(traceServer)
+	collector := trc.NewDefaultCollector()
+	collectorServer := trcweb.NewCollectorServer(trcweb.CollectorServerConfig{Collector: collector})
+	httpServer := httptest.NewServer(collectorServer)
 	defer httpServer.Close()
-	traceClient := trcweb.NewSearchClient(http.DefaultClient, httpServer.URL)
+	traceClient := trcweb.NewTraceClient(http.DefaultClient, httpServer.URL)
 
 	for _, tuple := range []struct {
 		category string
@@ -33,7 +33,7 @@ func TestE2E(t *testing.T) {
 		{"bar", "epsilon B 3", false},
 		{"baz", "alpha   Z 1", true},
 	} {
-		_, tr := source.NewTrace(ctx, tuple.category)
+		_, tr := collector.NewTrace(ctx, tuple.category)
 		tr.Tracef(tuple.message)
 		if tuple.isError {
 			tr.Errorf("error")
@@ -44,7 +44,7 @@ func TestE2E(t *testing.T) {
 	testSelect := func(t *testing.T, req *trc.SearchRequest) {
 		t.Helper()
 
-		res1, err1 := source.Search(ctx, req)
+		res1, err1 := collector.Search(ctx, req)
 		if err1 != nil {
 			t.Fatal(err1)
 		}

@@ -10,9 +10,9 @@ type SearchTrace struct {
 	ID       string        `json:"id"`
 	Category string        `json:"category"`
 	Started  time.Time     `json:"started"`
+	Duration time.Duration `json:"duration"`
 	Finished bool          `json:"finished"`
 	Errored  bool          `json:"errored"`
-	Duration time.Duration `json:"duration"`
 	Events   []Event       `json:"events"`
 }
 
@@ -22,9 +22,9 @@ func NewSearchTrace(tr Trace) *SearchTrace {
 		ID:       tr.ID(),
 		Category: tr.Category(),
 		Started:  tr.Started(),
+		Duration: tr.Duration(),
 		Finished: tr.Finished(),
 		Errored:  tr.Errored(),
-		Duration: tr.Duration(),
 		Events:   tr.Events(),
 	}
 }
