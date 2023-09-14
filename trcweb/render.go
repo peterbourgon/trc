@@ -226,6 +226,7 @@ var templateFuncs = template.FuncMap{
 	"HumanizeDuration":     trcutil.HumanizeDuration,
 	"HumanizeFloat":        trcutil.HumanizeFloat,
 	"HumanizeBytes":        trcutil.HumanizeBytes[int],
+	"HumanizeFunction":     humanizeFunction,
 	"CategoryClass":        categoryClass,
 	"HighlightClasses":     highlightClasses,
 	"DebugInfo":            debugInfo,
@@ -316,4 +317,11 @@ func flexGrowPercent(f float64) int {
 		return 100
 	}
 	return int(f)
+}
+
+func humanizeFunction(s string) string {
+	if index := strings.LastIndex(s, "/"); index > 0 && index < len(s) {
+		s = s[index+1:]
+	}
+	return s
 }

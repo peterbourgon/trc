@@ -17,16 +17,16 @@ table#summary
 	{
 		font-weight: bold;
 		{{ if or .Request.Filter.Query .Request.Filter.Sources }}
-		background-color: rgba(255, 255, 0, 0.4);
+		background-color: rgba(255, 255, 0, 0.5);
 		{{ else }}
-		background-color: rgba(173, 216, 230, 0.4);
+		background-color: rgba(173, 216, 230, 0.5);
 		{{ end }}
 	}
 {{ else if not .Request.Filter.IDs }}
 table#summary tr:last-child td {
 	font-weight: bold;
 	{{ if or .Request.Filter.Query .Request.Filter.Sources }}
-	background-color: rgba(255, 255, 0, 0.4);
+	background-color: rgba(255, 255, 0, 0.5);
 	{{ end }}
 }
 {{ end }}
@@ -36,15 +36,14 @@ table#summary tr:last-child td {
 <!-- --------------------------------- -->
 
 <script>
-function showStacks(id) {
-	let targetElem = document.getElementById(`trace-${id}`);
-	let stacksLinkElem = document.getElementById(id+"-stacks");
-	let doExpand = stacksLinkElem.title == "Show stacks";
-	let stackDetails = targetElem.getElementsByClassName("stack-details");
-	for (let i = 0; i < stackDetails.length; i++) {
-		stackDetails[i].open = doExpand;
-	}
-	stacksLinkElem.title = doExpand ? "Hide stacks" : "Show stacks";
+function toggleStacksFor(id) {
+	var anyOpen = false;
+	document.querySelectorAll(`div#trace-${id} .stack-details`).forEach(elem => {
+		anyOpen = anyOpen || elem.hasAttribute("open");
+	});
+	document.querySelectorAll(`div#trace-${id} .stack-details`).forEach(elem => {
+		elem.open = !anyOpen;
+	});
 }
 
 function timeSince(s) {
@@ -241,7 +240,7 @@ function highlightQuery() {
 
 	<div id="topline-form">
 		<form id="search-form" method="GET" target="">
-			<input id="search-box" type="text" name="q" placeholder="regex" value="{{.Request.Filter.Query}}" size="32" autofocus />
+			<input id="search-box" type="text" name="q" placeholder="regex" value="{{.Request.Filter.Query}}" size="32" autofocus tabindex="0" />
 
 			{{ if gt (len .Response.Sources) 1 }}
 				{{ $first_source := "" }}
@@ -400,109 +399,61 @@ function highlightQuery() {
 		cat <a href="?category={{.Category}}"><strong>{{.Category}}</strong></a>
 
 		<span class="right">
-			<span id="{{.ID}}-stacks" class="stacks-link" title="Show stacks" onclick="showStacks({{.ID}});">
+			<span id="{{.ID}}-stacks" class="stacks-link" onclick="toggleStacksFor({{.ID}});">
 				<strong>≡</strong>
 			</span>
 		</span>
 	</div>
 
-	<!-- Trace event block -->
-
+	<!-- Trace event block EXPERIMENTAL -->
 	<div class="events"> <!-- events -->
 
-		<div class="event-timeline-container"> <!-- event timeline container -->
+		<div class="event-timeline-container"> <!-- event-timeline-container -->
 
-			<!-- Start event -->
+			{{ range $tr.RenderEvents }} <!-- RenderEvents -->
 
-			<div class="event" onmouseover="hoverEvent({{$traceid}}, -1);" onmouseout="hoverEvent({{$traceid}}, -1);">
-				<div class="timestamp">
-					{{TimeTrunc .Started}}
-				</div>
+				<div class="event event-{{.Index}} {{if not (or .IsStart .IsEnd)}}event-clickable{{end}}" onmouseover="hoverEvent({{$traceid}}, {{.Index}});" onmouseout="hoverEvent({{$traceid}}, {{.Index}});">
 
-				<div class="delta">
-					+0
-				</div>
+					<div class="timestamp">
+						{{TimeTrunc .When}}
+					</div>
 
-				<div class="what meta">
-					start (<span class="time-since" title="{{.Started | TimeRFC3339 }}"></span> ago)
-				</div>
-			</div>
+					<div class="delta" title="+{{.Delta}} = {{.Cumulative}}, {{.DeltaPercent | HumanizeFloat}}% of total">
+						{{ if not .IsStart }}<div class="progress-bar" style="width:{{.DeltaPercent}}%;"></div>{{ end }}
+						+{{.Delta | HumanizeDuration}}
+					</div>
 
-			<!-- Actual trace events -->
+					<div class="what {{if or .IsStart .IsEnd}}meta{{end}} {{if .IsError}}error{{end}}">
+						{{      if .IsStart }} start (<span class="time-since" title="{{.When | TimeRFC3339 }}"></span> ago)
+						{{ else if .IsEnd   }} {{.What}}
+						{{ else             }} <span class="searchable">{{ .What | HTMLEscape | InsertBreaks }}</span>
+						{{ end              }}
+					</div>
 
-			{{ range $i, $ev := .Events }}
-			<div class="event event-clickable event-{{$i}}" onmouseover="hoverEvent({{$traceid}}, {{$i}});" onmouseout="hoverEvent({{$traceid}}, {{$i}});">
-				{{ $event_stats := $tr.EventStats $i }}
-
-				<div class="timestamp">
-					{{TimeTrunc $ev.When}}
-				</div>
-
-				<div class="delta" title="+{{$event_stats.Duration}} = {{$event_stats.Cumulative}}, {{$event_stats.Percent | HumanizeFloat}}% of total">
-					<div class="progress-bar" style="width:{{$event_stats.Percent}}%;"></div>
-					+{{$event_stats.Duration | HumanizeDuration}}
-				</div>
-
-				<div class="what {{if $ev.IsError}}error{{end}}">
-					<span class="searchable">{{ $ev.What | HTMLEscape | InsertBreaks }}</span>
-				</div>
-
-				<div class="stack">
-					<details class="stack-details">
-						<summary></summary>
-						<table class="stack-table">
-							{{ range $i, $c := $ev.Stack }}
-							<tr>
-								<td style="text-align: right;">
-									<span>
-										{{ $href := SourceLink $c.FileLine }}
-										{{ if $href }}
-											<a class="searchable" href="{{$href}}">{{$c.CompactFileLine}}</a>
-										{{ else }}
-											<span class="searchable">{{$c.CompactFileLine}}</span>
-										{{ end }}
+					{{ if not (or .IsStart .IsEnd) }} <!-- stack -->
+						<div class="stack">
+							<details class="stack-details">
+								<summary></summary>
+								{{ range .Stack }}
+									<span style="color: #999;">
+										<span class="searchable" title="{{.Function}}">{{.Function | HumanizeFunction }}</span>
+										&middot;
 									</span>
-								</td>
-								<td style="width: 1ch;"></td>
-								<td style="text-align: left;">
-									<span class="searchable">
-										{{$c.Function}}
-									</span>
-								</td>
-							</tr>
-							{{ else }}
-							<tr>
-								<td colspan=3>(no stack)</td>
-							</tr>
-							{{ end }}
-						</table>
-					</details>
-				</div>
-			</div>
-			{{ end }}
+									{{ $href := SourceLink .FileLine }}
+									{{ if $href }}
+										<a class="searchable" href="{{$href}}">{{.CompactFileLine}}</a>
+									{{ else }}
+										<span class="searchable">{{.CompactFileLine}}</span>
+									{{ end }}
+									<br/>
+								{{ end }}
+							</details>
+						</div>
+					{{ end }} <!-- stack -->
 
-			<!-- End event -->
-
-			{{ $i := len .Events }}
-			<div class="event event-{{$i}}" onmouseover="hoverEvent({{$traceid}}, {{$i}});" onmouseout="hoverEvent({{$traceid}}, {{$i}});" >
-				{{ $event_when := TimeAdd $tr.Started $tr.Duration }}
-				{{ $event_stats := $tr.EventStats $i }}
-
-				<div class="timestamp" title="{{$event_when}}">
-					{{TimeTrunc $event_when}}
 				</div>
 
-				<div class="delta" title="+{{$event_stats.Duration}} = {{$event_stats.Cumulative}}, {{$event_stats.Percent | HumanizeFloat}}% of total">
-					<div class="progress-bar" style="width:{{$event_stats.Percent}}%;"></div>
-					+{{ HumanizeDuration $event_stats.Duration }}
-				</div>
-
-				<div class="what meta">
-					{{ if .Finished }}end{{ else }}active...{{ end }}
-				</div>
-			</div>
-
-			<!-- Event timeline -->
+			{{ end }} <!-- RenderEvents -->
 
 			<div class="event-timeline">
 				{{ range $i, $ev := .Events }}
@@ -516,7 +467,7 @@ function highlightQuery() {
 				{{ end }}
 			</div>
 
-		</div> <!-- event timeline container -->
+		</div> <!-- event-timeline-container -->
 
 		<div class="event summary">
 			<div class="timestamp"></div>
@@ -525,6 +476,7 @@ function highlightQuery() {
 		</div>
 
 	</div> <!-- events -->
+	<!-- Trace event block EXPERIMENTAL -->
 
 </div>
 {{ end }}
@@ -578,12 +530,26 @@ function highlightQuery() {
 		updateDebugInfo();
 	}
 
+
+	function toggleStacks() {
+		document.querySelectorAll(`.stack-details`).forEach(elem => {
+			elem.open = !elem.hasAttribute("open");
+		})
+	}
+
 	document.body.addEventListener("keydown", (ev) => {
 		if (ev.srcElement !== document.body) {
 			return;
 		}
 		if (ev.keyCode === 68) { // "d" or "D"
 			toggleDebug();
+		}
+		if (ev.keyCode === 83) { // "s" or "S"
+			toggleStacks();
+		}
+		if (ev.keyCode === 191 && !ev.shiftKey) { // "/"
+			document.getElementById("search-box").focus();
+			ev.preventDefault();
 		}
 	});
 
@@ -592,6 +558,13 @@ function highlightQuery() {
 	});
 
 	updateDebugInfo();
+
+	document.onkeydown = function(evt) {
+    	evt = evt || window.event;
+    	if (evt.keyCode == 27) {//27 is the code for escape
+        	document.getElementById("search-box").blur();
+	    }
+	};
 </script>
 
 <!-- -------------------- -->
