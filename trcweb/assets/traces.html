@@ -456,14 +456,9 @@ function highlightQuery() {
 			{{ end }} <!-- RenderEvents -->
 
 			<div class="event-timeline">
-				{{ range $i, $ev := .Events }}
-					{{ $event_stats := $tr.EventStats $i }}
-					<div class="event-timeline-element event-{{$i}}" style="flex-grow:{{$event_stats.Percent | FlexGrowPercent }};" title="{{$event_stats.Duration | HumanizeDuration}}, {{$event_stats.Percent | HumanizeFloat}}%"></div>
-				{{ end }}
-				{{ if true }}
-					{{ $i := len .Events }}
-					{{ $event_stats := $tr.EventStats $i }}
-					<div class="event-timeline-element event-{{$i}}" style="flex-grow:{{$event_stats.Percent | FlexGrowPercent }};"></div>
+				{{ range $tr.RenderEvents }}
+					{{ if eq .Index 0 }}{{ continue }}{{ end }}
+					<div class="event-timeline-element event-{{.Index}}" style="flex-grow:{{.DeltaPercent | FlexGrowPercent }};" title="{{.Delta| HumanizeDuration}}, {{.DeltaPercent | HumanizeFloat}}%"></div>
 				{{ end }}
 			</div>
 
@@ -530,10 +525,13 @@ function highlightQuery() {
 		updateDebugInfo();
 	}
 
-
 	function toggleStacks() {
+		var anyOpen = false;
 		document.querySelectorAll(`.stack-details`).forEach(elem => {
-			elem.open = !elem.hasAttribute("open");
+			anyOpen = anyOpen || elem.hasAttribute("open");
+		})
+		document.querySelectorAll(`.stack-details`).forEach(elem => {
+			elem.open = !anyOpen;
 		})
 	}
 
@@ -559,12 +557,12 @@ function highlightQuery() {
 
 	updateDebugInfo();
 
-	document.onkeydown = function(evt) {
-    	evt = evt || window.event;
-    	if (evt.keyCode == 27) {//27 is the code for escape
-        	document.getElementById("search-box").blur();
-	    }
-	};
+	document.addEventListener("keydown", (evt) => {
+		evt = evt || window.event;
+		if (evt.keyCode == 27) { // esc
+			document.getElementById("search-box").blur();
+		}
+	});
 </script>
 
 <!-- -------------------- -->

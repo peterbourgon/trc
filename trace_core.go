@@ -345,8 +345,10 @@ func newCoreEvent(flags uint8, format string, args ...any) *coreEvent {
 		cev.what = newNormalStringer(format, args...)
 	}
 
+	cev.stack = cev.stack[:0] // be safe
+
 	if flags&flagNoStack != 0 {
-		cev.pcn = 0
+		cev.pcn = 0 // be safe
 	} else {
 		cev.pcn = runtime.Callers(3, cev.pc[:])
 	}
@@ -361,16 +363,15 @@ func (cev *coreEvent) getStack() []Frame {
 		return nil
 	}
 
-	if cev.stack != nil {
+	if len(cev.stack) > 0 {
 		return cev.stack
 	}
 
 	stdframes := runtime.CallersFrames(cev.pc[:cev.pcn])
-	trcframes := make([]Frame, 0, cev.pcn)
 	fr, more := stdframes.Next()
 	for more {
 		if !ignoreStackFrameFunction(fr.Function) {
-			trcframes = append(trcframes, Frame{
+			cev.stack = append(cev.stack, Frame{
 				Function: fr.Function,
 				FileLine: fr.File + ":" + strconv.Itoa(fr.Line),
 			})
@@ -378,15 +379,14 @@ func (cev *coreEvent) getStack() []Frame {
 		fr, more = stdframes.Next()
 	}
 
-	cev.stack = trcframes
-
 	return cev.stack
 }
 
 func (cev *coreEvent) free() {
 	cev.what.free()
 	cev.what = nil
-	cev.stack = nil
+	cev.stack = cev.stack[:0]
+	cev.pcn = 0
 	trcdebug.CoreEventFreeCount.Add(1)
 	coreEventPool.Put(cev)
 }

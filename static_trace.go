@@ -115,50 +115,6 @@ func (st *StaticTrace) Dump() string {
 	return string(buf)
 }
 
-type EventStats struct {
-	Index      int
-	Count      int
-	Cumulative time.Duration
-	Duration   time.Duration
-	Percent    float64 // 0..100
-}
-
-func (st *StaticTrace) EventStats(eventIndex int) EventStats {
-	stats := EventStats{
-		Index: eventIndex,
-		Count: len(st.TraceEvents),
-	}
-
-	if eventIndex < 0 {
-		return stats
-	}
-
-	if eventIndex >= len(st.TraceEvents) {
-		lastEvent := st.TraceEvents[len(st.TraceEvents)-1]
-		lastEventWhen := lastEvent.When
-		endEventWhen := st.TraceStarted.Add(st.TraceDuration)
-
-		stats.Cumulative = st.TraceDuration
-		stats.Duration = endEventWhen.Sub(lastEventWhen)
-		stats.Percent = 100 * float64(stats.Duration) / float64(st.TraceDuration)
-
-		return stats
-	}
-
-	event := st.TraceEvents[eventIndex]
-	eventWhen := event.When
-	previousEventWhen := st.TraceStarted
-	if eventIndex > 0 {
-		previousEventWhen = st.TraceEvents[eventIndex-1].When
-	}
-
-	stats.Cumulative = eventWhen.Sub(st.TraceStarted)
-	stats.Duration = eventWhen.Sub(previousEventWhen)
-	stats.Percent = 100 * float64(stats.Duration) / float64(st.TraceDuration)
-
-	return stats
-}
-
 type RenderEvent struct {
 	IsStart, IsEnd bool
 	Index          int

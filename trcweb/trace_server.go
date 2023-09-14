@@ -16,7 +16,6 @@ import (
 	"github.com/bernerdschaefer/eventsource"
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/internal/trcutil"
-	"github.com/peterbourgon/trc/trcstream"
 	"github.com/peterbourgon/trc/trcweb/assets"
 )
 
@@ -495,7 +494,7 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 			tr.LazyTracef("init: %s", string(ev.Data))
 
 		case "trace":
-			var str trcstream.StreamTrace
+			var str trc.StaticTrace
 			if err := json.Unmarshal(ev.Data, &str); err != nil {
 				return fmt.Errorf("decode trace event: %w", err)
 			}
@@ -505,7 +504,7 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 			}
 
 		case "stats":
-			var stats trcstream.Stats
+			var stats trc.StreamStats
 			if err := json.Unmarshal(ev.Data, &stats); err == nil {
 				tr.LazyTracef("%s", stats)
 			} else {
