@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -24,21 +23,6 @@ import (
 	"github.com/peterbourgon/trc/internal/trcdebug"
 	"github.com/peterbourgon/trc/internal/trcutil"
 )
-
-//go:embed assets/*
-var assetsRoot embed.FS
-
-var assets = func() fs.FS {
-	assets, err := fs.Sub(assetsRoot, "assets")
-	if err != nil {
-		panic(err)
-	}
-	return assets
-}()
-
-//
-//
-//
 
 func renderResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, fs fs.FS, templateName string, funcs template.FuncMap, data any) {
 	var (
@@ -191,24 +175,29 @@ var breaksReplacer = strings.NewReplacer(
 	`;`, `;<wbr>`,
 )
 
+//
+//
+//
+
 // FileLineURL converts a local source code file and line to a URL that can be
-// opened by a browser. The default value is FileLineURLNop.
-var FileLineURL = FileLineURLNop
+// opened by a browser.
+type SourceLinkFunc func(fileline string) template.URL
 
-// FileLineURLNop returns an empty string, preventing any clickable link.
-func FileLineURLNop(string) template.URL { return "" }
+var sourceLinkFunc = trcutil.NewAtomic(func(string) template.URL { return "" })
 
-// FileLineURLVSCode opens the source file in VS Code.
-func FileLineURLVSCode(fileline string) template.URL {
-	return template.URL("vscode://file/" + fileline)
-}
+// SetSourceLinkFunc sets the function used to produce clickable links to source
+// code in stack traces. By default links are not clickable.
+func SetSourceLinkFunc(f SourceLinkFunc) { sourceLinkFunc.Set(f) }
+
+// SourceLinkVSCode produces links that open in VS Code.
+func SourceLinkVSCode(fileline string) template.URL { return template.URL("vscode://file/" + fileline) }
 
 //
 //
 //
 
 var templateFuncs = template.FuncMap{
-	"FileLineURL":          func(fileline string) template.URL { return FileLineURL(fileline) },
+	"SourceLink":           func(fileline string) template.URL { return sourceLinkFunc.Get()(fileline) },
 	"AddInt":               func(i, j int) int { return i + j },
 	"AddFloat":             func(i, j float64) float64 { return i + j },
 	"PercentInt":           func(n, d int) int { return int(100 * float64(n) / float64(d)) },
@@ -240,6 +229,7 @@ var templateFuncs = template.FuncMap{
 	"CategoryClass":        categoryClass,
 	"HighlightClasses":     highlightClasses,
 	"DebugInfo":            debugInfo,
+	"FlexGrowPercent":      flexGrowPercent,
 }
 
 func categoryClass(category string) string {
@@ -316,4 +306,14 @@ func contains[T comparable](haystack []T, needle T) bool {
 		}
 	}
 	return false
+}
+
+func flexGrowPercent(f float64) int {
+	if f < 1 {
+		return 1
+	}
+	if f > 100 {
+		return 100
+	}
+	return int(f)
 }

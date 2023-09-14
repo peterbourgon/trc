@@ -45,9 +45,9 @@ func TestSearchScenarios(t *testing.T) {
 		AssertEqual(t, 3, res.TotalCount)
 		AssertEqual(t, 3, res.MatchCount)
 		AssertEqual(t, 3, len(res.Traces))
-		AssertEqual(t, id3, res.Traces[0].ID)
-		AssertEqual(t, id2, res.Traces[1].ID)
-		AssertEqual(t, id1, res.Traces[2].ID)
+		AssertEqual(t, id3, res.Traces[0].ID())
+		AssertEqual(t, id2, res.Traces[1].ID())
+		AssertEqual(t, id1, res.Traces[2].ID())
 	}
 
 	{
@@ -56,7 +56,7 @@ func TestSearchScenarios(t *testing.T) {
 		AssertEqual(t, 3, res.TotalCount)
 		AssertEqual(t, 1, res.MatchCount)
 		AssertEqual(t, 1, len(res.Traces))
-		AssertEqual(t, id2, res.Traces[0].ID)
+		AssertEqual(t, id2, res.Traces[0].ID())
 	}
 
 	{
@@ -65,8 +65,8 @@ func TestSearchScenarios(t *testing.T) {
 		AssertEqual(t, 3, res.TotalCount)
 		AssertEqual(t, 2, res.MatchCount)
 		AssertEqual(t, 2, len(res.Traces))
-		AssertEqual(t, id3, res.Traces[0].ID)
-		AssertEqual(t, id1, res.Traces[1].ID)
+		AssertEqual(t, id3, res.Traces[0].ID())
+		AssertEqual(t, id1, res.Traces[1].ID())
 	}
 
 	{
@@ -76,8 +76,8 @@ func TestSearchScenarios(t *testing.T) {
 		AssertEqual(t, 3, res.TotalCount)
 		AssertEqual(t, 2, res.MatchCount)
 		AssertEqual(t, 2, len(res.Traces))
-		AssertEqual(t, id2, res.Traces[0].ID)
-		AssertEqual(t, id1, res.Traces[1].ID)
+		AssertEqual(t, id2, res.Traces[0].ID())
+		AssertEqual(t, id1, res.Traces[1].ID())
 	}
 
 	{
@@ -109,19 +109,19 @@ func TestCollectorResize(t *testing.T) {
 		AssertNoError(t, err)                                         //
 		AssertEqual(t, count, res.TotalCount)                         // we get them all
 		AssertEqual(t, count, len(res.Traces))                        //
-		AssertEqual(t, ids[len(ids)-1], res.Traces[0].ID)             // first trace in the result is the most recent
-		AssertEqual(t, ids[0], res.Traces[len(res.Traces)-1].ID)      // last trace in the result is the oldest
+		AssertEqual(t, ids[len(ids)-1], res.Traces[0].ID())           // first trace in the result is the most recent
+		AssertEqual(t, ids[0], res.Traces[len(res.Traces)-1].ID())    // last trace in the result is the oldest
 	}
 
 	fewer := count / 3
 	src.SetCategorySize(fewer)
 
 	{
-		res, err := src.Search(ctx, &trc.SearchRequest{Limit: count})         // request the same count traces
-		AssertNoError(t, err)                                                 //
-		AssertEqual(t, fewer, res.TotalCount)                                 // but we get fewer, since we truncated each category
-		AssertEqual(t, fewer, len(res.Traces))                                //
-		AssertEqual(t, ids[len(ids)-1], res.Traces[0].ID)                     // first trace in the result is still the most recent
-		AssertEqual(t, ids[len(ids)-fewer], res.Traces[len(res.Traces)-1].ID) // last trace in the result "moves up" as older traces were dropped
+		res, err := src.Search(ctx, &trc.SearchRequest{Limit: count})           // request the same count traces
+		AssertNoError(t, err)                                                   //
+		AssertEqual(t, fewer, res.TotalCount)                                   // but we get fewer, since we truncated each category
+		AssertEqual(t, fewer, len(res.Traces))                                  //
+		AssertEqual(t, ids[len(ids)-1], res.Traces[0].ID())                     // first trace in the result is still the most recent
+		AssertEqual(t, ids[len(ids)-fewer], res.Traces[len(res.Traces)-1].ID()) // last trace in the result "moves up" as older traces were dropped
 	}
 }

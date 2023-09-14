@@ -112,9 +112,3 @@ func parseBucketing(bs []string) []time.Duration {
 
 	return ds
 }
-
-type HTTPClient interface {
-	Do(*http.Request) (*http.Response, error)
-}
-
-var _ HTTPClient = (*http.Client)(nil)

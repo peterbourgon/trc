@@ -185,7 +185,7 @@ function highlightQuery() {
 		</td>
 
 		<td class="active count progress active {{$category_class_name}}" title="{{$active_count}} of {{$total_count}}, {{$pct_active}}%">
-			<div class="progress-bar" style="width:{{$pct_active}}%;"></div>
+			<div class="progress-bar" style="height:{{$pct_active}}%;"></div>
 			<a href="?{{$category_query_params}}&active">{{$active_count}}</a>
 		</td>
 
@@ -193,13 +193,13 @@ function highlightQuery() {
 			{{ $min := index $r.Bucketing $i }}
 			{{ $pct := PercentInt $n $total_count }}
 			<td class="bucket count progress min-{{$min}} {{$category_class_name}}" title="{{$n}} of {{$total_count}}, {{$pct}}%">
-				<div class="progress-bar" style="width:{{$pct}}%;"></div>
+				<div class="progress-bar" style="height:{{$pct}}%;"></div>
 				<a href="?{{$category_query_params}}&min={{$min.String}}">{{$n}}</a>
 			</td>
 		{{ end }}
 
 		<td class="errored count progress {{$category_class_name}}" title="{{$errored_count}} of {{$total_count}}, {{$pct_errored}}%">
-			<div class="progress-bar" style="width:{{$pct_errored}}%;"></div>
+			<div class="progress-bar" style="height:{{$pct_errored}}%;"></div>
 			<a href="?{{$category_query_params}}&errored">{{$errored_count}}</a>
 		</td>
 
@@ -296,7 +296,7 @@ function highlightQuery() {
 
 	</div>
 
-	<script>
+	<script type="text/javascript">
 		let formElem = document.getElementById("search-form");
 		let inputElems = formElem.querySelectorAll("input,select");
 
@@ -358,11 +358,15 @@ function highlightQuery() {
 <!-- --------------------------------- -->
 
 <script type="text/javascript">
-function hoverEvent(traceID, eventIndex) {
-	document.querySelectorAll(`div#trace-${traceID} .event-${eventIndex}`).forEach(elem => {
-		elem.classList.toggle("hover");
-	});
-}
+	function hoverEvent(traceID, eventIndex) {
+		document.querySelectorAll(`
+			div#trace-${traceID} .event-timeline,
+			div#trace-${traceID} .event-${eventIndex},
+			div#trace-${traceID} .event-${eventIndex} .delta .progress-bar
+		`).forEach(elem => {
+			elem.classList.toggle("hover");
+		});
+	}
 </script>
 
 <!-- --------------------------------- -->
@@ -373,6 +377,7 @@ function hoverEvent(traceID, eventIndex) {
 {{ end }}
 
 {{ range .Response.Traces }}
+{{ $tr := . }}
 {{ $traceid := .ID }}
 <a class="trace-anchor" name="{{.ID}}"> </a>
 
@@ -402,17 +407,19 @@ function hoverEvent(traceID, eventIndex) {
 	</div>
 
 	<!-- Trace event block -->
- 	<div class="events"> <!-- events -->
 
-		<div style="position: relative;"> <!-- inner events -->
+	<div class="events"> <!-- events -->
 
-			<div class="event event-main" onmouseover="hoverEvent({{$traceid}}, 0);" onmouseout="hoverEvent({{$traceid}}, 0);">
+		<div class="event-timeline-container"> <!-- event timeline container -->
+
+			<!-- Start event -->
+
+			<div class="event" onmouseover="hoverEvent({{$traceid}}, -1);" onmouseout="hoverEvent({{$traceid}}, -1);">
 				<div class="timestamp">
 					{{TimeTrunc .Started}}
 				</div>
 
 				<div class="delta">
-					<div class="progress-bar" style="width:1%;"></div>
 					+0
 				</div>
 
@@ -421,24 +428,19 @@ function hoverEvent(traceID, eventIndex) {
 				</div>
 			</div>
 
-			{{ $start      := .Started    }}
-			{{ $duration   := .Duration   }}
-			{{ $prev_ts    := .Started    }}
+			<!-- Actual trace events -->
 
 			{{ range $i, $ev := .Events }}
-			<div class="event event-main" onmouseover="hoverEvent({{$traceid}}, {{$i}});" onmouseout="hoverEvent({{$traceid}}, {{$i}});">
-				{{ $delta   := TimeDiff $ev.When $prev_ts          }}
-				{{ $overall := TimeDiff $ev.When $start            }}
-				{{ $percent := PercentDuration $delta $duration    }}
+			<div class="event event-clickable event-{{$i}}" onmouseover="hoverEvent({{$traceid}}, {{$i}});" onmouseout="hoverEvent({{$traceid}}, {{$i}});">
+				{{ $event_stats := $tr.EventStats $i }}
 
 				<div class="timestamp">
 					{{TimeTrunc $ev.When}}
 				</div>
 
-				<div class="delta" title="+{{$delta}} = {{$overall}}, {{PercentDurationFloat $delta $duration | HumanizeFloat}}% of total">
-					<div class="progress-bar" style="width:{{$percent}}%;"></div>
-					+{{$delta | HumanizeDuration}}
-					{{ $prev_ts = $ev.When }}
+				<div class="delta" title="+{{$event_stats.Duration}} = {{$event_stats.Cumulative}}, {{$event_stats.Percent | HumanizeFloat}}% of total">
+					<div class="progress-bar" style="width:{{$event_stats.Percent}}%;"></div>
+					+{{$event_stats.Duration | HumanizeDuration}}
 				</div>
 
 				<div class="what {{if $ev.IsError}}error{{end}}">
@@ -453,7 +455,7 @@ function hoverEvent(traceID, eventIndex) {
 							<tr>
 								<td style="text-align: right;">
 									<span>
-										{{ $href := FileLineURL $c.FileLine }}
+										{{ $href := SourceLink $c.FileLine }}
 										{{ if $href }}
 											<a class="searchable" href="{{$href}}">{{$c.CompactFileLine}}</a>
 										{{ else }}
@@ -479,19 +481,20 @@ function hoverEvent(traceID, eventIndex) {
 			</div>
 			{{ end }}
 
-			<div class="event event-main" onmouseover="hoverEvent({{$traceid}}, {{len .Events}});" onmouseout="hoverEvent({{$traceid}}, {{len .Events}});" >
-				{{ $ts      := TimeAdd .Started .Duration }}
-				{{ $delta   := TimeDiff $ts $prev_ts | PositiveDuration }}
-				{{ $percent := PercentDuration $delta $duration }}
+			<!-- End event -->
 
-				<div class="timestamp" title="{{$ts}}">
-					{{TimeTrunc $ts}}
+			{{ $i := len .Events }}
+			<div class="event event-{{$i}}" onmouseover="hoverEvent({{$traceid}}, {{$i}});" onmouseout="hoverEvent({{$traceid}}, {{$i}});" >
+				{{ $event_when := TimeAdd $tr.Started $tr.Duration }}
+				{{ $event_stats := $tr.EventStats $i }}
+
+				<div class="timestamp" title="{{$event_when}}">
+					{{TimeTrunc $event_when}}
 				</div>
 
-				<div class="delta" title="+{{ $delta }} = {{.Duration}}, {{PercentDurationFloat $delta $duration | HumanizeFloat}}% of total">
-					<!-- {{ if .Finished }}<div class="progress-bar" style="width:{{$percent}}%;"></div>{{ end }} -->
-					<div class="progress-bar" style="width:{{$percent}}%;"></div>
-					+{{ HumanizeDuration $delta }}
+				<div class="delta" title="+{{$event_stats.Duration}} = {{$event_stats.Cumulative}}, {{$event_stats.Percent | HumanizeFloat}}% of total">
+					<div class="progress-bar" style="width:{{$event_stats.Percent}}%;"></div>
+					+{{ HumanizeDuration $event_stats.Duration }}
 				</div>
 
 				<div class="what meta">
@@ -499,19 +502,21 @@ function hoverEvent(traceID, eventIndex) {
 				</div>
 			</div>
 
+			<!-- Event timeline -->
+
 			<div class="event-timeline">
-				{{ $prev_ts = .Started }}
 				{{ range $i, $ev := .Events }}
-					{{ $delta   := TimeDiff $ev.When $prev_ts               }}
-					{{ $overall := TimeDiff $ev.When $start                 }}
-					{{ $percent := PercentDurationFloat $delta $duration    }}
-					{{ $prev_ts  = $ev.When                                 }}
-					<div class="event-timeline-element event-{{$i}}" style="flex-grow: {{$percent}};" title="{{HumanizeDuration $delta}}, {{HumanizeFloat $percent}}%"></div>
+					{{ $event_stats := $tr.EventStats $i }}
+					<div class="event-timeline-element event-{{$i}}" style="flex-grow:{{$event_stats.Percent | FlexGrowPercent }};" title="{{$event_stats.Duration | HumanizeDuration}}, {{$event_stats.Percent | HumanizeFloat}}%"></div>
 				{{ end }}
-				<div class="event-timeline-element event-{{len .Events}}" style="flex-grow: {{$percent}};"></div>
+				{{ if true }}
+					{{ $i := len .Events }}
+					{{ $event_stats := $tr.EventStats $i }}
+					<div class="event-timeline-element event-{{$i}}" style="flex-grow:{{$event_stats.Percent | FlexGrowPercent }};"></div>
+				{{ end }}
 			</div>
 
-		</div> <!-- inner events -->
+		</div> <!-- event timeline container -->
 
 		<div class="event summary">
 			<div class="timestamp"></div>
@@ -528,9 +533,9 @@ function hoverEvent(traceID, eventIndex) {
 <!-- -------------------- -->
 
 <script type="text/javascript">
-	let events = document.querySelectorAll(".event");
+	let events = document.querySelectorAll(".event-clickable");
 	for (let i = 0; i < events.length; i++) {
-		let eventChild = events[i].querySelectorAll(".when, .what");
+		let eventChild = events[i].querySelectorAll(".timestamp, .delta, .when, .what");
 		let eventDetails = events[i].getElementsByTagName("details")[0];
 		for (let j = 0; j < eventChild.length; j++) {
 			eventChild[j].style.cursor = "pointer";
@@ -542,6 +547,7 @@ function hoverEvent(traceID, eventIndex) {
 
 	calcDates();
 	highlightQuery();
+
 	let input = document.getElementById("search-box");
 	input.focus();
 	input.select();

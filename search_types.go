@@ -104,7 +104,7 @@ type SearchResponse struct {
 	Sources    []string       `json:"sources"`
 	TotalCount int            `json:"total_count"`
 	MatchCount int            `json:"match_count"`
-	Traces     []*SearchTrace `json:"traces"`
+	Traces     []*StaticTrace `json:"traces"`
 	Stats      *SearchStats   `json:"stats,omitempty"`
 	Problems   []string       `json:"problems,omitempty"`
 	Duration   time.Duration  `json:"duration"`
@@ -185,7 +185,7 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	// to sort all of the selected traces by start time, and then limit them by
 	// the request limit.
 	sort.Slice(aggregate.Traces, func(i, j int) bool {
-		return aggregate.Traces[i].Started.After(aggregate.Traces[j].Started)
+		return aggregate.Traces[i].Started().After(aggregate.Traces[j].Started())
 	})
 	if len(aggregate.Traces) > req.Limit {
 		aggregate.Traces = aggregate.Traces[:req.Limit]

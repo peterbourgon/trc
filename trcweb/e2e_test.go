@@ -60,7 +60,8 @@ func TestE2E(t *testing.T) {
 
 		opts := []cmp.Option{
 			cmpopts.IgnoreFields(trc.SearchResponse{}, "Duration", "Sources"),
-			cmpopts.IgnoreFields(trc.SearchTrace{}, "Source"),
+			cmpopts.IgnoreFields(trc.StaticTrace{}, "TraceSource"),
+			cmpopts.IgnoreFields(trc.Event{}, "Stack"),
 			cmpopts.IgnoreUnexported(trc.CategoryStats{}),
 			cmpopts.IgnoreUnexported(trc.Filter{}),
 		}

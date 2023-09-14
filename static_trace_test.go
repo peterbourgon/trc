@@ -20,7 +20,7 @@ func TestStreamTraceDuration(t *testing.T) {
 	str1 := trc.NewStreamTrace(tr)
 	data, _ := json.Marshal(str1)
 
-	var str2 trc.StreamTrace
+	var str2 trc.StaticTrace
 	json.Unmarshal(data, &str2)
 
 	haveDuration := str2.Duration()

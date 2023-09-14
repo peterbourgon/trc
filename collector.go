@@ -129,11 +129,11 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 		stats         = NewSearchStats(req.Bucketing)
 		totalCount    = 0
 		matchCount    = 0
-		traces        = []*SearchTrace{}
+		traces        = []*StaticTrace{}
 	)
 
 	for _, ringBuf := range c.categories.GetAll() { // TODO: could do these concurrently
-		var categoryTraces []*SearchTrace
+		var categoryTraces []*StaticTrace
 		ringBuf.Walk(func(candidate Trace) error {
 			// Every candidate trace should be observed.
 			stats.Observe(candidate)
@@ -161,7 +161,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 
 	// Sort most recent first.
 	sort.Slice(traces, func(i, j int) bool {
-		return traces[i].Started.After(traces[j].Started)
+		return traces[i].Started().After(traces[j].Started())
 	})
 
 	// Take only the most recent traces as per the limit.
@@ -193,10 +193,10 @@ func (c *Collector) Publish(ctx context.Context, tr Trace) {
 	c.broker.Publish(ctx, tr)
 }
 
-func (c *Collector) Stream(ctx context.Context, f Filter, ch chan<- Trace) (Stats, error) {
+func (c *Collector) Stream(ctx context.Context, f Filter, ch chan<- Trace) (StreamStats, error) {
 	return c.broker.Stream(ctx, f, ch)
 }
 
-func (c *Collector) StreamStats(ctx context.Context, ch chan<- Trace) (Stats, error) {
+func (c *Collector) StreamStats(ctx context.Context, ch chan<- Trace) (StreamStats, error) {
 	return c.broker.StreamStats(ctx, ch)
 }

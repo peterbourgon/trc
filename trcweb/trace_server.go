@@ -17,19 +17,30 @@ import (
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/internal/trcutil"
 	"github.com/peterbourgon/trc/trcstream"
+	"github.com/peterbourgon/trc/trcweb/assets"
 )
+
+type HTTPClient interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
+var _ HTTPClient = (*http.Client)(nil)
+
+type Searcher trc.Searcher
+
+type Streamer interface {
+	Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) (trc.StreamStats, error)
+	StreamStats(ctx context.Context, ch chan<- trc.Trace) (trc.StreamStats, error)
+}
+
+//
+//
+//
 
 type TraceServer struct {
 	Collector *trc.Collector
 	Searcher  Searcher
 	Streamer  Streamer
-}
-
-type Searcher trc.Searcher
-
-type Streamer interface {
-	Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) (trc.Stats, error)
-	StreamStats(ctx context.Context, ch chan<- trc.Trace) (trc.Stats, error)
 }
 
 func NewTraceServer(c *trc.Collector) *TraceServer {
@@ -51,31 +62,42 @@ func (s *TraceServer) initialize() {
 
 func (s *TraceServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.initialize()
-
-	switch {
-	case r.Method != "GET":
+	switch getTraceRequestCategory(r) {
+	case traceRequestCategoryInvalid:
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-	case requestExplicitlyAccepts(r, "text/event-stream"):
+	case traceRequestCategoryStream:
 		s.handleStream(w, r)
-	case requestExplicitlyAccepts(r, "text/html"), requestExplicitlyAccepts(r, "application/json"):
+	case traceRequestCategoryTraces:
 		s.handleSearch(w, r)
 	default:
-		trc.Get(r.Context()).LazyTracef("Accept: %q -- invalid", r.Header.Get("accept"))
+		trc.Get(r.Context()).LazyTracef("invalid accept header %q", r.Header.Get("accept"))
 		s.handleSearch(w, r)
 	}
 }
 
-func TraceServerCategory(r *http.Request) string {
+type traceRequestCategory string
+
+const (
+	traceRequestCategoryInvalid traceRequestCategory = "invalid"
+	traceRequestCategoryStream  traceRequestCategory = "stream"
+	traceRequestCategoryTraces  traceRequestCategory = "traces"
+)
+
+func getTraceRequestCategory(r *http.Request) traceRequestCategory {
 	switch {
 	case r.Method != "GET":
-		return "invalid"
+		return traceRequestCategoryInvalid
 	case requestExplicitlyAccepts(r, "text/event-stream"):
-		return "stream"
+		return traceRequestCategoryStream
 	case requestExplicitlyAccepts(r, "text/html"), requestExplicitlyAccepts(r, "application/json"):
-		return "traces"
+		return traceRequestCategoryTraces
 	default:
-		return "traces-unknown"
+		return traceRequestCategoryTraces
 	}
+}
+
+func Categorize(r *http.Request) string {
+	return string(getTraceRequestCategory(r))
 }
 
 //
@@ -85,7 +107,7 @@ func TraceServerCategory(r *http.Request) string {
 type SearchData struct {
 	Request  trc.SearchRequest  `json:"request"`
 	Response trc.SearchResponse `json:"response"`
-	Problems []error            `json:"-"`
+	Problems []error            `json:"-"` // for rendering, not transmitting
 }
 
 func (s *TraceServer) handleSearch(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +151,7 @@ func (s *TraceServer) handleSearch(w http.ResponseWriter, r *http.Request) {
 		data.Problems = append(data.Problems, fmt.Errorf("response: %s", problem))
 	}
 
-	renderResponse(ctx, w, r, assets, "traces.html", nil, data)
+	renderResponse(ctx, w, r, assets.FS, "traces.html", nil, data)
 }
 
 //
@@ -191,7 +213,7 @@ func (c *SearchClient) Search(ctx context.Context, req *trc.SearchRequest) (_ *t
 		return nil, fmt.Errorf("decode search response: %w", err)
 	}
 
-	tr.Tracef("%s -> total %d, matched %d, returned %d", c.uri, res.Response.TotalCount, res.Response.MatchCount, len(res.Response.Traces))
+	tr.LazyTracef("%s -> total %d, matched %d, returned %d", c.uri, res.Response.TotalCount, res.Response.MatchCount, len(res.Response.Traces))
 
 	return &res.Response, nil
 }
@@ -327,7 +349,8 @@ func (s *TraceServer) handleStream(w http.ResponseWriter, r *http.Request) {
 				return
 
 			case <-stop:
-				tr.LazyTracef("stopping: stop signal")
+				tr.LazyTracef("stopping: stop signal (canceling context)")
+				cancel()
 				return
 			}
 		}

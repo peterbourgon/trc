@@ -241,21 +241,7 @@ func (tr *coreTrace) Errored() bool {
 }
 
 func (tr *coreTrace) Events() []Event {
-	tr.mtx.Lock()
-	defer tr.mtx.Unlock()
-
-	events := snapshotEvents(tr.events, true)
-
-	if tr.truncated > 0 {
-		events = append(events, Event{
-			When:    time.Now().UTC(),
-			What:    fmt.Sprintf("(truncated event count %d)", tr.truncated),
-			Stack:   nil,
-			IsError: false,
-		})
-	}
-
-	return events
+	return tr.EventsDetail(-1, true)
 }
 
 func (tr *coreTrace) EventsDetail(n int, stacks bool) []Event {
@@ -426,7 +412,7 @@ func ignoreStackFrameFunction(function string) bool {
 	if !strings.HasPrefix(function, "github.com/peterbourgon/trc") {
 		return false // fast path
 	}
-	if strings.HasPrefix(function, "github.com/peterbourgon/trc.(*") {
+	if strings.HasSuffix(function, "Tracef") || strings.HasSuffix(function, "Errorf") {
 		return true
 	}
 	if strings.HasPrefix(function, "github.com/peterbourgon/trc.Region") {

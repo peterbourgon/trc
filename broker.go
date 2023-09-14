@@ -44,7 +44,7 @@ func (b *Broker) Publish(ctx context.Context, tr Trace) {
 	}
 }
 
-func (b *Broker) Stream(ctx context.Context, f Filter, ch chan<- Trace) (Stats, error) {
+func (b *Broker) Stream(ctx context.Context, f Filter, ch chan<- Trace) (StreamStats, error) {
 	if err := func() error {
 		b.mtx.Lock()
 		defer b.mtx.Unlock()
@@ -60,7 +60,7 @@ func (b *Broker) Stream(ctx context.Context, f Filter, ch chan<- Trace) (Stats, 
 
 		return nil
 	}(); err != nil {
-		return Stats{}, err
+		return StreamStats{}, err
 	}
 
 	<-ctx.Done()
@@ -76,36 +76,36 @@ func (b *Broker) Stream(ctx context.Context, f Filter, ch chan<- Trace) (Stats, 
 	}()
 
 	if sub == nil {
-		return Stats{}, fmt.Errorf("not subscribed (programmer error)")
+		return StreamStats{}, fmt.Errorf("not subscribed (programmer error)")
 	}
 
 	return sub.stats, ctx.Err()
 }
 
-func (b *Broker) StreamStats(ctx context.Context, ch chan<- Trace) (Stats, error) {
+func (b *Broker) StreamStats(ctx context.Context, ch chan<- Trace) (StreamStats, error) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
 	sub, ok := b.subs[ch]
 	if !ok {
-		return Stats{}, fmt.Errorf("not subscribed")
+		return StreamStats{}, fmt.Errorf("not subscribed")
 	}
 
 	return sub.stats, nil
 }
 
-type Stats struct {
+type StreamStats struct {
 	Skips int `json:"skips"`
 	Sends int `json:"sends"`
 	Drops int `json:"drops"`
 }
 
-func (s Stats) String() string {
-	return fmt.Sprintf("skips %d, sends %d, drops %d", s.Skips, s.Sends, s.Drops)
+func (s StreamStats) String() string {
+	return fmt.Sprintf("skips=%d sends=%d drops=%d", s.Skips, s.Sends, s.Drops)
 }
 
 type subscriber struct {
 	traces chan<- Trace
 	filter Filter
-	stats  Stats
+	stats  StreamStats
 }
