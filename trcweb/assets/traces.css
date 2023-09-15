@@ -70,20 +70,18 @@ table#summary td.progress {
 	position: relative;
 }
 
-table#summary td.progress div.progress-bar {
+table#summary div.progress-bar {
 	position: absolute;
 	bottom: 0;
 	left: 0;
-	width: calc(100% - 2px);
-	margin-left: 1px;
+	width: 90%;
+	margin-left: 5%;
 	max-height: calc(100% - 1px);
 	background-color: rgba(0, 0, 0, 0.10);
 	z-index: -1;
 }
 
-/* error cells show percent from the the right side */
 table#summary td.errored div.progress-bar {
-	/* right: 0; */
 	background-color: rgba(224, 0, 0, 0.2);
 }
 
@@ -239,8 +237,8 @@ div#traces .trace .events div.event div.timestamp {
 /* next cell is delta, also fixed width, with progress bar */
 div#traces .trace .events div.event div.delta {
 	text-align: left;
-	width: 7ch;
-	min-width: 7ch;
+	width: 8ch;
+	min-width: 8ch;
 	position: relative;
 	z-index: 1;
 }
@@ -250,7 +248,7 @@ div#traces .progress-bar {
 	top: 0;
 	bottom: 0;
 	left: 0;
-	min-width: 3px;
+	min-width: 2px;
 	max-width: calc(100% - 2px);
 	background-color: rgba(0, 0, 0, 0.10);
 	z-index: -1;

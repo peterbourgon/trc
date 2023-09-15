@@ -14,21 +14,9 @@ import (
 	"github.com/peterbourgon/trc/internal/trcdebug"
 )
 
-// TraceMaxEvents establishes the maximum number of events that will be stored
-// in a core trace produced via e.g. [New]. The default value is 1000, the
-// minimum is 10, and the maximum is 10000.
-var TraceMaxEvents atomic.Uint64
-
-// TraceNoStacks disables call stacks in core trace events. The default value is
-// false, as call stacks are generally very useful. However, capturing call
-// stacks can be the single most expensive part of using traces, and call stacks
-// can be the single biggest contributor to the size of search results. Setting
-// this value to true is therefore a performance optimization.
-var TraceNoStacks atomic.Bool
-
-func init() {
-	TraceMaxEvents.Store(traceMaxEventsDefault)
-}
+//
+//
+//
 
 const (
 	traceMaxEventsMin     = 10
@@ -36,17 +24,31 @@ const (
 	traceMaxEventsMax     = 10000
 )
 
-func getTraceMaxEvents() int {
-	val := TraceMaxEvents.Load()
-	switch {
-	case val < traceMaxEventsMin:
-		return traceMaxEventsMin
-	case val > traceMaxEventsMax:
-		return traceMaxEventsMax
-	default:
-		return int(val)
+var traceMaxEvents = func() *atomic.Int32 {
+	var v atomic.Int32
+	v.Store(traceMaxEventsDefault)
+	return &v
+}()
+
+func SetTraceMaxEvents(n int) {
+	if n < traceMaxEventsMin {
+		n = traceMaxEventsMin
 	}
+	if n > traceMaxEventsMax {
+		n = traceMaxEventsMax
+	}
+	traceMaxEvents.Store(int32(n))
 }
+
+var traceNoStacks atomic.Bool
+
+func SetTraceStacks(enable bool) {
+	traceNoStacks.Store(!enable)
+}
+
+//
+//
+//
 
 var traceIDEntropy = ulid.DefaultEntropy()
 
@@ -105,9 +107,9 @@ func newCoreTrace(source, category string) *coreTrace {
 	tr.errored = false
 	tr.finished = false
 	tr.duration = 0
-	tr.nostackflag = iff(TraceNoStacks.Load(), flagNoStack, uint8(0))
+	tr.nostackflag = iff(traceNoStacks.Load(), flagNoStack, uint8(0))
 	tr.events = tr.events[:0]
-	tr.eventsmax = getTraceMaxEvents()
+	tr.eventsmax = int(traceMaxEvents.Load())
 	tr.truncated = 0
 	return tr
 }
@@ -385,8 +387,8 @@ func (cev *coreEvent) getStack() []Frame {
 func (cev *coreEvent) free() {
 	cev.what.free()
 	cev.what = nil
-	cev.stack = cev.stack[:0]
 	cev.pcn = 0
+	cev.stack = cev.stack[:0]
 	trcdebug.CoreEventFreeCount.Add(1)
 	coreEventPool.Put(cev)
 }

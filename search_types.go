@@ -85,7 +85,8 @@ const (
 )
 
 var DefaultBucketing = []time.Duration{
-	0 * time.Millisecond,
+	0,
+	100 * time.Microsecond,
 	1 * time.Millisecond,
 	5 * time.Millisecond,
 	10 * time.Millisecond,

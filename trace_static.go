@@ -21,20 +21,17 @@ type StaticTrace struct {
 
 var _ Trace = (*StaticTrace)(nil) // needs to be passed to Filter.Allow
 
-// NewSearchTrace produces a static trace
+// NewSearchTrace produces a static trace intended for a search response.
 func NewSearchTrace(tr Trace) *StaticTrace {
-	duration := tr.Duration()
 	return &StaticTrace{
-		TraceSource:      tr.Source(),
-		TraceID:          tr.ID(),
-		TraceCategory:    tr.Category(),
-		TraceStarted:     tr.Started(),
-		TraceDuration:    duration,
-		TraceDurationStr: duration.String(),
-		TraceDurationSec: duration.Seconds(),
-		TraceFinished:    tr.Finished(),
-		TraceErrored:     tr.Errored(),
-		TraceEvents:      tr.Events(),
+		TraceSource:   tr.Source(),
+		TraceID:       tr.ID(),
+		TraceCategory: tr.Category(),
+		TraceStarted:  tr.Started(),
+		TraceDuration: tr.Duration(),
+		TraceFinished: tr.Finished(),
+		TraceErrored:  tr.Errored(),
+		TraceEvents:   tr.Events(),
 	}
 }
 
