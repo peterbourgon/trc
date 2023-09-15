@@ -54,10 +54,16 @@ func main() {
 		instanceHandlers[i] = trcweb.Middleware(instanceCollectors[i].NewTrace, trcweb.Categorize)(instanceHandlers[i])
 	}
 
+	var globalBroker *trc.Broker
+	{
+		globalBroker = trc.NewBroker()
+		go globalBroker.Run(context.Background(), 100)
+	}
+
 	// TODO
 	var globalCollector *trc.Collector
 	{
-		globalCollector = trc.NewCollector(trc.CollectorConfig{Source: "global"})
+		globalCollector = trc.NewCollector(trc.CollectorConfig{Source: "global", Broker: globalBroker})
 	}
 
 	// TODO

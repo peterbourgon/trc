@@ -412,7 +412,7 @@ function highlightQuery() {
 
 			{{ range $tr.RenderEvents }} <!-- RenderEvents -->
 
-				<div class="event event-{{.Index}} {{if not (or .IsStart .IsEnd)}}event-clickable{{end}}" onmouseover="hoverEvent({{$traceid}}, {{.Index}});" onmouseout="hoverEvent({{$traceid}}, {{.Index}});">
+				<div class="event {{if ge .Index 0}}event-{{.Index}}{{end}} {{if not (or .IsStart .IsEnd)}}event-clickable{{end}}" onmouseover="hoverEvent({{$traceid}}, {{.Index}});" onmouseout="hoverEvent({{$traceid}}, {{.Index}});">
 
 					<div class="timestamp">
 						{{TimeTrunc .When}}
@@ -457,7 +457,7 @@ function highlightQuery() {
 
 			<div class="event-timeline">
 				{{ range $tr.RenderEvents }}
-					{{ if eq .Index 0 }}{{ continue }}{{ end }}
+					{{ if lt .Index 0 }}{{ continue }}{{ end }}
 					<div class="event-timeline-element event-{{.Index}}" style="flex-grow:{{.DeltaPercent | FlexGrowPercent }};" title="{{.Delta| HumanizeDuration}}, {{.DeltaPercent | HumanizeFloat}}%"></div>
 				{{ end }}
 			</div>

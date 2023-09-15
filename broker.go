@@ -7,8 +7,9 @@ import (
 )
 
 type Broker struct {
-	mtx  sync.Mutex
-	subs map[chan<- Trace]*subscriber
+	mtx   sync.Mutex
+	subs  map[chan<- Trace]*subscriber
+	async chan Trace
 }
 
 func NewBroker() *Broker {
@@ -17,7 +18,74 @@ func NewBroker() *Broker {
 	}
 }
 
+func (b *Broker) Run(ctx context.Context, bufsz int) error {
+	async := make(chan Trace, bufsz)
+
+	if running := func() bool {
+		b.mtx.Lock()
+		defer b.mtx.Unlock()
+		if b.async != nil {
+			return false
+		}
+		b.async = async
+		return true
+	}(); running {
+		return fmt.Errorf("already running")
+	}
+
+	defer func() {
+		b.mtx.Lock()
+		defer b.mtx.Unlock()
+		b.async = nil
+	}()
+
+	defer func() {
+		close(async)
+		for range async {
+			//
+		}
+	}()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case tr := <-async:
+				b.publish(ctx, tr)
+			}
+		}
+	}()
+
+	<-done
+
+	return ctx.Err()
+}
+
 func (b *Broker) Publish(ctx context.Context, tr Trace) {
+	var async chan Trace
+
+	b.mtx.Lock()
+	async = b.async
+	b.mtx.Unlock()
+
+	switch {
+	case async == nil:
+		b.publish(ctx, tr)
+
+	case async != nil:
+		select {
+		case async <- tr:
+			// ok
+		default:
+			// drop
+		}
+	}
+}
+
+func (b *Broker) publish(ctx context.Context, tr Trace) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
