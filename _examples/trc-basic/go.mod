@@ -1,6 +1,8 @@
 module trc-basic
 
-go 1.20
+go 1.21
+
+toolchain go1.21.1
 
 require github.com/peterbourgon/trc v0.0.0-00010101000000-000000000000
 
