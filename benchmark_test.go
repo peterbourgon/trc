@@ -102,7 +102,7 @@ func BenchmarkCollector(b *testing.B) {
 		ctx, cancel := context.WithCancel(ctx)
 		ch := make(chan trc.Trace)
 		errc := make(chan error, 1)
-		go func() { _, err := collector.DebugGetBroker().Stream(ctx, trc.Filter{IsErrored: true}, ch); errc <- err }()
+		go func() { _, err := collector.Stream(ctx, trc.Filter{IsErrored: true}, ch); errc <- err }()
 		defer func() { cancel(); <-errc }()
 
 		b.ResetTimer()
@@ -121,7 +121,7 @@ func BenchmarkCollector(b *testing.B) {
 		ctx, cancel := context.WithCancel(ctx)
 		ch := make(chan trc.Trace)
 		errc := make(chan error, 1)
-		go func() { _, err := collector.DebugGetBroker().Stream(ctx, trc.Filter{}, ch); errc <- err }()
+		go func() { _, err := collector.Stream(ctx, trc.Filter{}, ch); errc <- err }()
 		defer func() { cancel(); <-errc }()
 
 		b.ResetTimer()

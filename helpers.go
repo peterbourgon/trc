@@ -5,6 +5,8 @@ import (
 	"runtime/trace"
 	"strings"
 	"time"
+
+	"github.com/peterbourgon/trc/internal/trcutil"
 )
 
 // Put the given trace into the context, and return a new context containing
@@ -78,7 +80,7 @@ func Region(ctx context.Context, name string) (context.Context, Trace, func()) {
 	inputTrace.LazyTracef("→ " + name)
 	finish := func() {
 		took := time.Since(begin)
-		inputTrace.LazyTracef("← "+name+" [%s]", took.String())
+		inputTrace.LazyTracef("← "+name+" [%s]", trcutil.HumanizeDuration(took))
 		region.End()
 	}
 

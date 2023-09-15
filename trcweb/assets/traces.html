@@ -226,8 +226,8 @@ function highlightQuery() {
 			{{ end }}
 		</td>
 
-		<td class="rate numeric {{$category_class_name}}" title="{{.Rate}}">
-			{{ HumanizeFloat .Rate }}/s
+		<td class="rate numeric {{$category_class_name}}" title="{{.TraceRate|HumanizeFloat}} traces/sec, {{.EventRate|HumanizeFloat}} events/sec">
+			{{ HumanizeFloat .TraceRate }}/s
 		</td>
 	</tr>
 	{{ end }}
@@ -350,6 +350,8 @@ function highlightQuery() {
 				</details>
 			</div>
 		{{ end }}
+
+
 	</div>
 
 </div>

@@ -150,6 +150,10 @@ func (s *TraceServer) handleSearch(w http.ResponseWriter, r *http.Request) {
 		data.Problems = append(data.Problems, fmt.Errorf("response: %s", problem))
 	}
 
+	if n := len(data.Response.Stats.Categories); n >= 100 {
+		data.Problems = append(data.Problems, fmt.Errorf("way too many categories (%d)", n))
+	}
+
 	renderResponse(ctx, w, r, assets.FS, "traces.html", nil, data)
 }
 
@@ -254,7 +258,7 @@ func (s *TraceServer) handleStream(w http.ResponseWriter, r *http.Request) {
 
 	var (
 		stats   = parseDefault(r.URL.Query().Get("stats"), time.ParseDuration, 10*time.Second)
-		sendbuf = parseRange(r.URL.Query().Get("sendbuf"), strconv.Atoi, 0, 100, 1000)
+		sendbuf = parseRange(r.URL.Query().Get("sendbuf"), strconv.Atoi, 0, 100, 100000)
 		tracec  = make(chan trc.Trace, sendbuf)
 		donec   = make(chan struct{})
 	)
@@ -366,7 +370,7 @@ type StreamClient struct {
 	// URI of the remote stream server. Required.
 	URI string
 
-	// SendBuffer used by the remote stream server. Default 0, max 1000.
+	// SendBuffer used by the remote stream server. Min 0, max 100k.
 	SendBuffer int
 
 	// OnRead is called for every stream event received by the client.
@@ -389,7 +393,7 @@ func (c *StreamClient) initialize() {
 		c.URI = "http://" + c.URI
 	}
 
-	if min, max := 0, 1000; c.SendBuffer < min {
+	if min, max := 0, 100000; c.SendBuffer < min {
 		c.SendBuffer = min
 	} else if c.SendBuffer > max {
 		c.SendBuffer = max

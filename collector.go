@@ -117,10 +117,6 @@ func (c *Collector) NewTrace(ctx context.Context, category string) (context.Cont
 	return Put(ctx, tr)
 }
 
-func (c *Collector) DebugGetBroker() *Broker {
-	return c.broker
-}
-
 func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
 	var (
 		tr            = Get(ctx)

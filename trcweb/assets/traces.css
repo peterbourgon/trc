@@ -243,7 +243,7 @@ div#traces .trace .events div.event div.delta {
 	z-index: 1;
 }
 
-div#traces .progress-bar {
+div#traces .trace .events div.event div.delta .progress-bar {
 	position: absolute;
 	top: 0;
 	bottom: 0;
