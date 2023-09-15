@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 )
 
 type Broker struct {
@@ -124,6 +125,7 @@ func (b *Broker) Stream(ctx context.Context, f Filter, ch chan<- Trace) (StreamS
 		b.subs[ch] = &subscriber{
 			filter: f,
 			traces: ch,
+			stats:  StreamStats{Start: time.Now()},
 		}
 
 		return nil
@@ -163,13 +165,14 @@ func (b *Broker) StreamStats(ctx context.Context, ch chan<- Trace) (StreamStats,
 }
 
 type StreamStats struct {
-	Skips int `json:"skips"`
-	Sends int `json:"sends"`
-	Drops int `json:"drops"`
+	Start time.Time `json:"start"`
+	Skips int       `json:"skips"`
+	Sends int       `json:"sends"`
+	Drops int       `json:"drops"`
 }
 
 func (s StreamStats) String() string {
-	return fmt.Sprintf("skips=%d sends=%d drops=%d", s.Skips, s.Sends, s.Drops)
+	return fmt.Sprintf("alive=%s skips=%d sends=%d drops=%d", time.Since(s.Start).Truncate(100*time.Millisecond), s.Skips, s.Sends, s.Drops)
 }
 
 type subscriber struct {
