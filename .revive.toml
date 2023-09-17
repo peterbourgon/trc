@@ -1,2 +1,2 @@
 [rule.unused-parameter]
-Disabled = true
+disabled = true

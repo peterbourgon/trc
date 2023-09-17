@@ -3,9 +3,9 @@
 set -o pipefail
 
 function test_workflow    { cat .github/workflows/test.yaml ; }
-function test_commands    { yq '.jobs.test.steps[] | select(.name == "Run *") | .run' ; }
+function install_commands { yq '.jobs.test.steps[] | select(.name == "Install tools") | .run' ; }
 
-test_workflow | test_commands | while read COMMAND
+test_workflow | install_commands | while read COMMAND
 do
 	echo ${COMMAND}
 	TEMPFILE=$(mktemp)
