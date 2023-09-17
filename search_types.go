@@ -12,6 +12,7 @@ import (
 	"github.com/peterbourgon/trc/internal/trcutil"
 )
 
+// Searcher models anything that can serve search requests.
 type Searcher interface {
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
 }
@@ -20,6 +21,7 @@ type Searcher interface {
 //
 //
 
+// SearchRequest describes a complete search request.
 type SearchRequest struct {
 	Bucketing  []time.Duration `json:"bucketing,omitempty"`
 	Filter     Filter          `json:"filter,omitempty"`
@@ -27,6 +29,8 @@ type SearchRequest struct {
 	StackDepth int             `json:"stack_depth,omitempty"` // 0 is default stacks, -1 for no stacks
 }
 
+// Normalize ensures the search request is valid, modifying it if necessary. It
+// returns any errors encountered in the process.
 func (req *SearchRequest) Normalize() []error {
 	var errs []error
 
@@ -46,16 +50,17 @@ func (req *SearchRequest) Normalize() []error {
 
 	switch {
 	case req.Limit <= 0:
-		req.Limit = SelectRequestLimitDefault
-	case req.Limit < SelectRequestLimitMin:
-		req.Limit = SelectRequestLimitMin
-	case req.Limit > SelectRequestLimitMax:
-		req.Limit = SelectRequestLimitMax
+		req.Limit = SearchLimitDefault
+	case req.Limit < SearchLimitMin:
+		req.Limit = SearchLimitMin
+	case req.Limit > SearchLimitMax:
+		req.Limit = SearchLimitMax
 	}
 
 	return errs
 }
 
+// String implements fmt.Stringer.
 func (req SearchRequest) String() string {
 	var elems []string
 
@@ -79,11 +84,17 @@ func (req SearchRequest) String() string {
 }
 
 const (
-	SelectRequestLimitMin     = 1
-	SelectRequestLimitDefault = 10
-	SelectRequestLimitMax     = 250
+	// SearchLimitMin is the minimum search limit.
+	SearchLimitMin = 1
+
+	// SearchLimitDefault is the default search limit.
+	SearchLimitDefault = 10
+
+	// SearchLimitMax is the maximum search limit.
+	SearchLimitMax = 250
 )
 
+// DefaultBucketing is the default set of time buckets used in search stats.
 var DefaultBucketing = []time.Duration{
 	0,
 	100 * time.Microsecond,
@@ -100,6 +111,7 @@ var DefaultBucketing = []time.Duration{
 //
 //
 
+// SearchResponse returned by a search request.
 type SearchResponse struct {
 	Request    *SearchRequest `json:"request,omitempty"`
 	Sources    []string       `json:"sources"`
@@ -115,10 +127,13 @@ type SearchResponse struct {
 //
 //
 
+// MultiSearcher allows multiple searchers to be searched as one.
 type MultiSearcher []Searcher
 
 var _ Searcher = (MultiSearcher)(nil)
 
+// Search scatters the request over the searchers, gathers responses, and merges
+// them into a single response returned to the caller.
 func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
 	var (
 		begin         = time.Now()

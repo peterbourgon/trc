@@ -93,7 +93,8 @@ func main() {
 	// And an extra HTTP server for the global trace handler. We'll use this
 	// server for additional stuff like profiling endpoints.
 	go func() {
-		http.Handle("/traces/", http.StripPrefix("/traces", globalHandler))
+		http.Handle("/traces", http.StripPrefix("/traces", globalHandler))
+		http.Handle("/traces/", http.StripPrefix("/traces/", globalHandler))
 		http.Handle("/debug/fgprof", fgprof.Handler())
 		log.Printf("http://localhost:8080/traces")
 		log.Fatal(http.ListenAndServe("localhost:8080", nil))

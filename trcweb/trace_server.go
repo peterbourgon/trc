@@ -19,14 +19,17 @@ import (
 	"github.com/peterbourgon/trc/trcweb/assets"
 )
 
+// HTTPClient models an http.Client.
 type HTTPClient interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
 var _ HTTPClient = (*http.Client)(nil)
 
+// Searcher is just a trc.Searcher.
 type Searcher trc.Searcher
 
+// Streamer models the subscriber methods of a trc.Collector.
 type Streamer interface {
 	Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) (trc.StreamStats, error)
 	StreamStats(ctx context.Context, ch chan<- trc.Trace) (trc.StreamStats, error)
@@ -36,12 +39,21 @@ type Streamer interface {
 //
 //
 
+// TraceServer provides an HTTP interface to a trace collector.
 type TraceServer struct {
+	// Collector is the default implementation for Searcher and Streamer.
 	Collector *trc.Collector
-	Searcher  Searcher
-	Streamer  Streamer
+
+	// Searcher is used to serve requests which Accept: text/html and/or
+	// application/json. If not provided, the Collector will be used.
+	Searcher Searcher
+
+	// Streamer is used to serve requests which Accept: text/event-stream. If
+	// not provided, the Collector will be used.
+	Streamer Streamer
 }
 
+// NewTraceServer returns a standard trace server wrapping the collector.
 func NewTraceServer(c *trc.Collector) *TraceServer {
 	s := &TraceServer{
 		Collector: c,
@@ -59,50 +71,31 @@ func (s *TraceServer) initialize() {
 	}
 }
 
+// ServeHTTP implements http.Handler.
 func (s *TraceServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.initialize()
-	switch getTraceRequestCategory(r) {
-	case traceRequestCategoryInvalid:
-		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-	case traceRequestCategoryStream:
+
+	switch Categorize(r) {
+	case "stream":
 		s.handleStream(w, r)
-	case traceRequestCategoryTraces:
-		s.handleSearch(w, r)
 	default:
-		trc.Get(r.Context()).LazyTracef("invalid accept header %q", r.Header.Get("accept"))
 		s.handleSearch(w, r)
 	}
 }
 
-type traceRequestCategory string
-
-const (
-	traceRequestCategoryInvalid traceRequestCategory = "invalid"
-	traceRequestCategoryStream  traceRequestCategory = "stream"
-	traceRequestCategoryTraces  traceRequestCategory = "traces"
-)
-
-func getTraceRequestCategory(r *http.Request) traceRequestCategory {
-	switch {
-	case r.Method != "GET":
-		return traceRequestCategoryInvalid
-	case requestExplicitlyAccepts(r, "text/event-stream"):
-		return traceRequestCategoryStream
-	case requestExplicitlyAccepts(r, "text/html"), requestExplicitlyAccepts(r, "application/json"):
-		return traceRequestCategoryTraces
-	default:
-		return traceRequestCategoryTraces
-	}
-}
-
+// Categorize the request for a [Middleware].
 func Categorize(r *http.Request) string {
-	return string(getTraceRequestCategory(r))
+	if requestExplicitlyAccepts(r, "text/event-stream") {
+		return "stream"
+	}
+	return "traces"
 }
 
 //
 //
 //
 
+// SearchData is returned by normal trace search requests.
 type SearchData struct {
 	Request  trc.SearchRequest  `json:"request"`
 	Response trc.SearchResponse `json:"response"`
@@ -120,17 +113,22 @@ func (s *TraceServer) handleSearch(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case isJSON:
 		body := http.MaxBytesReader(w, r.Body, maxRequestBodySizeBytes)
-		if err := json.NewDecoder(body).Decode(&data.Request); err != nil {
-			tr.Errorf("decode JSON request failed, using defaults (%v)", err)
-			data.Problems = append(data.Problems, fmt.Errorf("decode JSON request: %w", err))
+		var req trc.SearchRequest
+		if err := json.NewDecoder(body).Decode(&req); err != nil {
+			//tr.Errorf("decode JSON request failed, using defaults (%v)", err)
+			//data.Problems = append(data.Problems, fmt.Errorf("decode JSON request: %w", err))
+			tr.Errorf("decode JSON request failed (%v) -- returning error", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
+		data.Request = req
 
 	default:
 		urlquery := r.URL.Query()
 		data.Request = trc.SearchRequest{
 			Bucketing:  parseBucketing(urlquery["b"]), // nil is OK
 			Filter:     parseFilter(r),
-			Limit:      parseRange(urlquery.Get("n"), strconv.Atoi, trc.SelectRequestLimitMin, trc.SelectRequestLimitDefault, trc.SelectRequestLimitMax),
+			Limit:      parseRange(urlquery.Get("n"), strconv.Atoi, trc.SearchLimitMin, trc.SearchLimitDefault, trc.SearchLimitMax),
 			StackDepth: parseDefault(urlquery.Get("stack"), strconv.Atoi, 0),
 		}
 	}
@@ -208,7 +206,7 @@ func (c *SearchClient) Search(ctx context.Context, req *trc.SearchRequest) (_ *t
 	}()
 
 	if httpRes.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP response %d %s", httpRes.StatusCode, http.StatusText(httpRes.StatusCode))
+		return nil, fmt.Errorf("read HTTP response: server gave HTTP %d (%s)", httpRes.StatusCode, http.StatusText(httpRes.StatusCode))
 	}
 
 	var res SearchData

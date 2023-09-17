@@ -1,3 +1,4 @@
+// trc is a CLI tool for interacting with trc web servers.
 package main
 
 import (

@@ -112,3 +112,19 @@ func parseBucketing(bs []string) []time.Duration {
 
 	return ds
 }
+
+func iff[T any](cond bool, yes, no T) T {
+	if cond {
+		return yes
+	}
+	return no
+}
+
+func contains[T comparable](haystack []T, needle T) bool {
+	for _, elem := range haystack {
+		if elem == needle {
+			return true
+		}
+	}
+	return false
+}

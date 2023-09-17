@@ -254,7 +254,7 @@ div#traces .trace .events div.event div.delta .progress-bar {
 	z-index: -1;
 }
 
-div#traces .progress-bar.hover {
+div#traces .trace .events div.event div.delta .progress-bar.hover {
 	background-color: #999;
 }
 

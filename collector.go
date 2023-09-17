@@ -52,6 +52,7 @@ type CollectorConfig struct {
 	Broker *Broker
 }
 
+// NewCollector returns a new collector with the provided config.
 func NewCollector(cfg CollectorConfig) *Collector {
 	if cfg.Source == "" {
 		cfg.Source = "default"
@@ -70,27 +71,39 @@ func NewCollector(cfg CollectorConfig) *Collector {
 		newTrace:   cfg.NewTrace,
 		broker:     cfg.Broker,
 		decorators: cfg.Decorators,
-		categories: trcringbuf.NewRingBuffers[Trace](defaultCategorySize),
+		categories: trcringbuf.NewRingBuffers[Trace](1000),
 	}
 }
 
-const defaultCategorySize = 1000
-
+// SetSourceName sets the source used by the collector.
+//
+// The method returns its receiver to allow for builder-style construction.
 func (c *Collector) SetSourceName(name string) *Collector {
 	c.source = name
 	return c
 }
 
+// SetNewTrace sets the new trace function used by the collector.
+//
+// The method returns its receiver to allow for builder-style construction.
 func (c *Collector) SetNewTrace(newTrace NewTraceFunc) *Collector {
 	c.newTrace = newTrace
 	return c
 }
 
+// SetDecorators completely resets the decorators used by the collector.
+//
+// The method returns its receiver to allow for builder-style construction.
 func (c *Collector) SetDecorators(decorators ...DecoratorFunc) *Collector {
 	c.decorators = decorators
 	return c
 }
 
+// SetCategorySize resets the max size of each category in the collector. If any
+// categories are currently larger than the given capacity, they will be reduced
+// by dropping old traces. The default capacity is 1000.
+//
+// The method returns its receiver to allow for builder-style construction.
 func (c *Collector) SetCategorySize(cap int) *Collector {
 	for _, droppedTrace := range c.categories.Resize(cap) {
 		maybeFree(droppedTrace)
@@ -98,6 +111,9 @@ func (c *Collector) SetCategorySize(cap int) *Collector {
 	return c
 }
 
+// NewTrace produces a new trace in the collector with the given category,
+// injects it into the given context, and returns a new derived context
+// containing the trace, as well as the new trace itself.
 func (c *Collector) NewTrace(ctx context.Context, category string) (context.Context, Trace) {
 	if tr, ok := MaybeGet(ctx); ok {
 		tr.LazyTracef("(+ %s)", category)
@@ -117,6 +133,7 @@ func (c *Collector) NewTrace(ctx context.Context, category string) (context.Cont
 	return Put(ctx, tr)
 }
 
+// Search the collector for traces, according to the provided search request.
 func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
 	var (
 		tr            = Get(ctx)
@@ -179,20 +196,23 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 	}, nil
 }
 
-func maybeFree(tr Trace) {
-	if f, ok := tr.(interface{ Free() }); ok {
-		f.Free()
-	}
-}
-
-func (c *Collector) Publish(ctx context.Context, tr Trace) {
-	c.broker.Publish(ctx, tr)
-}
-
+// Stream traces matching the filter to the channel, returning when the context
+// is canceled. See [Broker.Stream] for more details.
 func (c *Collector) Stream(ctx context.Context, f Filter, ch chan<- Trace) (StreamStats, error) {
 	return c.broker.Stream(ctx, f, ch)
 }
 
+// StreamStats returns statistics about a currently active subscription.
 func (c *Collector) StreamStats(ctx context.Context, ch chan<- Trace) (StreamStats, error) {
 	return c.broker.StreamStats(ctx, ch)
+}
+
+//
+//
+//
+
+func maybeFree(tr Trace) {
+	if f, ok := tr.(interface{ Free() }); ok {
+		f.Free()
+	}
 }

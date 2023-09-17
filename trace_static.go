@@ -1,7 +1,6 @@
 package trc
 
 import (
-	"encoding/json"
 	"time"
 )
 
@@ -77,20 +76,47 @@ func NewStreamTrace(tr Trace) *StaticTrace {
 	}
 }
 
-func (st *StaticTrace) ID() string                            { return st.TraceID }
-func (st *StaticTrace) Source() string                        { return st.TraceSource }
-func (st *StaticTrace) Category() string                      { return st.TraceCategory }
-func (st *StaticTrace) Started() time.Time                    { return st.TraceStarted }
-func (st *StaticTrace) Tracef(format string, args ...any)     {}
-func (st *StaticTrace) LazyTracef(format string, args ...any) {}
-func (st *StaticTrace) Errorf(format string, args ...any)     {}
-func (st *StaticTrace) LazyErrorf(format string, args ...any) {}
-func (st *StaticTrace) Finish()                               {}
-func (st *StaticTrace) Finished() bool                        { return st.TraceFinished }
-func (st *StaticTrace) Errored() bool                         { return st.TraceErrored }
-func (st *StaticTrace) Duration() time.Duration               { return st.TraceDuration }
-func (st *StaticTrace) Events() []Event                       { return st.TraceEvents }
+// ID implements the Trace interface.
+func (st *StaticTrace) ID() string { return st.TraceID }
 
+// Source implements the Trace interface.
+func (st *StaticTrace) Source() string { return st.TraceSource }
+
+// Category implements the Trace interface.
+func (st *StaticTrace) Category() string { return st.TraceCategory }
+
+// Started implements the Trace interface.
+func (st *StaticTrace) Started() time.Time { return st.TraceStarted }
+
+// Tracef implements the Trace interface.
+func (st *StaticTrace) Tracef(format string, args ...any) {}
+
+// LazyTracef implements the Trace interface.
+func (st *StaticTrace) LazyTracef(format string, args ...any) {}
+
+// Errorf implements the Trace interface.
+func (st *StaticTrace) Errorf(format string, args ...any) {}
+
+// LazyErrorf implements the Trace interface.
+func (st *StaticTrace) LazyErrorf(format string, args ...any) {}
+
+// Finish implements the Trace interface.
+func (st *StaticTrace) Finish() {}
+
+// Finished implements the Trace interface.
+func (st *StaticTrace) Finished() bool { return st.TraceFinished }
+
+// Errored implements the Trace interface.
+func (st *StaticTrace) Errored() bool { return st.TraceErrored }
+
+// Duration implements the Trace interface.
+func (st *StaticTrace) Duration() time.Duration { return st.TraceDuration }
+
+// Events implements the Trace interface.
+func (st *StaticTrace) Events() []Event { return st.TraceEvents }
+
+// TrimStacks reduces the stacks of every event in the trace based on depth. A
+// depth of 0 means "no change" -- to remove stacks, use a depth of -1.
 func (st *StaticTrace) TrimStacks(depth int) *StaticTrace {
 	if depth == 0 {
 		return st // zero value (0) means don't do anything
@@ -105,66 +131,4 @@ func (st *StaticTrace) TrimStacks(depth int) *StaticTrace {
 		}
 	}
 	return st
-}
-
-func (st *StaticTrace) Dump() string {
-	buf, _ := json.MarshalIndent(st, "", "    ")
-	return string(buf)
-}
-
-type RenderEvent struct {
-	IsStart, IsEnd bool
-	Index          int
-	When           time.Time
-	Delta          time.Duration
-	DeltaPercent   float64
-	Cumulative     time.Duration
-	What           string
-	IsError        bool
-	Stack          []Frame
-}
-
-func (st *StaticTrace) RenderEvents() []RenderEvent {
-	var events []RenderEvent
-
-	// Synthetic "start" event.
-	events = append(events, RenderEvent{
-		IsStart: true,
-		Index:   -1,
-		When:    st.TraceStarted,
-		What:    "start",
-	})
-
-	// Actual trace events.
-	prev := st.TraceStarted
-	for i, ev := range st.TraceEvents {
-		delta := ev.When.Sub(prev)
-		events = append(events, RenderEvent{
-			Index:        i,
-			When:         ev.When,
-			Delta:        delta,
-			DeltaPercent: 100 * float64(delta) / float64(st.TraceDuration),
-			Cumulative:   ev.When.Sub(st.TraceStarted),
-			What:         ev.What,
-			IsError:      ev.IsError,
-			Stack:        ev.Stack,
-		})
-		prev = ev.When
-	}
-
-	// Synthetic "end" event.
-	when := st.TraceStarted.Add(st.TraceDuration)
-	delta := when.Sub(prev)
-	what := iff(st.TraceFinished, "finished", "active...")
-	events = append(events, RenderEvent{
-		IsEnd:        true,
-		Index:        len(st.TraceEvents),
-		When:         when,
-		Delta:        delta,
-		DeltaPercent: 100 * float64(delta) / float64(st.TraceDuration),
-		Cumulative:   st.TraceDuration,
-		What:         what,
-	})
-
-	return events
 }

@@ -4,85 +4,25 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 
 	"github.com/peterbourgon/trc/internal/trcutil"
 )
 
 // DecoratorFunc is a function that decorates a trace in some way. It's similar
-// to an HTTP middleware.
+// to an HTTP middleware. Decorators can be provided to a [Collector] and will
+// be applied to every trace created in that collector.
 type DecoratorFunc func(Trace) Trace
 
 //
 //
 //
 
-// publishDecorator returns a decorator that publishes the trace to the
-// publisher when it's created, with each trace event, and when the trace is
-// finished. The published trace is a reduced form of the full trace, containing
-// only the core metadata and, in the case of trace events, the single event
-// that triggered the publish.
-func publishDecorator(p publisher) DecoratorFunc {
-	return func(tr Trace) Trace {
-		ptr := &publishTrace{
-			Trace: tr,
-			p:     p,
-		}
-		p.Publish(context.Background(), ptr.Trace)
-		return ptr
-	}
-}
-
-type publisher interface {
-	Publish(ctx context.Context, tr Trace)
-}
-
-type publishTrace struct {
-	Trace
-	p publisher
-}
-
-var _ interface{ Free() } = (*publishTrace)(nil)
-
-func (ptr *publishTrace) Tracef(format string, args ...any) {
-	ptr.Trace.Tracef(format, args...)
-	ptr.p.Publish(context.Background(), ptr.Trace)
-}
-
-func (ptr *publishTrace) LazyTracef(format string, args ...any) {
-	ptr.Trace.LazyTracef(format, args...)
-	ptr.p.Publish(context.Background(), ptr.Trace)
-}
-
-func (ptr *publishTrace) Errorf(format string, args ...any) {
-	ptr.Trace.Errorf(format, args...)
-	ptr.p.Publish(context.Background(), ptr.Trace)
-}
-
-func (ptr *publishTrace) LazyErrorf(format string, args ...any) {
-	ptr.Trace.LazyErrorf(format, args...)
-	ptr.p.Publish(context.Background(), ptr.Trace)
-}
-
-func (ptr *publishTrace) Finish() {
-	ptr.Trace.Finish()
-	ptr.p.Publish(context.Background(), ptr.Trace)
-}
-
-func (ptr *publishTrace) Free() {
-	if f, ok := ptr.Trace.(interface{ Free() }); ok {
-		f.Free()
-	}
-}
-
-//
-//
-//
-
-// LogDecorator returns a decorator that logs a simple string to the provided
-// destination when the trace is created, on every event, and when the trace is
-// finished. The logged string is a reduced form of the full trace, containing
-// only the trace ID and the single event that triggered the log.
+// LogDecorator logs a simple string to the provided destination when the trace
+// is created, on every event, and when the trace is finished. The logged string
+// is a reduced form of the full trace, containing only the trace ID and the
+// single event that triggered the log.
 func LogDecorator(dst io.Writer) DecoratorFunc {
 	return func(tr Trace) Trace {
 		ltr := &logTrace{
@@ -93,6 +33,18 @@ func LogDecorator(dst io.Writer) DecoratorFunc {
 		ltr.logEvent("started, source '%s', category '%s'", tr.Source(), tr.Category())
 		return ltr
 	}
+}
+
+// LoggerDecorator is like LogDecorator, but uses a log.Logger.
+func LoggerDecorator(logger *log.Logger) DecoratorFunc {
+	return LogDecorator(&loggerWriter{logger})
+}
+
+type loggerWriter struct{ logger *log.Logger }
+
+func (lw *loggerWriter) Write(p []byte) (int, error) {
+	lw.logger.Printf(string(p))
+	return len(p), nil
 }
 
 type logTrace struct {
@@ -145,6 +97,63 @@ func (ltr *logTrace) logEvent(format string, args ...any) {
 
 func (ltr *logTrace) Free() {
 	if f, ok := ltr.Trace.(interface{ Free() }); ok {
+		f.Free()
+	}
+}
+
+//
+//
+//
+
+func publishDecorator(p publisher) DecoratorFunc {
+	return func(tr Trace) Trace {
+		ptr := &publishTrace{
+			Trace: tr,
+			p:     p,
+		}
+		p.Publish(context.Background(), ptr.Trace)
+		return ptr
+	}
+}
+
+type publisher interface {
+	Publish(ctx context.Context, tr Trace)
+}
+
+type publishTrace struct {
+	Trace
+	p publisher
+}
+
+var _ interface{ Free() } = (*publishTrace)(nil)
+
+func (ptr *publishTrace) Tracef(format string, args ...any) {
+	ptr.Trace.Tracef(format, args...)
+	ptr.p.Publish(context.Background(), ptr.Trace)
+}
+
+func (ptr *publishTrace) LazyTracef(format string, args ...any) {
+	ptr.Trace.LazyTracef(format, args...)
+	ptr.p.Publish(context.Background(), ptr.Trace)
+}
+
+func (ptr *publishTrace) Errorf(format string, args ...any) {
+	ptr.Trace.Errorf(format, args...)
+	ptr.p.Publish(context.Background(), ptr.Trace)
+}
+
+func (ptr *publishTrace) LazyErrorf(format string, args ...any) {
+	ptr.Trace.LazyErrorf(format, args...)
+	ptr.p.Publish(context.Background(), ptr.Trace)
+}
+
+func (ptr *publishTrace) Finish() {
+	ptr.Trace.Finish()
+	ptr.p.Publish(context.Background(), ptr.Trace)
+}
+
+func (ptr *publishTrace) Free() {
+	if f, ok := ptr.Trace.(interface{ Free() }); ok {
 		f.Free()
 	}
 }

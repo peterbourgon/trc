@@ -13,7 +13,7 @@
 //
 // Traces are accessed via the [Handler], which provides an HTTP interface to
 // the global collector. Applications should install the handler to their
-// internal or debug HTTP server, on a route of their choice, e.g. /traces.
+// internal or debug HTTP server.
 //
 // See the examples directory for more complete example applications.
 package eztrc

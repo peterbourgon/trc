@@ -6,11 +6,15 @@ import (
 	"time"
 )
 
+// SearchStats are statistics over the complete set of traces that were queried
+// as part of a search request.
 type SearchStats struct {
 	Bucketing  []time.Duration           `json:"bucketing"`
 	Categories map[string]*CategoryStats `json:"categories"`
 }
 
+// NewSearchStats creates a new and empty search stats, with the given time
+// buckets for grouping finished traces.
 func NewSearchStats(bucketing []time.Duration) *SearchStats {
 	return &SearchStats{
 		Bucketing:  bucketing,
@@ -18,6 +22,7 @@ func NewSearchStats(bucketing []time.Duration) *SearchStats {
 	}
 }
 
+// IsZero returns true if the stats are empty.
 func (ss *SearchStats) IsZero() bool {
 	if ss == nil {
 		return true
@@ -30,6 +35,7 @@ func (ss *SearchStats) IsZero() bool {
 	return false
 }
 
+// Observe the given traces into the search stats.
 func (ss *SearchStats) Observe(trs ...Trace) {
 	for _, tr := range trs {
 		category := tr.Category()
@@ -69,6 +75,7 @@ func (ss *SearchStats) Observe(trs ...Trace) {
 	}
 }
 
+// Merge the other stats into this one.
 func (ss *SearchStats) Merge(other *SearchStats) {
 	if other.IsZero() {
 		return
@@ -94,6 +101,7 @@ func (ss *SearchStats) Merge(other *SearchStats) {
 	}
 }
 
+// Overall returns a synthetic category stats representing all categories.
 func (ss *SearchStats) Overall() *CategoryStats {
 	overall := NewCategoryStats("overall", ss.Bucketing)
 	var tracerate, eventrate float64
@@ -107,6 +115,8 @@ func (ss *SearchStats) Overall() *CategoryStats {
 	return overall
 }
 
+// AllCategories returns category stats for all known categories, as well as the
+// synthetic Overall category.
 func (ss *SearchStats) AllCategories() []*CategoryStats {
 	slice := make([]*CategoryStats, 0, len(ss.Categories)+1)
 	for _, cs := range ss.Categories {
@@ -123,6 +133,7 @@ func (ss *SearchStats) AllCategories() []*CategoryStats {
 //
 //
 
+// CategoryStats represents statistics for all traces in a specific category.
 type CategoryStats struct {
 	Category     string    `json:"category"`
 	EventCount   int       `json:"event_count"`
@@ -136,6 +147,8 @@ type CategoryStats struct {
 	eventrate float64
 }
 
+// NewCategoryStats returns an empty category stats for the given category, and
+// with the given bucketing.
 func NewCategoryStats(category string, bucketing []time.Duration) *CategoryStats {
 	return &CategoryStats{
 		Category:     category,
@@ -166,6 +179,7 @@ func (cs *CategoryStats) IsZero() bool {
 	return zeroEverything
 }
 
+// TotalCount returns the total number of traces in the category.
 func (cs *CategoryStats) TotalCount() int {
 	var total int
 	total += cs.ActiveCount
@@ -176,6 +190,7 @@ func (cs *CategoryStats) TotalCount() int {
 	return total
 }
 
+// TraceRate is an approximate measure of traces per second in this category.
 func (cs *CategoryStats) TraceRate() (r float64) {
 	if cs.tracerate != 0 {
 		return cs.tracerate
@@ -201,6 +216,7 @@ func (cs *CategoryStats) TraceRate() (r float64) {
 	return float64(total) / float64(delta.Seconds())
 }
 
+// EventRate is an approximate measure of events per second in this category.
 func (cs *CategoryStats) EventRate() (r float64) {
 	if cs.eventrate != 0 {
 		return cs.eventrate
@@ -226,6 +242,7 @@ func (cs *CategoryStats) EventRate() (r float64) {
 	return float64(total) / float64(delta.Seconds())
 }
 
+// Merge the other category stats into this one.
 func (cs *CategoryStats) Merge(other *CategoryStats) {
 	if other.IsZero() {
 		return

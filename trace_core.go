@@ -30,6 +30,12 @@ var traceMaxEvents = func() *atomic.Int32 {
 	return &v
 }()
 
+// SetTraceMaxEvents sets the max number of events that will be stored in a core
+// trace. Once a core trace has the maximum number of events, additional events
+// increment a "truncated" counter, which is represented as a single final
+// event. The default is 1000, the minimum is 10, and the maximum is 10000.
+//
+// Changing this value does not affect traces that have already been created.
 func SetTraceMaxEvents(n int) {
 	if n < traceMaxEventsMin {
 		n = traceMaxEventsMin
@@ -42,6 +48,13 @@ func SetTraceMaxEvents(n int) {
 
 var traceNoStacks atomic.Bool
 
+// SetTraceStacks sets a boolean that determines whether trace events include
+// stack traces. By default, trace event stacks are enabled, because they're
+// generally very useful. However, computing stack traces can be the single most
+// computationally heavy part of using package trc, so disabling them altogether
+// can be a significant performance optimization.
+//
+// Changing this value does not affect traces that have already been created.
 func SetTraceStacks(enable bool) {
 	traceNoStacks.Store(!enable)
 }

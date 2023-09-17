@@ -102,6 +102,9 @@ func parseAcceptMediaTypes(r *http.Request) map[string]map[string]string {
 	return mediaTypes
 }
 
+// AssetsDirEnvKey can be set to a local path for the assets directory, in which
+// case those files will be used when rendering assets, instead of the embedded
+// assets. This is especially useful when developing.
 const AssetsDirEnvKey = "TRC_ASSETS_DIR"
 
 func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFuncs template.FuncMap, data any) (_ []byte, err error) {
@@ -179,8 +182,8 @@ var breaksReplacer = strings.NewReplacer(
 //
 //
 
-// FileLineURL converts a local source code file and line to a URL that can be
-// opened by a browser.
+// SourceLinkFunc converts a local source code file and line to a URL that can
+// be opened by a browser.
 type SourceLinkFunc func(fileline string) template.URL
 
 var sourceLinkFunc = trcutil.NewAtomic(func(string) template.URL { return "" })
@@ -231,6 +234,14 @@ var templateFuncs = template.FuncMap{
 	"HighlightClasses":     highlightClasses,
 	"DebugInfo":            debugInfo,
 	"FlexGrowPercent":      flexGrowPercent,
+	"RenderEvents":         renderEvents,
+}
+
+func humanizeFunction(s string) string {
+	if index := strings.LastIndex(s, "/"); index > 0 && index < len(s) {
+		s = s[index+1:]
+	}
+	return s
 }
 
 func categoryClass(category string) string {
@@ -293,22 +304,6 @@ func sha256hex(input string) string {
 	return s
 }
 
-func iff[T any](cond bool, yes, no T) T {
-	if cond {
-		return yes
-	}
-	return no
-}
-
-func contains[T comparable](haystack []T, needle T) bool {
-	for _, elem := range haystack {
-		if elem == needle {
-			return true
-		}
-	}
-	return false
-}
-
 func flexGrowPercent(f float64) int {
 	if f < 1 {
 		return 1
@@ -319,9 +314,59 @@ func flexGrowPercent(f float64) int {
 	return int(f)
 }
 
-func humanizeFunction(s string) string {
-	if index := strings.LastIndex(s, "/"); index > 0 && index < len(s) {
-		s = s[index+1:]
+func renderEvents(st *trc.StaticTrace) []renderEvent {
+	var events []renderEvent
+
+	// Synthetic "start" event.
+	events = append(events, renderEvent{
+		IsStart: true,
+		Index:   -1,
+		When:    st.TraceStarted,
+		What:    "start",
+	})
+
+	// Actual trace events.
+	prev := st.TraceStarted
+	for i, ev := range st.TraceEvents {
+		delta := ev.When.Sub(prev)
+		events = append(events, renderEvent{
+			Index:        i,
+			When:         ev.When,
+			Delta:        delta,
+			DeltaPercent: 100 * float64(delta) / float64(st.TraceDuration),
+			Cumulative:   ev.When.Sub(st.TraceStarted),
+			What:         ev.What,
+			IsError:      ev.IsError,
+			Stack:        ev.Stack,
+		})
+		prev = ev.When
 	}
-	return s
+
+	// Synthetic "end" event.
+	when := st.TraceStarted.Add(st.TraceDuration)
+	delta := when.Sub(prev)
+	what := iff(st.TraceFinished, "finished", "active...")
+	events = append(events, renderEvent{
+		IsEnd:        true,
+		Index:        len(st.TraceEvents),
+		When:         when,
+		Delta:        delta,
+		DeltaPercent: 100 * float64(delta) / float64(st.TraceDuration),
+		Cumulative:   st.TraceDuration,
+		What:         what,
+	})
+
+	return events
+}
+
+type renderEvent struct {
+	IsStart, IsEnd bool
+	Index          int
+	When           time.Time
+	Delta          time.Duration
+	DeltaPercent   float64
+	Cumulative     time.Duration
+	What           string
+	IsError        bool
+	Stack          []trc.Frame
 }
