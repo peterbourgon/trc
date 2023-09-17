@@ -157,6 +157,7 @@ func (s *TraceServer) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 //
 
+// SearchClient implements [trc.Searcher] by querying a search server.
 type SearchClient struct {
 	client HTTPClient
 	uri    string
@@ -164,6 +165,8 @@ type SearchClient struct {
 
 var _ trc.Searcher = (*SearchClient)(nil)
 
+// NewSearchClient returns a search client using the given HTTP client to query
+// the given search server URI.
 func NewSearchClient(client HTTPClient, uri string) *SearchClient {
 	if !strings.HasPrefix(uri, "http") {
 		uri = "http://" + uri
@@ -174,6 +177,7 @@ func NewSearchClient(client HTTPClient, uri string) *SearchClient {
 	}
 }
 
+// Search implements [trc.Searcher].
 func (c *SearchClient) Search(ctx context.Context, req *trc.SearchRequest) (_ *trc.SearchResponse, err error) {
 	tr := trc.Get(ctx)
 
