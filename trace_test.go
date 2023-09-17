@@ -14,15 +14,11 @@ import (
 
 // TraceTest performs basic validation of trace implementations.
 func TraceTest(t *testing.T, constructor trc.NewTraceFunc) {
-	t.Parallel()
-
 	t.Helper()
 
 	ctx := context.Background()
 
 	t.Run("Unique ID", func(t *testing.T) {
-		t.Parallel()
-
 		index := map[string]bool{}
 		for i := 0; i < 10; i++ {
 			_, tr := constructor(ctx, "src", "foo")
@@ -34,8 +30,6 @@ func TraceTest(t *testing.T, constructor trc.NewTraceFunc) {
 	})
 
 	t.Run("Errored", func(t *testing.T) {
-		t.Parallel()
-
 		_, tr := constructor(ctx, "src", "foo")
 		if want, have := false, tr.Errored(); want != have {
 			t.Errorf("Trace was marked Errored without error event")
@@ -51,8 +45,6 @@ func TraceTest(t *testing.T, constructor trc.NewTraceFunc) {
 	})
 
 	t.Run("Finish prevents updates", func(t *testing.T) {
-		t.Parallel()
-
 		_, tr := constructor(ctx, "src", "foo")
 		tr.Tracef("first")
 		tr.LazyTracef("second")
@@ -92,8 +84,6 @@ func TraceTest(t *testing.T, constructor trc.NewTraceFunc) {
 	})
 
 	t.Run("Normal events", func(t *testing.T) {
-		t.Parallel()
-
 		_, tr := constructor(ctx, "src", "foo")
 		a := []int{1, 2, 3}
 		tr.Tracef("a=%v", a)
@@ -105,8 +95,6 @@ func TraceTest(t *testing.T, constructor trc.NewTraceFunc) {
 	})
 
 	t.Run("Lazy events", func(t *testing.T) {
-		t.Parallel()
-
 		_, tr := constructor(ctx, "src", "foo")
 		a := []int{1, 2, 3}
 		tr.LazyTracef("a=%v", a)
@@ -118,8 +106,6 @@ func TraceTest(t *testing.T, constructor trc.NewTraceFunc) {
 	})
 
 	t.Run("Error event", func(t *testing.T) {
-		t.Parallel()
-
 		_, tr := constructor(ctx, "src", "foo")
 		tr.Errorf("this is an error")
 		tr.Finish()
@@ -127,8 +113,6 @@ func TraceTest(t *testing.T, constructor trc.NewTraceFunc) {
 	})
 
 	t.Run("optional SetMaxEvents", func(t *testing.T) {
-		t.Parallel()
-
 		_, tr := constructor(ctx, "src", "foo")
 		defer tr.Finish()
 		m, ok := tr.(interface{ SetMaxEvents(int) })
@@ -185,10 +169,14 @@ func TraceTest(t *testing.T, constructor trc.NewTraceFunc) {
 }
 
 func TestCoreTrace(t *testing.T) {
+	t.Parallel()
+
 	TraceTest(t, trc.New)
 }
 
 func TestTraceContext(t *testing.T) {
+	t.Parallel()
+
 	t.Run("empty", func(t *testing.T) {
 		ctx0 := context.Background()
 		if _, ok := trc.MaybeGet(ctx0); ok {

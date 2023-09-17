@@ -61,8 +61,8 @@ jobs:
         if: matrix.platform != 'windows-latest' # :<
         run: diff <(gofmt -d . 2>/dev/null) <(printf '')
 
-      #- name: Run go vet
-      # run: go vet ./...
+      - name: Run go vet
+        run: go vet ./...
 
       - name: Run staticcheck
         run: staticcheck ./...
@@ -71,7 +71,7 @@ jobs:
         run: gofumpt -d -e -l .
 
       - name: Run revive
-        run: revive --set_exit_status --exclude="./examples/..." --exclude="./internal/..." ./...
+        run: revive --set_exit_status --config="./.revive.toml" --exclude="./_examples/..." --exclude="./internal/..." ./...
 
       - name: Run lint-parallel-tests
         run: hack/lint-parallel-tests

@@ -35,6 +35,8 @@ func testCallStackBaz(t *testing.T, ctx context.Context) {
 }
 
 func TestEventStacks(t *testing.T) {
+	t.Parallel()
+
 	ctx, tr := trc.New(context.Background(), "src", "cat")
 	testCallStackFoo(t, ctx)
 	tr.Finish()

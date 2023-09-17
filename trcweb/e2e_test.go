@@ -13,6 +13,8 @@ import (
 )
 
 func TestE2E(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	collector := trc.NewDefaultCollector()
 	collectorServer := trcweb.NewTraceServer(collector)

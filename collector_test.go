@@ -8,6 +8,8 @@ import (
 )
 
 func TestSearchScenarios(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	src := trc.NewDefaultCollector()
 
@@ -89,6 +91,8 @@ func TestSearchScenarios(t *testing.T) {
 }
 
 func TestCollectorResize(t *testing.T) {
+	t.Parallel()
+
 	var (
 		ctx      = context.Background()
 		src      = trc.NewDefaultCollector()

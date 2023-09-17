@@ -9,6 +9,8 @@ import (
 )
 
 func TestRegion(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	ctx, tr := trc.New(ctx, "source", "category")
 	tr.Tracef("before x1")
@@ -42,6 +44,8 @@ func TestRegion(t *testing.T) {
 }
 
 func TestPrefix(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	ctx, tr := trc.New(ctx, "source", "category")
 	tr.Tracef("before x1")
