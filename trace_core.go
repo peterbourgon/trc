@@ -14,41 +14,54 @@ import (
 	"github.com/peterbourgon/trc/internal/trcdebug"
 )
 
-// TraceMaxEvents establishes the maximum number of events that will be stored
-// in a core trace produced via e.g. [New]. The default value is 1000. The
-// minimum is 10, and the maximum is 10000.
-var TraceMaxEvents atomic.Uint64
-
-// TraceEventCallStacks determines whether core trace events will capture call
-// stacks when they're created. The default value is true, as call stacks are
-// generally very useful. However, capturing call stacks can be the single most
-// expensive part of using traces, and call stacks can be the single biggest
-// contributor to the size of search results. Setting this value to false is
-// therefore a performance optimization.
-var TraceEventCallStacks atomic.Bool
-
-func init() {
-	TraceMaxEvents.Store(traceMaxEventsDef)
-	TraceEventCallStacks.Store(true)
-}
+//
+//
+//
 
 const (
-	traceMaxEventsMin = 10
-	traceMaxEventsDef = 1000
-	traceMaxEventsMax = 10000
+	traceMaxEventsMin     = 10
+	traceMaxEventsDefault = 1000
+	traceMaxEventsMax     = 10000
 )
 
-func getTraceMaxEvents() int {
-	val := TraceMaxEvents.Load()
-	switch {
-	case val < traceMaxEventsMin:
-		return traceMaxEventsMin
-	case val > traceMaxEventsMax:
-		return traceMaxEventsMax
-	default:
-		return int(val)
+var traceMaxEvents = func() *atomic.Int32 {
+	var v atomic.Int32
+	v.Store(traceMaxEventsDefault)
+	return &v
+}()
+
+// SetTraceMaxEvents sets the max number of events that will be stored in a core
+// trace. Once a core trace has the maximum number of events, additional events
+// increment a "truncated" counter, which is represented as a single final
+// event. The default is 1000, the minimum is 10, and the maximum is 10000.
+//
+// Changing this value does not affect traces that have already been created.
+func SetTraceMaxEvents(n int) {
+	if n < traceMaxEventsMin {
+		n = traceMaxEventsMin
 	}
+	if n > traceMaxEventsMax {
+		n = traceMaxEventsMax
+	}
+	traceMaxEvents.Store(int32(n))
 }
+
+var traceNoStacks atomic.Bool
+
+// SetTraceStacks sets a boolean that determines whether trace events include
+// stack traces. By default, trace event stacks are enabled, because they're
+// generally very useful. However, computing stack traces can be the single most
+// computationally heavy part of using package trc, so disabling them altogether
+// can be a significant performance optimization.
+//
+// Changing this value does not affect traces that have already been created.
+func SetTraceStacks(enable bool) {
+	traceNoStacks.Store(!enable)
+}
+
+//
+//
+//
 
 var traceIDEntropy = ulid.DefaultEntropy()
 
@@ -57,18 +70,18 @@ var traceIDEntropy = ulid.DefaultEntropy()
 // events that can be stored in a trace is set when the trace is created, based
 // on the current value of TraceMaxEvents.
 type coreTrace struct {
-	mtx       sync.Mutex
-	source    string
-	id        ulid.ULID
-	category  string
-	start     time.Time
-	errored   bool
-	finished  bool
-	duration  time.Duration
-	events    []*coreEvent
-	nostacks  bool
-	eventsmax int
-	truncated int
+	mtx         sync.Mutex
+	source      string
+	id          ulid.ULID
+	category    string
+	start       time.Time
+	errored     bool
+	finished    bool
+	duration    time.Duration
+	nostackflag uint8
+	events      []*coreEvent
+	eventsmax   int
+	truncated   int
 }
 
 var _ Trace = (*coreTrace)(nil)
@@ -76,8 +89,11 @@ var _ Trace = (*coreTrace)(nil)
 // New creates a new core trace with the given source and category, and injects
 // it into the given context. It returns a new context containing that trace,
 // and the trace itself.
-func New(ctx context.Context, source, category string) (context.Context, Trace) {
-	tr := newCoreTrace(source, category)
+func New(ctx context.Context, source, category string, decorators ...DecoratorFunc) (context.Context, Trace) {
+	tr := Trace(newCoreTrace(source, category))
+	for _, d := range decorators {
+		tr = d(tr)
+	}
 	return Put(ctx, tr)
 }
 
@@ -97,26 +113,33 @@ func newCoreTrace(source, category string) *coreTrace {
 	trcdebug.CoreTraceNewCount.Add(1)
 	now := time.Now().UTC()
 	tr := coreTracePool.Get().(*coreTrace)
-	tr.source = source
 	tr.id = ulid.MustNew(ulid.Timestamp(now), traceIDEntropy) // defer String computation
+	tr.source = source
 	tr.category = category
 	tr.start = now
 	tr.errored = false
 	tr.finished = false
 	tr.duration = 0
+	tr.nostackflag = iff(traceNoStacks.Load(), flagNoStack, uint8(0))
 	tr.events = tr.events[:0]
-	tr.nostacks = !TraceEventCallStacks.Load()
-	tr.eventsmax = getTraceMaxEvents()
+	tr.eventsmax = int(traceMaxEvents.Load())
 	tr.truncated = 0
 	return tr
 }
 
-func (tr *coreTrace) Source() string {
-	return tr.source // immutable
+func iff[T any](cond bool, yes, no T) T {
+	if cond {
+		return yes
+	}
+	return no
 }
 
 func (tr *coreTrace) ID() string {
 	return tr.id.String() // immutable
+}
+
+func (tr *coreTrace) Source() string {
+	return tr.source // immutable
 }
 
 func (tr *coreTrace) Category() string {
@@ -150,7 +173,7 @@ func (tr *coreTrace) Tracef(format string, args ...any) {
 	case len(tr.events) >= tr.eventsmax:
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, newCoreEvent(flagNormal, format, args...))
+		tr.events = append(tr.events, newCoreEvent(flagNormal|tr.nostackflag, format, args...))
 	}
 }
 
@@ -166,7 +189,7 @@ func (tr *coreTrace) LazyTracef(format string, args ...any) {
 	case len(tr.events) >= tr.eventsmax:
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, newCoreEvent(flagLazy, format, args...))
+		tr.events = append(tr.events, newCoreEvent(flagLazy|tr.nostackflag, format, args...))
 	}
 }
 
@@ -184,7 +207,7 @@ func (tr *coreTrace) Errorf(format string, args ...any) {
 	case len(tr.events) >= tr.eventsmax:
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, newCoreEvent(flagError, format, args...))
+		tr.events = append(tr.events, newCoreEvent(flagError|tr.nostackflag, format, args...))
 	}
 }
 
@@ -202,7 +225,7 @@ func (tr *coreTrace) LazyErrorf(format string, args ...any) {
 	case len(tr.events) >= tr.eventsmax:
 		tr.truncated++
 	default:
-		tr.events = append(tr.events, newCoreEvent(flagLazy|flagError, format, args...))
+		tr.events = append(tr.events, newCoreEvent(flagLazy|flagError|tr.nostackflag, format, args...))
 	}
 }
 
@@ -233,10 +256,19 @@ func (tr *coreTrace) Errored() bool {
 }
 
 func (tr *coreTrace) Events() []Event {
+	return tr.EventsDetail(-1, true)
+}
+
+func (tr *coreTrace) EventsDetail(n int, stacks bool) []Event {
 	tr.mtx.Lock()
 	defer tr.mtx.Unlock()
 
-	events := snapshotEvents(tr.events)
+	if n <= 0 || n > len(tr.events) {
+		n = len(tr.events)
+	}
+
+	latest := tr.events[len(tr.events)-n:]
+	events := snapshotEvents(latest, stacks)
 
 	if tr.truncated > 0 {
 		events = append(events, Event{
@@ -245,6 +277,7 @@ func (tr *coreTrace) Events() []Event {
 			Stack:   nil,
 			IsError: false,
 		})
+		events = events[1:]
 	}
 
 	return events
@@ -301,8 +334,9 @@ var coreEventPool = sync.Pool{
 type coreEvent struct {
 	when  time.Time
 	what  *stringer
-	pc    [16]uintptr
+	pc    [8]uintptr
 	pcn   int
+	stack []Frame
 	iserr bool
 }
 
@@ -315,53 +349,75 @@ const (
 
 func newCoreEvent(flags uint8, format string, args ...any) *coreEvent {
 	trcdebug.CoreEventNewCount.Add(1)
+
 	cev := coreEventPool.Get().(*coreEvent)
+
 	cev.when = time.Now().UTC()
+
 	if flags&flagLazy != 0 {
 		cev.what = newLazyStringer(format, args...)
 	} else {
 		cev.what = newNormalStringer(format, args...)
 	}
+
+	cev.stack = cev.stack[:0] // be safe
+
 	if flags&flagNoStack != 0 {
-		cev.pcn = 0
+		cev.pcn = 0 // be safe
 	} else {
 		cev.pcn = runtime.Callers(3, cev.pc[:])
 	}
+
 	cev.iserr = flags&flagError != 0
+
 	return cev
 }
 
 func (cev *coreEvent) getStack() []Frame {
+	if cev.pcn <= 0 {
+		return nil
+	}
+
+	if len(cev.stack) > 0 {
+		return cev.stack
+	}
+
 	stdframes := runtime.CallersFrames(cev.pc[:cev.pcn])
-	trcframes := make([]Frame, 0, cev.pcn)
 	fr, more := stdframes.Next()
 	for more {
 		if !ignoreStackFrameFunction(fr.Function) {
-			trcframes = append(trcframes, Frame{
+			cev.stack = append(cev.stack, Frame{
 				Function: fr.Function,
 				FileLine: fr.File + ":" + strconv.Itoa(fr.Line),
 			})
 		}
 		fr, more = stdframes.Next()
 	}
-	return trcframes
+
+	return cev.stack
 }
 
 func (cev *coreEvent) free() {
 	cev.what.free()
 	cev.what = nil
+	cev.pcn = 0
+	cev.stack = cev.stack[:0]
 	trcdebug.CoreEventFreeCount.Add(1)
 	coreEventPool.Put(cev)
 }
 
-func snapshotEvents(cevs []*coreEvent) []Event {
+func snapshotEvents(cevs []*coreEvent, stacks bool) []Event {
 	res := make([]Event, len(cevs))
-	for i, ev := range cevs {
+	for i, cev := range cevs {
+		var stack []Frame
+		if stacks {
+			stack = cev.getStack()
+		}
 		res[i] = Event{
-			When:    ev.when,
-			What:    ev.what.String(),
-			Stack:   ev.getStack(),
-			IsError: ev.iserr,
+			When:    cev.when,
+			What:    cev.what.String(),
+			Stack:   stack,
+			IsError: cev.iserr,
 		}
 	}
 	return res
@@ -371,7 +427,7 @@ func ignoreStackFrameFunction(function string) bool {
 	if !strings.HasPrefix(function, "github.com/peterbourgon/trc") {
 		return false // fast path
 	}
-	if strings.HasPrefix(function, "github.com/peterbourgon/trc.(*prefixTrace)") {
+	if strings.HasSuffix(function, "Tracef") || strings.HasSuffix(function, "Errorf") {
 		return true
 	}
 	if strings.HasPrefix(function, "github.com/peterbourgon/trc.Region") {

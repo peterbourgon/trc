@@ -7,38 +7,36 @@ import (
 
 // Trace is a collection of metadata and events for a single operation,
 // typically a request, in a program. Traces are normally accessed through a
-// context, and may be stored in an e.g.
-// [github.com/peterbourgon/trc/trcstore.Collector].
+// context, and maintained in a [Collector].
 //
-// The package provides a default implementation which is suitable for most use
-// cases. Consumers can extend that default implementation with e.g. decorators,
-// or provide their own implementation entirely. Implementations must be safe
+// [New] produces a default implementation of a Trace which is suitable for most
+// use cases. Consumers can extend that implementation via [DecoratorFunc], or
+// provide their own implementation entirely. Trace implementations must be safe
 // for concurrent use.
 //
 // Note that traces are typically created for every operation, but are accessed
-// only when operators explicitly ask for them, for example when diagnosing a
+// only upon explicit request, for example when an operator is diagnosing a
 // problem. Consequently, traces are written far more often than they are read.
 // Implementations should keep this access pattern in mind, and optimize for
 // writes rather than reads.
 //
 // Trace implementations may optionally implement SetMaxEvents(int), to allow
 // callers to modify the maximum number of events that will be stored in the
-// trace. This method, if it exists, is called by e.g. [SetMaxEvents].
+// trace. This method, if it exists, is called by [SetMaxEvents].
 //
 // Trace implementations may optionally implement Free(), to release any
 // resources claimed by the trace to an e.g. [sync.Pool]. This method, if it
-// exists, is called by e.g. [github.com/peterbourgon/trc/trcstore.Collector],
-// when a trace is dropped.
+// exists, is called by the [Collector] when a trace is dropped.
 type Trace interface {
-	// Source returns a human-readable string representing the origin of the
-	// trace, which is typically the instance of the program where the trace was
-	// constructed.
-	Source() string
-
 	// ID returns an identifier for the trace which should be automatically
 	// generated during construction, and should be unique within a given
 	// instance.
 	ID() string
+
+	// Source returns a human-readable string representing the origin of the
+	// trace, which is typically the instance of the program where the trace was
+	// constructed.
+	Source() string
 
 	// Category returns the category of the trace, which should be provided by
 	// the caller when the trace is created.
@@ -83,23 +81,25 @@ type Trace interface {
 	// Errored returns true if Errorf or LazyErrorf has been called.
 	Errored() bool
 
-	// Events returns all of the events collected by the trace, newest first.
+	// Events returns all of the events collected by the trace, oldest to
+	// newest. Events are produced by Tracef, LazyTracef, Errorf, and
+	// LazyErrorf.
 	Events() []Event
 }
 
 // Event is a traced event, similar to a log event, which is created in the
 // context of a specific trace, via methods like Tracef.
 type Event struct {
-	When    time.Time
-	What    string
-	Stack   []Frame
-	IsError bool
+	When    time.Time `json:"when"`
+	What    string    `json:"what"`
+	Stack   []Frame   `json:"stack,omitempty"`
+	IsError bool      `json:"is_error,omitempty"`
 }
 
 // Frame is a single call frame in an event's call stack.
 type Frame struct {
-	Function string
-	FileLine string
+	Function string `json:"function"`
+	FileLine string `json:"fileline"`
 }
 
 // CompactFileLine returns a human-readable representation of the file and line,

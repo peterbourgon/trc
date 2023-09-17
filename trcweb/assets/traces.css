@@ -4,7 +4,8 @@ body {
 
 form,
 input,
-select {
+select,
+button {
 	font-family: monospace;
 }
 
@@ -69,19 +70,18 @@ table#summary td.progress {
 	position: relative;
 }
 
-table#summary td.progress div.progress-bar {
+table#summary div.progress-bar {
 	position: absolute;
-	top: 0;
 	bottom: 0;
-	min-width: 1%;
-	max-width: 99%;
+	left: 0;
+	width: 90%;
+	margin-left: 5%;
+	max-height: calc(100% - 1px);
 	background-color: rgba(0, 0, 0, 0.10);
 	z-index: -1;
 }
 
-/* error cells show percent from the the right side */
 table#summary td.errored div.progress-bar {
-	right: 0;
 	background-color: rgba(224, 0, 0, 0.2);
 }
 
@@ -168,6 +168,10 @@ div#topline-search-sources summary {
 	/* */
 }
 
+div#topline-form select {
+	background-color: rgba(0, 0, 0, 0.0);
+}
+
 /*
  * traces
  */
@@ -225,15 +229,16 @@ div.event:last-child {
 /* first cell is timestamp, fixed width */
 div#traces .trace .events div.event div.timestamp {
 	text-align: left;
-	width: 10em;
-	min-width: 10em;
+	width: 15ch;
+	min-width: 15ch;
+	margin-right: 1ch;
 }
 
 /* next cell is delta, also fixed width, with progress bar */
 div#traces .trace .events div.event div.delta {
 	text-align: left;
-	width: 5em;
-	min-width: 5em;
+	width: 8ch;
+	min-width: 8ch;
 	position: relative;
 	z-index: 1;
 }
@@ -243,14 +248,18 @@ div#traces .trace .events div.event div.delta .progress-bar {
 	top: 0;
 	bottom: 0;
 	left: 0;
-	min-width: 1%;
-	max-width: 99%;
+	min-width: 2px;
+	max-width: calc(100% - 2px);
 	background-color: rgba(0, 0, 0, 0.10);
 	z-index: -1;
 }
 
+div#traces .trace .events div.event div.delta .progress-bar.hover {
+	background-color: #999;
+}
+
 /* last cell is the text, should fill the rest of the page */
-div#traces .trace .events div.event div.what {
+div#traces div.event div.what {
 	flex: 10 0px;
 	min-width: 25%;
 	padding-left: 2em;
@@ -258,12 +267,44 @@ div#traces .trace .events div.event div.what {
 	overflow: scroll;
 }
 
-div#traces .trace .events div.event div.what.error {
+div#traces div.event div.what.error {
 	color: rgb(224, 0, 0);
 }
 
-div#traces .trace .events div.event div.what.meta {
+div#traces div.event div.what.meta {
 	font-style: italic;
+}
+
+/*
+ * event timelines
+ */
+
+.event-timeline-container {
+	position: relative;
+}
+
+.event-timeline {
+	position: absolute;
+	top: 0;
+	left: 15ch;
+	height: calc(100% - 1px);
+	margin-top: 1px;
+	width: 1ch;
+	z-index: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+.event-timeline.hover {
+	background-color: #ddd;
+}
+
+.event-timeline-element {
+	min-height: 2px;
+}
+
+.event-timeline-element.hover {
+	background-color: #999;
 }
 
 /*
@@ -309,11 +350,6 @@ div.stack div.frame {
 	margin-right: 2rem;
 }
 
-div.stack table td {
-	text-align: left;
-	color: #666;
-}
-
 div.stack a,
 div.stack a:visited {
 	color: #666;
@@ -324,10 +360,10 @@ div.stack a:visited {
  * debug info
  */
 
-div#debuginfo {
-	position: absolute;
-	top: 1em;
-	right: 1em;
+div#debug-info {
+	position: fixed;
+	top: 2em;
+	right: 2em;
 	max-width: 33%;
 	color: #666;
 	background-color: #eee;
@@ -335,6 +371,7 @@ div#debuginfo {
 	font-size: smaller;
 	padding: 0 2ch;
 	visibility: hidden;
+	box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
 }
 
 /*
@@ -342,7 +379,7 @@ div#debuginfo {
  */
 
 .highlight {
-	background-color: yellow;
+	background-color: yellow !important;
 }
 
 .numeric {

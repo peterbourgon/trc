@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	_ "net/http/pprof"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/eztrc"
 )
 
@@ -38,7 +40,8 @@ func main() {
 	}
 
 	// Here's how you would change the number of traces per category.
-	eztrc.Collector().Resize(context.Background(), 100)
+	eztrc.Collector().SetCategorySize(100)
+	eztrc.Collector().SetDecorators(trc.LogDecorator(os.Stderr))
 
 	// Create a single serve mux for both API endpoints.
 	mux := http.NewServeMux()

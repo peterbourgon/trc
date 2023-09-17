@@ -9,27 +9,25 @@ import (
 	"net/http/httptest"
 	_ "net/http/pprof"
 	"strings"
-	"sync"
+	"time"
 
 	"github.com/felixge/fgprof"
 
-	"github.com/peterbourgon/trc/trchttp"
-	"github.com/peterbourgon/trc/trcstore"
+	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/trcweb"
 )
 
 func main() {
 	// Open stack trace links in VS Code.
-	trchttp.FileLineURL = trchttp.FileLineURLVSCode
+	trcweb.SetSourceLinkFunc(trcweb.SourceLinkVSCode)
 
 	// Each port is a distinct instance.
 	ports := []string{"8081", "8082", "8083"}
 
 	// Create a trace collector for each instance.
-	collectors := make([]*trcstore.Collector, len(ports))
-	for i := range collectors {
-		collectors[i] = trcstore.NewCollector(trcstore.CollectorConfig{
-			Source: ports[i],
-		})
+	instanceCollectors := make([]*trc.Collector, len(ports))
+	for i := range ports {
+		instanceCollectors[i] = trc.NewCollector(trc.CollectorConfig{Source: ports[i]})
 	}
 
 	// Create a `kv` service for each instance.
@@ -43,50 +41,43 @@ func main() {
 	apiHandlers := make([]http.Handler, len(ports))
 	for i := range apiHandlers {
 		apiHandlers[i] = kvs[i]
-		apiHandlers[i] = trchttp.Middleware(collectors[i].NewTrace, apiCategory)(apiHandlers[i])
+		apiHandlers[i] = trcweb.Middleware(instanceCollectors[i].NewTrace, apiCategory)(apiHandlers[i])
 	}
 
 	// Generate random load for each `kv` instance.
-	apiWorkers := sync.WaitGroup{}
-	for _, h := range apiHandlers {
-		apiWorkers.Add(1)
-		go func(h http.Handler) {
-			defer apiWorkers.Done()
-			load(context.Background(), h)
-		}(h)
-	}
+	go load(context.Background(), apiHandlers...)
 
 	// Create a traces HTTP handler for each instance.
 	// We'll also trace each request to this endpoint.
-	tracesHandlers := make([]http.Handler, len(collectors))
-	for i := range tracesHandlers {
-		tracesHandlers[i] = trchttp.NewServer(collectors[i])
-		tracesHandlers[i] = trchttp.Middleware(collectors[i].NewTrace, func(r *http.Request) string { return "traces" })(tracesHandlers[i])
+	instanceHandlers := make([]http.Handler, len(instanceCollectors))
+	for i := range instanceHandlers {
+		instanceHandlers[i] = trcweb.NewTraceServer(instanceCollectors[i])
+		instanceHandlers[i] = trcweb.Middleware(instanceCollectors[i].NewTrace, trcweb.Categorize)(instanceHandlers[i])
 	}
 
-	// We can also create a "global" traces handler, which serves aggregate
-	// results from all of the individual trace handlers for each instance.
-	var tracesGlobal http.Handler
+	// TODO
+	var globalCollector *trc.Collector
 	{
-		// MultiSearcher allows multiple searchers to be treated as one. In this
-		// case, the searchers are the collectors for each instance.
-		var ms trcstore.MultiSearcher
-		for i := range ports {
-			// Each instance is modeled with an HTTP client querying the
-			// corresponding trace HTTP handler. This is usually how it would
-			// work, as different instances are usually on different hosts.
-			ms = append(ms, trchttp.NewClient(http.DefaultClient, fmt.Sprintf("http://localhost:%s/traces", ports[i])))
-		}
+		globalCollector = trc.NewCollector(trc.CollectorConfig{Source: "global"})
+	}
 
-		// Let's also trace requests to this global handler in a distinct trace
-		// collector, and include that collector in the multi-searcher.
-		globalCollector := trcstore.NewCollector(trcstore.CollectorConfig{
-			Source: "global",
-		})
+	// TODO
+	var globalSearcher trc.Searcher
+	{
+		var ms trc.MultiSearcher
+		for i := range ports {
+			ms = append(ms, trcweb.NewSearchClient(http.DefaultClient, fmt.Sprintf("localhost:%s/traces", ports[i])))
+		}
 		ms = append(ms, globalCollector)
 
-		tracesGlobal = trchttp.NewServer(ms)
-		tracesGlobal = trchttp.Middleware(globalCollector.NewTrace, func(r *http.Request) string { return "traces" })(tracesGlobal)
+		globalSearcher = ms
+	}
+
+	// TODO
+	var globalHandler http.Handler
+	{
+		globalHandler = &trcweb.TraceServer{Collector: globalCollector, Searcher: globalSearcher}
+		globalHandler = trcweb.Middleware(globalCollector.NewTrace, trcweb.Categorize)(globalHandler)
 	}
 
 	// Now we run HTTP servers for each instance.
@@ -94,8 +85,7 @@ func main() {
 	for i := range httpServers {
 		addr := "localhost:" + ports[i]
 		mux := http.NewServeMux()
-		mux.Handle("/api", http.StripPrefix("/api", apiHandlers[i])) // technically unnecessary as the loader calls the handler directly
-		mux.Handle("/traces", http.StripPrefix("/traces", tracesHandlers[i]))
+		mux.Handle("/traces", http.StripPrefix("/traces", instanceHandlers[i]))
 		s := &http.Server{Addr: addr, Handler: mux}
 		go func() { log.Fatal(s.ListenAndServe()) }()
 		log.Printf("http://localhost:%s/traces", ports[i])
@@ -104,7 +94,8 @@ func main() {
 	// And an extra HTTP server for the global trace handler. We'll use this
 	// server for additional stuff like profiling endpoints.
 	go func() {
-		http.Handle("/traces", tracesGlobal)
+		http.Handle("/traces", http.StripPrefix("/traces", globalHandler))
+		http.Handle("/traces/", http.StripPrefix("/traces/", globalHandler))
 		http.Handle("/debug/fgprof", fgprof.Handler())
 		log.Printf("http://localhost:8080/traces")
 		log.Fatal(http.ListenAndServe("localhost:8080", nil))
@@ -113,7 +104,7 @@ func main() {
 	select {}
 }
 
-func load(ctx context.Context, dst http.Handler) {
+func load(ctx context.Context, dsts ...http.Handler) {
 	for ctx.Err() == nil {
 		f := rand.Float64()
 		switch {
@@ -122,7 +113,7 @@ func load(ctx context.Context, dst http.Handler) {
 			url := fmt.Sprintf("http://irrelevant/%s", key)
 			req, _ := http.NewRequest("GET", url, nil)
 			rec := httptest.NewRecorder()
-			dst.ServeHTTP(rec, req)
+			dsts[0].ServeHTTP(rec, req)
 
 		case f < 0.9:
 			key := getWord()
@@ -130,14 +121,16 @@ func load(ctx context.Context, dst http.Handler) {
 			url := fmt.Sprintf("http://irrelevant/%s", key)
 			req, _ := http.NewRequest("PUT", url, strings.NewReader(val))
 			rec := httptest.NewRecorder()
-			dst.ServeHTTP(rec, req)
+			dsts[0].ServeHTTP(rec, req)
 
 		default:
 			key := getWord()
 			url := fmt.Sprintf("http://irrelevant/%s", key)
 			req, _ := http.NewRequest("DELETE", url, nil)
 			rec := httptest.NewRecorder()
-			dst.ServeHTTP(rec, req)
+			dsts[0].ServeHTTP(rec, req)
 		}
+		dsts = append(dsts[1:], dsts[0])
+		time.Sleep(time.Millisecond)
 	}
 }

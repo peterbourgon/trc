@@ -1,4 +1,4 @@
-package trchttp
+package trcweb
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/internal/trcutil"
 )
 
 // Middleware decorates an HTTP handler by creating a trace for each request via
@@ -26,12 +27,18 @@ func Middleware(
 
 			tr.LazyTracef("%s %s %s", r.RemoteAddr, r.Method, r.URL.String())
 
+			for _, header := range []string{"User-Agent", "Accept", "Content-Type"} {
+				if val := r.Header.Get(header); val != "" {
+					tr.LazyTracef("%s: %s", header, val)
+				}
+			}
+
 			iw := newInterceptor(w)
 
 			defer func(b time.Time) {
 				code := iw.Code()
-				sent := humanizebytes(iw.Written())
-				took := humanizeduration(time.Since(b))
+				sent := trcutil.HumanizeBytes(iw.Written())
+				took := trcutil.HumanizeDuration(time.Since(b))
 				tr.LazyTracef("HTTP %d, %s, %s", code, sent, took)
 			}(time.Now())
 
@@ -41,6 +48,10 @@ func Middleware(
 		})
 	}
 }
+
+//
+//
+//
 
 type interceptor struct {
 	http.ResponseWriter

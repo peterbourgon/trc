@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- Look, I'm doing my best here. I'm sorry. -->
+
+<head>
+<title>trc</title>
+<style>
+{{ template "traces.css" . }}
+
+{{ $highlight_classes := HighlightClasses .Request.Filter }}
+{{ if $highlight_classes }}
+table#summary
+	th{{ range $highlight_classes }}.{{.}}{{ end }},
+	td{{ range $highlight_classes }}.{{.}}{{ end }},
+	tr{{ range $highlight_classes }}.{{.}}{{ end }}
+	{
+		font-weight: bold;
+		{{ if or .Request.Filter.Query .Request.Filter.Sources }}
+		background-color: rgba(255, 255, 0, 0.5);
+		{{ else }}
+		background-color: rgba(173, 216, 230, 0.5);
+		{{ end }}
+	}
+{{ else if not .Request.Filter.IDs }}
+table#summary tr:last-child td {
+	font-weight: bold;
+	{{ if or .Request.Filter.Query .Request.Filter.Sources }}
+	background-color: rgba(255, 255, 0, 0.5);
+	{{ end }}
+}
+{{ end }}
+</style>
+</head>
+
+<!-- --------------------------------- -->
+
+<script>
+function toggleStacksFor(id) {
+	var anyOpen = false;
+	document.querySelectorAll(`div#trace-${id} .stack-details`).forEach(elem => {
+		anyOpen = anyOpen || elem.hasAttribute("open");
+	});
+	document.querySelectorAll(`div#trace-${id} .stack-details`).forEach(elem => {
+		elem.open = !anyOpen;
+	});
+}
+
+function timeSince(s) {
+	var ts  = Date.parse(s);
+	var now = new Date();
+	var ms  = now - ts;
+
+	var days    = Math.floor(ms / (86400 * 1000)); if (days    > 0) { ms -= (days    * (86400 * 1000)) };
+	var hours   = Math.floor(ms / (3600  * 1000)); if (hours   > 0) { ms -= (hours   * (3600  * 1000)) };
+	var minutes = Math.floor(ms / (60    * 1000)); if (minutes > 0) { ms -= (minutes * (60    * 1000)) };
+	var seconds = Math.floor(ms / (1     * 1000)); if (seconds > 0) { ms -= (seconds * (1     * 1000)) };
+
+	switch (true) {
+		case    days > 0: return days+"d"    + hours+"h"   ;
+		case   hours > 0: return hours+"h"   + minutes+"m" ;
+		case minutes > 0: return minutes+"m" + seconds+"s" ;
+		case seconds > 0: return seconds+"s"               ;
+		case      ms > 0: return ms+"ms"                   ;
+		default:          return "fresh";
+	}
+}
+
+function calcDates() {
+	let timeSinces = document.getElementsByClassName("time-since");
+	for (let i = 0; i < timeSinces.length; i++) {
+		timeSinces[i].textContent = timeSince(timeSinces[i].title);
+	}
+}
+
+setInterval(calcDates, 1000);
+
+function highlightQuery() {
+	{{ if .Request.Filter.Query }}
+	let re = new RegExp('('+{{.Request.Filter.Query}}+')');
+	document.getElementById("traces").querySelectorAll(".searchable").forEach(elem => {
+		if (re.test(elem.innerHTML)) {
+			let oldText = elem.textContent.replace(/(<mark class="highlight">|<\/mark>)/gim, ' ');
+			let newText = oldText.replace(re, '<mark class="highlight">$&</mark>');
+			elem.innerHTML = newText;
+			let details = elem.closest("details");
+			if (details != null) {
+				details.open = true;
+			}
+		}
+	});
+	{{ end }}
+}
+</script>
+
+<body>
+
+<!-- --------------------------------- -->
+
+{{ $r := .Request }}
+{{ $n := .Request.Limit }}
+{{ $f := .Request.Filter }}
+{{ $q := .Request.Filter.Query }}
+
+{{ $query_params := printf "n=%d" $n | SafeURL }}
+
+{{ if $q }}
+	{{ $query_params = printf "%s&q=%s" $query_params $q | SafeURL }}
+{{ end }}
+
+{{ if $f.Sources }}
+	{{ range $f.Sources }}
+		{{ $query_params = printf "%s&source=%s" $query_params . | SafeURL }}
+	{{ end }}
+{{ end }}
+
+{{ if not (ReflectDeepEqual DefaultBucketing $r.Bucketing) }}
+	{{ range $r.Bucketing }}
+		{{ $query_params = printf "%s&b=%s" $query_params . | SafeURL }}
+	{{ end }}
+{{ end }}
+
+<!-- --------------------------------- -->
+
+<table id="summary">
+	<tr class="header">
+		<th class="category text">
+			&nbsp;
+		</th>
+
+		<th class="active">
+			<a href="?{{$query_params}}&active">Active</a>
+		</th>
+
+		{{ range .Response.Stats.Bucketing }}
+		<th class="bucket min-{{.String}}">
+			<a href="?{{$query_params}}&min={{.String}}">&geq;{{.String}}</a>
+		</th>
+		{{ end }}
+
+		<th class="errored">
+			<a href="?{{$query_params}}&errored">Error</a>
+		</th>
+
+		<th class="total">
+			Total
+		</th>
+
+		<th class="separator">
+			&nbsp;
+		</th>
+
+		<th class="oldest" title="Oldest trace">
+			Oldest
+		</th>
+
+		<th class="newest" title="Newest trace">
+			Newest
+		</th>
+
+		<th class="rate numeric">
+			Rate
+		</th>
+	</tr>
+
+	{{ range .Response.Stats.AllCategories }}
+	<tr class="category">
+		{{ $category_name         := .Category                    }}
+		{{ $category_class_name   := CategoryClass $category_name }}
+
+		{{ $category_query_params := $query_params }}
+		{{ if ne $category_name "overall" }}
+			{{ $category_query_params = printf "%s&category=%s" $query_params $category_name | SafeURL }}
+		{{ end }}
+
+		{{ $active_count  := .ActiveCount                           }}
+		{{ $errored_count := .ErroredCount                          }}
+		{{ $total_count   := .TotalCount                            }}
+		{{ $pct_active    := PercentInt $active_count  $total_count }}
+		{{ $pct_errored   := PercentInt $errored_count $total_count }}
+
+		<td class="category text {{$category_class_name}}">
+			<a href="?{{$category_query_params}}">{{$category_name}}</a>
+		</td>
+
+		<td class="active count progress active {{$category_class_name}}" title="{{$active_count}} of {{$total_count}}, {{$pct_active}}%">
+			<div class="progress-bar" style="height:{{$pct_active}}%;"></div>
+			<a href="?{{$category_query_params}}&active">{{$active_count}}</a>
+		</td>
+
+		{{ range $i, $n := .BucketCounts }}
+			{{ $min := index $r.Bucketing $i }}
+			{{ $pct := PercentInt $n $total_count }}
+			<td class="bucket count progress min-{{$min}} {{$category_class_name}}" title="{{$n}} of {{$total_count}}, {{$pct}}%">
+				<div class="progress-bar" style="height:{{$pct}}%;"></div>
+				<a href="?{{$category_query_params}}&min={{$min.String}}">{{$n}}</a>
+			</td>
+		{{ end }}
+
+		<td class="errored count progress {{$category_class_name}}" title="{{$errored_count}} of {{$total_count}}, {{$pct_errored}}%">
+			<div class="progress-bar" style="height:{{$pct_errored}}%;"></div>
+			<a href="?{{$category_query_params}}&errored">{{$errored_count}}</a>
+		</td>
+
+		<td class="total count {{$category_class_name}}" title="{{$total_count}} total traces">
+			{{$total_count}}
+		</td>
+
+		<td class="separator {{$category_class_name}}">
+			&nbsp;
+		</td>
+
+		<td class="oldest {{$category_class_name}}" title="{{.Oldest}}">
+			{{ if not .Oldest.IsZero }}
+				{{HumanizeDuration (TimeSince .Oldest)}}
+			{{ else }}
+				n/a
+			{{ end }}
+		</td>
+
+		<td class="newest {{$category_class_name}}" title="{{.Newest}}">
+			{{ if not .Newest.IsZero }}
+				{{HumanizeDuration (TimeSince .Newest)}}
+			{{ else }}
+				n/a
+			{{ end }}
+		</td>
+
+		<td class="rate numeric {{$category_class_name}}" title="{{.TraceRate|HumanizeFloat}} traces/sec, {{.EventRate|HumanizeFloat}} events/sec">
+			{{ HumanizeFloat .TraceRate }}/s
+		</td>
+	</tr>
+	{{ end }}
+
+</table>
+
+<!-- --------------------------------- -->
+
+<div id="topline">
+
+	<div id="topline-form">
+		<form id="search-form" method="GET" target="">
+			<input id="search-box" type="text" name="q" placeholder="regex" value="{{.Request.Filter.Query}}" size="32" autofocus tabindex="0" />
+
+			{{ if gt (len .Response.Sources) 1 }}
+				{{ $first_source := "" }}
+				{{ if gt (len $f.Sources) 0 }} {{ $first_source = index $f.Sources 0 }} {{ end }}
+					<select id="search-source" name="source" {{ if not (eq $first_source "") }}style="background-color: yellow;"{{ end }}>
+						<option value="" {{ if eq $first_source "" }}selected{{ end }}>all sources</option>
+						{{ range .Response.Sources }}
+						<option value="{{.}}" {{ if eq $first_source . }}selected{{ end }}>{{.}}</option>
+						{{ end }}
+					</select>
+			{{ else }}
+				<input type="hidden" name="source" value="" />
+			{{ end }}
+
+			<select id="search-limit" name="n">
+				<option name="10"   {{ if eq .Request.Limit 10  }}selected{{ end }}>10 </option>
+				<option name="25"   {{ if eq .Request.Limit 25  }}selected{{ end }}>25 </option>
+				<option name="100"  {{ if eq .Request.Limit 100 }}selected{{ end }}>100</option>
+				{{ if not ( or ( or (eq .Request.Limit 10) (eq .Request.Limit 25) ) (eq .Request.Limit 100) ) }}
+				<option name="{{.Request.Limit}}" selected>{{.Request.Limit}}</option>
+				{{ end }}
+			</select>
+
+			{{ if and (.Request.Filter.Category) (ne .Request.Filter.Category "overall") }}
+				<input type="hidden" name="category"  value="{{.Request.Filter.Category}}" />
+			{{ end }}
+
+			{{ if .Request.Filter.IsActive }}
+				<input type="hidden" name="active" value="{{.Request.Filter.IsActive}}" />
+			{{ end }}
+
+			{{ if .Request.Filter.IsFinished }}
+				<input type="hidden" name="finished" value="{{.Request.Filter.IsFinished}}" />
+			{{ end }}
+
+			{{ if .Request.Filter.MinDuration }}
+				<input type="hidden" name="min" value="{{.Request.Filter.MinDuration}}" />
+			{{ end }}
+
+			{{ if .Request.Filter.IsSuccess }}
+				<input type="hidden" name="success" value="{{.Request.Filter.IsSuccess}}" />
+			{{ end }}
+
+			{{ if .Request.Filter.IsErrored }}
+				<input type="hidden" name="errored" value="{{.Request.Filter.IsErrored}}" />
+			{{ end }}
+
+			<input id="search-button" type="submit" value="search" />
+
+			<input id="reset-button" type="submit" value="reset" form="none" onclick="window.location.href = window.location.pathname;" />
+		</form>
+
+	</div>
+
+	<script type="text/javascript">
+		let formElem = document.getElementById("search-form");
+		let inputElems = formElem.querySelectorAll("input,select");
+
+		formElem.onsubmit = function() {
+			for (let i = 0; i < inputElems.length; i++) {
+				inputElems[i].disabled = (inputElems[i].value == "");
+			}
+			return true; // ensure form submits
+		};
+
+		for (let i = 0; i < inputElems.length; i++) {
+			inputElems[i].disabled = false; // un-disable for e.g. "back"
+		}
+	</script>
+
+	<div id="topline-metadata">
+		{{ if .Response.Sources }}
+		<div id="topline-search-sources" class="topline-search">
+			<details>
+				<summary>sources={{ len .Response.Sources }}</summary>
+				<div>
+					{{ range .Response.Sources }} {{.}}<br/> {{ end }}
+				</div>
+			</details>
+		</div>
+		{{ end }}
+
+		<div id="topline-search-total" class="topline-search">
+			total={{ .Response.TotalCount }}
+		</div>
+
+		<div id="topline-search-matched" class="topline-search">
+			matched={{ .Response.MatchCount }}
+		</div>
+
+		<div id="topline-search-shown" class="topline-search">
+			shown={{ len .Response.Traces }}
+		</div>
+
+		<div id="topline-search-took" class="topline-search">
+			took={{ HumanizeDuration .Response.Duration }}
+		</div>
+
+		{{ $problems := .Problems }}
+		{{ if $problems }}
+			<div id="topline-search-problems" class="topline-search">
+				<details>
+					<summary>problems={{ len $problems }}</summary>
+					<div>
+						{{ range $problems }}<div>{{.}}</div>{{ end }}
+					</div>
+				</details>
+			</div>
+		{{ end }}
+
+
+	</div>
+
+</div>
+
+<!-- --------------------------------- -->
+
+<script type="text/javascript">
+	function hoverEvent(traceID, eventIndex) {
+		document.querySelectorAll(`
+			div#trace-${traceID} .event-timeline,
+			div#trace-${traceID} .event-${eventIndex},
+			div#trace-${traceID} .event-${eventIndex} .delta .progress-bar
+		`).forEach(elem => {
+			elem.classList.toggle("hover");
+		});
+	}
+</script>
+
+<!-- --------------------------------- -->
+
+<div id="traces">
+{{ if not .Response.Traces }}
+<p>No matching traces found.</p>
+{{ end }}
+
+{{ range .Response.Traces }}
+{{ $tr := . }}
+{{ $traceid := .ID }}
+<a class="trace-anchor" name="{{.ID}}"> </a>
+
+<div id="trace-{{.ID}}" class="trace">
+
+	<!-- Trace top line -->
+	<div class="metadata">
+		{{ $href := printf "id=%s" .ID | SafeURL }}
+
+		<strong><a href="?{{$href}}">{{ .ID }}</a></strong>
+
+		(<a href="?{{$href}}&json">JSON</a>)
+
+		{{ if .Source }}
+			&middot;
+			src <a href="?source={{.Source}}"><strong>{{.Source}}</strong></a>
+		{{ end }}
+
+		&middot;
+		cat <a href="?category={{.Category}}"><strong>{{.Category}}</strong></a>
+
+		<span class="right">
+			<span id="{{.ID}}-stacks" class="stacks-link" onclick="toggleStacksFor({{.ID}});">
+				<strong>≡</strong>
+			</span>
+		</span>
+	</div>
+
+	<!-- Trace event block EXPERIMENTAL -->
+	<div class="events"> <!-- events -->
+
+		<div class="event-timeline-container"> <!-- event-timeline-container -->
+
+			{{ range RenderEvents $tr }} <!-- RenderEvents -->
+
+				<div class="event {{if ge .Index 0}}event-{{.Index}}{{end}} {{if not (or .IsStart .IsEnd)}}event-clickable{{end}}" onmouseover="hoverEvent({{$traceid}}, {{.Index}});" onmouseout="hoverEvent({{$traceid}}, {{.Index}});">
+
+					<div class="timestamp">
+						{{TimeTrunc .When}}
+					</div>
+
+					<div class="delta" title="+{{.Delta}} = {{.Cumulative}}, {{.DeltaPercent | HumanizeFloat}}% of total">
+						{{ if not .IsStart }}<div class="progress-bar" style="width:{{.DeltaPercent}}%;"></div>{{ end }}
+						+{{.Delta | HumanizeDuration}}
+					</div>
+
+					<div class="what {{if or .IsStart .IsEnd}}meta{{end}} {{if .IsError}}error{{end}}">
+						{{      if .IsStart }} start (<span class="time-since" title="{{.When | TimeRFC3339 }}"></span> ago)
+						{{ else if .IsEnd   }} {{.What}}
+						{{ else             }} <span class="searchable">{{ .What | HTMLEscape | InsertBreaks }}</span>
+						{{ end              }}
+					</div>
+
+					{{ if not (or .IsStart .IsEnd) }} <!-- stack -->
+						<div class="stack">
+							<details class="stack-details">
+								<summary></summary>
+								{{ range .Stack }}
+									<span style="color: #999;">
+										<span class="searchable" title="{{.Function}}">{{.Function | HumanizeFunction }}</span>
+										&middot;
+									</span>
+									{{ $href := SourceLink .FileLine }}
+									{{ if $href }}
+										<a class="searchable" href="{{$href}}">{{.CompactFileLine}}</a>
+									{{ else }}
+										<span class="searchable">{{.CompactFileLine}}</span>
+									{{ end }}
+									<br/>
+								{{ end }}
+							</details>
+						</div>
+					{{ end }} <!-- stack -->
+
+				</div>
+
+			{{ end }} <!-- RenderEvents -->
+
+			<div class="event-timeline">
+				{{ range RenderEvents $tr }}
+					{{ if lt .Index 0 }}{{ continue }}{{ end }}
+					<div class="event-timeline-element event-{{.Index}}" style="flex-grow:{{.DeltaPercent | FlexGrowPercent }};" title="{{.Delta| HumanizeDuration}}, {{.DeltaPercent | HumanizeFloat}}%"></div>
+				{{ end }}
+			</div>
+
+		</div> <!-- event-timeline-container -->
+
+		<div class="event summary">
+			<div class="timestamp"></div>
+			<div class="duration" title="{{.Duration}}">&nbsp;{{ if .Finished }}<strong>{{ HumanizeDuration .Duration }}</strong>{{ else }}<em>{{ HumanizeDuration .Duration }}</em>{{ end }}</div>
+			<div class="what"></div>
+		</div>
+
+	</div> <!-- events -->
+	<!-- Trace event block EXPERIMENTAL -->
+
+</div>
+{{ end }}
+</div>
+
+<!-- -------------------- -->
+
+<script type="text/javascript">
+	let events = document.querySelectorAll(".event-clickable");
+	for (let i = 0; i < events.length; i++) {
+		let eventChild = events[i].querySelectorAll(".timestamp, .delta, .when, .what");
+		let eventDetails = events[i].getElementsByTagName("details")[0];
+		for (let j = 0; j < eventChild.length; j++) {
+			eventChild[j].style.cursor = "pointer";
+			eventChild[j].addEventListener("click", function() {
+				eventDetails.open = !eventDetails.open;
+			});
+		}
+	}
+
+	calcDates();
+	highlightQuery();
+
+	let input = document.getElementById("search-box");
+	input.focus();
+	input.select();
+</script>
+
+<!-- -------------------- -->
+
+<div id="debug-info" title="Debug info (D)">
+	<pre>{{ if DebugInfo }}{{ DebugInfo }}{{ else }}(No debug info){{ end }}</pre>
+</div>
+
+<script type="text/javascript">
+	function updateDebugInfo() {
+		let debugElem = document.getElementById("debug-info");
+		if (sessionStorage.getItem("debug-info")) {
+			debugElem.style.visibility = "inherit";
+		} else {
+			debugElem.style.visibility = "hidden";
+		}
+	}
+
+	function toggleDebug() {
+		if (sessionStorage.getItem("debug-info")) {
+			sessionStorage.removeItem("debug-info");
+		} else {
+			sessionStorage.setItem("debug-info", "true");
+		}
+		updateDebugInfo();
+	}
+
+	function toggleStacks() {
+		var anyOpen = false;
+		document.querySelectorAll(`.stack-details`).forEach(elem => {
+			anyOpen = anyOpen || elem.hasAttribute("open");
+		})
+		document.querySelectorAll(`.stack-details`).forEach(elem => {
+			elem.open = !anyOpen;
+		})
+	}
+
+	document.body.addEventListener("keydown", (ev) => {
+		if (ev.srcElement !== document.body) {
+			return;
+		}
+		if (ev.keyCode === 68) { // "d" or "D"
+			toggleDebug();
+		}
+		if (ev.keyCode === 83) { // "s" or "S"
+			toggleStacks();
+		}
+		if (ev.keyCode === 191 && !ev.shiftKey) { // "/"
+			document.getElementById("search-box").focus();
+			ev.preventDefault();
+		}
+	});
+
+	document.getElementById("debug-info").addEventListener("click", (ev) => {
+		toggleDebug();
+	});
+
+	updateDebugInfo();
+
+	document.addEventListener("keydown", (evt) => {
+		evt = evt || window.event;
+		if (evt.keyCode == 27) { // esc
+			document.getElementById("search-box").blur();
+		}
+	});
+</script>
+
+<!-- -------------------- -->
+
+</body>
+</html>

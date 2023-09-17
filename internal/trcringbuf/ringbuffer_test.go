@@ -17,6 +17,8 @@ func assertEqual[T any](t *testing.T, have, want T) {
 }
 
 func TestRingBuffer(t *testing.T) {
+	t.Parallel()
+
 	rb := NewRingBuffer[int](3)
 
 	top := func(k int) []int {
@@ -81,6 +83,8 @@ func TestRingBuffer(t *testing.T) {
 }
 
 func TestRingBufferStats(t *testing.T) {
+	t.Parallel()
+
 	firstLast := func(rb *RingBuffer[int]) (int, int) {
 		var count, first, last int
 		rb.Walk(func(i int) error {
@@ -146,6 +150,8 @@ func TestRingBufferStats(t *testing.T) {
 }
 
 func TestRingBufferResize(t *testing.T) {
+	t.Parallel()
+
 	rb := NewRingBuffer[int](3)
 
 	top := func(k int) []int {

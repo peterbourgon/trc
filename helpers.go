@@ -5,6 +5,8 @@ import (
 	"runtime/trace"
 	"strings"
 	"time"
+
+	"github.com/peterbourgon/trc/internal/trcutil"
 )
 
 // Put the given trace into the context, and return a new context containing
@@ -29,6 +31,19 @@ func Get(ctx context.Context) Trace {
 func MaybeGet(ctx context.Context) (Trace, bool) {
 	tr, ok := ctx.Value(traceContextVal).(Trace)
 	return tr, ok
+}
+
+// SetMaxEvents tries to set the max events for a specific trace, by checking if
+// the trace implements the method SetMaxEvents(int), and, if so, calling that
+// method with the given max events value. Returns the given trace, and a
+// boolean representing whether or not the call was successful.
+func SetMaxEvents(tr Trace, maxEvents int) (Trace, bool) {
+	m, ok := tr.(interface{ SetMaxEvents(int) })
+	if !ok {
+		return tr, false
+	}
+	m.SetMaxEvents(maxEvents)
+	return tr, true
 }
 
 // Region provides more detailed tracing of regions of code, usually functions,
@@ -65,7 +80,7 @@ func Region(ctx context.Context, name string) (context.Context, Trace, func()) {
 	inputTrace.LazyTracef("→ " + name)
 	finish := func() {
 		took := time.Since(begin)
-		inputTrace.LazyTracef("← "+name+" [%s]", took.String())
+		inputTrace.LazyTracef("← "+name+" [%s]", trcutil.HumanizeDuration(took))
 		region.End()
 	}
 
@@ -114,17 +129,4 @@ func (ptr *prefixTrace) Errorf(format string, args ...any) {
 
 func (ptr *prefixTrace) LazyErrorf(format string, args ...any) {
 	ptr.Trace.LazyErrorf(ptr.format+format, append(ptr.args, args...)...)
-}
-
-// SetMaxEvents tries to set the max events for a specific trace, by checking if
-// the trace implements the method SetMaxEvents(int), and, if so, calling that
-// method with the given max events value. Returns the given trace, and a
-// boolean representing whether or not the call was successful.
-func SetMaxEvents(tr Trace, maxEvents int) (Trace, bool) {
-	m, ok := tr.(interface{ SetMaxEvents(int) })
-	if !ok {
-		return tr, false
-	}
-	m.SetMaxEvents(maxEvents)
-	return tr, true
 }
