@@ -117,6 +117,9 @@ func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 	var lastData atomic.Value
 	onRead := func(ctx context.Context, eventType string, eventData []byte) {
 		lastData.Store(time.Now())
+		if eventType == "init" {
+			cfg.debug.Printf("%s: stream re/connected", uri)
+		}
 	}
 
 	reporterDone := make(chan struct{})
@@ -147,7 +150,7 @@ func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 	cfg.debug.Printf("%s: starting", uri)
 	defer cfg.debug.Printf("%s: stopped", uri)
 
-	c := &trcweb.StreamClient{
+	sc := &trcweb.StreamClient{
 		HTTPClient:    http.DefaultClient,
 		URI:           uri,
 		SendBuffer:    cfg.sendBuf,
@@ -157,9 +160,9 @@ func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 	}
 
 	for ctx.Err() == nil {
-		subctx, cancel := context.WithCancel(ctx)                        // per-iteration sub-context
-		errc := make(chan error, 1)                                      // per-iteration stream result
-		go func() { errc <- c.Stream(subctx, cfg.filter, cfg.traces) }() // returns only on terminal errors
+		subctx, cancel := context.WithCancel(ctx)                         // per-iteration sub-context
+		errc := make(chan error, 1)                                       // per-iteration stream result
+		go func() { errc <- sc.Stream(subctx, cfg.filter, cfg.traces) }() // returns only on terminal errors
 
 		select {
 		case <-subctx.Done():
@@ -198,7 +201,7 @@ func (cfg *streamConfig) writeTraces(ctx context.Context) error {
 			count++
 			encode(tr)
 		case <-ctx.Done():
-			cfg.debug.Printf("emitted trace count: %d", count)
+			cfg.debug.Printf("emitted trace count %d", count)
 			return ctx.Err()
 		}
 	}

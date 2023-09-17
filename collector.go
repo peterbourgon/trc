@@ -174,7 +174,20 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 
 	// Sort most recent first.
 	sort.Slice(traces, func(i, j int) bool {
-		return traces[i].Started().After(traces[j].Started())
+		var (
+			iStarted = traces[i].Started()
+			jStarted = traces[j].Started()
+			iID      = traces[i].ID()
+			jID      = traces[j].ID()
+		)
+		switch {
+		case iStarted.After(jStarted):
+			return true
+		case iStarted.Before(jStarted):
+			return false
+		default:
+			return iID > jID
+		}
 	})
 
 	// Take only the most recent traces as per the limit.
