@@ -41,9 +41,6 @@ func TestE2E(t *testing.T) {
 			tr.Errorf("error")
 		}
 		tr.Finish()
-		// if runtime.GOOS == "windows" {
-		// time.Sleep(time.Millisecond)
-		// }
 	}
 
 	testSelect := func(t *testing.T, req *trc.SearchRequest) {

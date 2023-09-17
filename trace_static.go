@@ -132,3 +132,29 @@ func (st *StaticTrace) TrimStacks(depth int) *StaticTrace {
 	}
 	return st
 }
+
+//
+//
+//
+
+type staticTracesNewestFirst []*StaticTrace
+
+func (sts staticTracesNewestFirst) Len() int { return len(sts) }
+
+func (sts staticTracesNewestFirst) Swap(i, j int) { sts[i], sts[j] = sts[j], sts[i] }
+
+func (sts staticTracesNewestFirst) Less(i, j int) bool {
+	var (
+		iStarted = sts[i].Started()
+		jStarted = sts[j].Started()
+	)
+	switch {
+	case iStarted.After(jStarted):
+		return true
+	case iStarted.Before(jStarted):
+		return false
+	default:
+		return sts[i].ID() > sts[j].ID()
+	}
+
+}

@@ -200,9 +200,7 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	// gonna get. We need to do a little bit of post-processing. First, we need
 	// to sort all of the selected traces by start time, and then limit them by
 	// the request limit.
-	sort.Slice(aggregate.Traces, func(i, j int) bool {
-		return aggregate.Traces[i].Started().After(aggregate.Traces[j].Started())
-	})
+	sort.Sort(staticTracesNewestFirst(aggregate.Traces))
 	if len(aggregate.Traces) > req.Limit {
 		aggregate.Traces = aggregate.Traces[:req.Limit]
 	}
