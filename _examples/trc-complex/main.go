@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	_ "net/http/pprof"
 	"strings"
+	"time"
 
 	"github.com/felixge/fgprof"
 
@@ -130,5 +131,6 @@ func load(ctx context.Context, dsts ...http.Handler) {
 			dsts[0].ServeHTTP(rec, req)
 		}
 		dsts = append(dsts[1:], dsts[0])
+		time.Sleep(time.Millisecond)
 	}
 }
