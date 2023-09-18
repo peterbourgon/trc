@@ -287,6 +287,12 @@ func debugInfo() string {
 		sf = trcdebug.StringerFreeCount.Load()
 		sl = trcdebug.StringerLostCount.Load()
 		sr = 100 * float64(sf) / float64(sn)
+
+		xn = trcdebug.StaticTraceNewCount.Load()
+		xa = trcdebug.StaticTraceAllocCount.Load()
+		xf = trcdebug.StaticTraceFreeCount.Load()
+		xl = trcdebug.StaticTraceLostCount.Load()
+		xr = 100 * float64(xf) / float64(xn)
 	)
 	buf := &bytes.Buffer{}
 	tw := tabwriter.NewWriter(buf, 0, 2, 2, ' ', 0)
@@ -294,6 +300,7 @@ func debugInfo() string {
 	fmt.Fprintf(tw, "coreTrace\t%d\t%d\t%d\t%d\t%.2f%%\n", tn, ta, tf, tl, tr)
 	fmt.Fprintf(tw, "coreEvent\t%d\t%d\t%d\t%d\t%.2f%%\n", en, ea, ef, el, er)
 	fmt.Fprintf(tw, "stringer\t%d\t%d\t%d\t%d\t%.2f%%\n", sn, sa, sf, sl, sr)
+	fmt.Fprintf(tw, "StaticTrace\t%d\t%d\t%d\t%d\t%.2f%%\n", xn, xa, xf, xl, xr)
 	tw.Flush()
 	return buf.String()
 }

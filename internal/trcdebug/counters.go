@@ -40,4 +40,19 @@ var (
 
 	// StringerLostCount tracks when a stringer is lost (see above).
 	StringerLostCount atomic.Uint64
+
+	// StaticTraceNewCount tracks when a new static trace is requested.
+	StaticTraceNewCount atomic.Uint64
+
+	// StaticTraceAllocCount tracks when the static trace pool allocs a new
+	// value.
+	StaticTraceAllocCount atomic.Uint64
+
+	// StaticTraceFreeCount tracks when a static trace returns to the pool.
+	StaticTraceFreeCount atomic.Uint64
+
+	// StaticTraceLostCount tracks when a static trace which is still active is
+	// requested to be free'd, which will result in a no-op and the trace
+	// (eventually) being GC'd.
+	StaticTraceLostCount atomic.Uint64
 )

@@ -1,7 +1,11 @@
 package trc
 
 import (
+	"runtime"
+	"sync"
 	"time"
+
+	"github.com/peterbourgon/trc/internal/trcdebug"
 )
 
 // StaticTrace is a "snapshot" of a trace which can be sent over the wire.
@@ -20,18 +24,48 @@ type StaticTrace struct {
 
 var _ Trace = (*StaticTrace)(nil) // needs to be passed to Filter.Allow
 
+var staticTracePool = sync.Pool{
+	New: func() any {
+		trcdebug.StaticTraceAllocCount.Add(1)
+		return &StaticTrace{}
+	},
+}
+
+func newStaticTrace() *StaticTrace {
+	trcdebug.StaticTraceNewCount.Add(1)
+	st := staticTracePool.Get().(*StaticTrace)
+
+	runtime.SetFinalizer(st, func(st *StaticTrace) {
+		trcdebug.StaticTraceFreeCount.Add(1)
+		staticTracePool.Put(st)
+	})
+
+	st.TraceSource = ""
+	st.TraceID = ""
+	st.TraceCategory = ""
+	st.TraceStarted = time.Time{}
+	st.TraceDuration = 0
+	st.TraceDurationStr = ""
+	st.TraceDurationSec = 0
+	st.TraceFinished = false
+	st.TraceErrored = false
+	st.TraceEvents = st.TraceEvents[:0]
+
+	return st
+}
+
 // NewSearchTrace produces a static trace intended for a search response.
 func NewSearchTrace(tr Trace) *StaticTrace {
-	return &StaticTrace{
-		TraceSource:   tr.Source(),
-		TraceID:       tr.ID(),
-		TraceCategory: tr.Category(),
-		TraceStarted:  tr.Started(),
-		TraceDuration: tr.Duration(),
-		TraceFinished: tr.Finished(),
-		TraceErrored:  tr.Errored(),
-		TraceEvents:   tr.Events(),
-	}
+	st := newStaticTrace()
+	st.TraceSource = tr.Source()
+	st.TraceID = tr.ID()
+	st.TraceCategory = tr.Category()
+	st.TraceStarted = tr.Started()
+	st.TraceDuration = tr.Duration()
+	st.TraceFinished = tr.Finished()
+	st.TraceErrored = tr.Errored()
+	st.TraceEvents = tr.Events()
+	return st
 }
 
 // NewStreamTrace produces a static trace meant for streaming. If the trace is
@@ -62,18 +96,20 @@ func NewStreamTrace(tr Trace) *StaticTrace {
 	}
 
 	duration := tr.Duration()
-	return &StaticTrace{
-		TraceSource:      tr.Source(),
-		TraceID:          tr.ID(),
-		TraceCategory:    tr.Category(),
-		TraceStarted:     tr.Started(),
-		TraceDuration:    duration,
-		TraceDurationStr: duration.String(),
-		TraceDurationSec: duration.Seconds(),
-		TraceFinished:    tr.Finished(),
-		TraceErrored:     tr.Errored(),
-		TraceEvents:      events,
-	}
+
+	st := newStaticTrace()
+	st.TraceSource = tr.Source()
+	st.TraceID = tr.ID()
+	st.TraceCategory = tr.Category()
+	st.TraceStarted = tr.Started()
+	st.TraceDuration = duration
+	st.TraceDurationStr = duration.String()
+	st.TraceDurationSec = duration.Seconds()
+	st.TraceFinished = tr.Finished()
+	st.TraceErrored = tr.Errored()
+	st.TraceEvents = events
+
+	return st
 }
 
 // ID implements the Trace interface.

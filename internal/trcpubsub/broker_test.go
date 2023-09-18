@@ -1,10 +1,11 @@
-package trc_test
+package trcpubsub_test
 
 import (
 	"context"
 	"testing"
 
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/internal/trcpubsub"
 )
 
 func BenchmarkBrokerPublish(b *testing.B) {
@@ -14,13 +15,13 @@ func BenchmarkBrokerPublish(b *testing.B) {
 		b.Run(name, func(b *testing.B) {
 			var (
 				ctx, cancel = context.WithCancel(ctxbg)
-				broker      = trc.NewBroker()
+				broker      = trcpubsub.NewBroker(func(tr trc.Trace) trc.Trace { return trc.NewStreamTrace(tr) })
 			)
 			for _, f := range fs {
 				tracec := make(chan trc.Trace)
 				defer func() { <-tracec }()
 				go func(f trc.Filter) {
-					broker.Stream(ctx, f, tracec)
+					broker.Subscribe(ctx, f.Allow, tracec)
 					close(tracec)
 				}(f)
 			}

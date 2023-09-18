@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/peterbourgon/trc/internal/trcpubsub"
 	"github.com/peterbourgon/trc/internal/trcringbuf"
 	"github.com/peterbourgon/trc/internal/trcutil"
 )
@@ -13,8 +14,9 @@ import (
 type Collector struct {
 	source     string
 	newTrace   NewTraceFunc
-	broker     *Broker
 	decorators []DecoratorFunc
+	broker     *trcpubsub.Broker[Trace]
+	publish    DecoratorFunc
 	categories *trcringbuf.RingBuffers[Trace]
 }
 
@@ -46,10 +48,6 @@ type CollectorConfig struct {
 
 	// Decorators are applied to every new trace created in the collector.
 	Decorators []DecoratorFunc
-
-	// Broker is used for streaming traces and events. If not provided, a new
-	// broker will be constructed and used.
-	Broker *Broker
 }
 
 // NewCollector returns a new collector with the provided config.
@@ -62,15 +60,15 @@ func NewCollector(cfg CollectorConfig) *Collector {
 		cfg.NewTrace = New
 	}
 
-	if cfg.Broker == nil {
-		cfg.Broker = NewBroker()
-	}
+	broker := trcpubsub.NewBroker(func(tr Trace) Trace { return NewStreamTrace(tr) })
+	publish := publishDecorator(broker)
 
 	return &Collector{
 		source:     cfg.Source,
 		newTrace:   cfg.NewTrace,
-		broker:     cfg.Broker,
 		decorators: cfg.Decorators,
+		broker:     broker,
+		publish:    publish,
 		categories: trcringbuf.NewRingBuffers[Trace](1000),
 	}
 }
@@ -120,17 +118,13 @@ func (c *Collector) NewTrace(ctx context.Context, category string) (context.Cont
 		return ctx, tr
 	}
 
-	ctx, tr := c.newTrace(ctx, c.source, category, publishDecorator(c.broker))
-
-	for _, d := range c.decorators {
-		tr = d(tr)
-	}
+	ctx, tr := c.newTrace(ctx, c.source, category, append(c.decorators, c.publish)...)
 
 	if droppedTrace, didDrop := c.categories.GetOrCreate(category).Add(tr); didDrop {
 		maybeFree(droppedTrace)
 	}
 
-	return Put(ctx, tr)
+	return ctx, tr
 }
 
 // Search the collector for traces, according to the provided search request.
@@ -194,16 +188,25 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 	}, nil
 }
 
-// Stream traces matching the filter to the channel, returning when the context
-// is canceled. See [Broker.Stream] for more details.
+// Stream will forward a copy of every trace created in the collector matching
+// the filter to the provided channel. If the channel is full, traces will be
+// dropped. For reasons of efficiency, streamed trace events don't have stacks.
+// Stream blocks until the context is canceled.
+//
+// Note that if the filter has IsActive true, the caller will receive not only
+// complete matching traces as they are finished, but also a single-event trace
+// for each individual matching event as they are created. This can be an
+// enormous volume of data, please be careful.
 func (c *Collector) Stream(ctx context.Context, f Filter, ch chan<- Trace) (StreamStats, error) {
-	return c.broker.Stream(ctx, f, ch)
+	return c.broker.Subscribe(ctx, f.Allow, ch)
 }
 
-// StreamStats returns statistics about a currently active subscription.
+// StreamStats returns statistics about a currently active stream.
 func (c *Collector) StreamStats(ctx context.Context, ch chan<- Trace) (StreamStats, error) {
-	return c.broker.StreamStats(ctx, ch)
+	return c.broker.Stats(ctx, ch)
 }
+
+type StreamStats = trcpubsub.Stats
 
 //
 //
