@@ -1,5 +1,6 @@
 *.cpu
 *.mem
+*.trc
 
 # Binaries for programs and plugins
 *.exe
