@@ -45,7 +45,17 @@ func (ss *SearchStats) Observe(trs ...Trace) {
 			ss.Categories[category] = cs
 		}
 
-		cs.EventCount += len(tr.Events())
+		if o, ok := tr.(interface {
+			ObserveStats(*CategoryStats, []time.Duration) bool
+		}); ok && o.ObserveStats(cs, ss.Bucketing) {
+			continue
+		}
+
+		if ec, ok := tr.(interface{ EventCount() int }); ok {
+			cs.EventCount += ec.EventCount()
+		} else {
+			cs.EventCount += len(tr.Events())
+		}
 
 		var (
 			traceStarted  = tr.Started()

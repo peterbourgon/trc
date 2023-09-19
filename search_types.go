@@ -200,12 +200,13 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	// gonna get. We need to do a little bit of post-processing. First, we need
 	// to sort all of the selected traces by start time, and then limit them by
 	// the request limit.
+	collectedCount := len(aggregate.Traces)
 	sort.Sort(staticTracesNewestFirst(aggregate.Traces))
 	if len(aggregate.Traces) > req.Limit {
 		aggregate.Traces = aggregate.Traces[:req.Limit]
 	}
 
-	tr.Tracef("total %d, matched %d, returned %d", aggregate.TotalCount, aggregate.MatchCount, len(aggregate.Traces))
+	tr.Tracef("total %d, matched %d, collected %d, returned %d", aggregate.TotalCount, aggregate.MatchCount, collectedCount, len(aggregate.Traces))
 
 	// Fix up the sources.
 	sourceIndex := make(map[string]struct{}, len(aggregate.Sources))

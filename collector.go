@@ -2,6 +2,7 @@ package trc
 
 import (
 	"context"
+	"runtime/trace"
 	"sort"
 	"time"
 
@@ -129,6 +130,8 @@ func (c *Collector) NewTrace(ctx context.Context, category string) (context.Cont
 
 // Search the collector for traces, according to the provided search request.
 func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResponse, error) {
+	defer trace.StartRegion(ctx, "Collector.Search").End()
+
 	var (
 		tr            = Get(ctx)
 		begin         = time.Now()
@@ -139,32 +142,37 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 		traces        = []*StaticTrace{}
 	)
 
-	for _, ringBuf := range c.categories.GetAll() { // TODO: could do these concurrently
-		var categoryTraces []*StaticTrace
-		ringBuf.Walk(func(candidate Trace) error {
-			// Every candidate trace should be observed.
-			stats.Observe(candidate)
-			totalCount++
+	func() {
+		defer trace.StartRegion(ctx, "Collector.Search.Walk").End()
+		for _, ringBuf := range c.categories.GetAll() {
+			var categoryTraces []*StaticTrace
+			ringBuf.Walk(func(candidate Trace) error {
+				// Every candidate trace should be observed.
+				stats.Observe(candidate)
+				totalCount++
 
-			// If we already have the max number of traces from this category,
-			// then we won't select any more. We do this first, because it's
-			// cheaper than checking allow.
-			if len(categoryTraces) >= req.Limit {
+				// If we already have the max number of traces from this category,
+				// then we won't select any more. We do this first, because it's
+				// cheaper than checking allow.
+				if len(categoryTraces) >= req.Limit {
+					return nil
+				}
+
+				// If the filter won't allow this trace, then we won't select it.
+				if !req.Filter.Allow(candidate) {
+					return nil
+				}
+
+				// Otherwise, collect a static copy of the trace.
+				categoryTraces = append(categoryTraces, NewSearchTrace(candidate).TrimStacks(req.StackDepth))
+				matchCount++
 				return nil
-			}
+			})
+			traces = append(traces, categoryTraces...)
+		}
+	}()
 
-			// If the filter won't allow this trace, then we won't select it.
-			if !req.Filter.Allow(candidate) {
-				return nil
-			}
-
-			// Otherwise, collect a static copy of the trace.
-			categoryTraces = append(categoryTraces, NewSearchTrace(candidate).TrimStacks(req.StackDepth))
-			matchCount++
-			return nil
-		})
-		traces = append(traces, categoryTraces...)
-	}
+	tr.LazyTracef("walk all traces complete")
 
 	// Sort most recent first.
 	sort.Sort(staticTracesNewestFirst(traces))

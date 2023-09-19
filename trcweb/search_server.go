@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime/trace"
 	"strconv"
 	"strings"
 
@@ -26,8 +27,10 @@ type SearchServer struct {
 }
 
 func (s *SearchServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx, task := trace.NewTask(r.Context(), "SearchServer.Search")
+	defer task.End()
+
 	var (
-		ctx    = r.Context()
 		tr     = trc.Get(ctx)
 		isJSON = strings.Contains(r.Header.Get("content-type"), "application/json")
 		data   = SearchData{}
@@ -104,6 +107,9 @@ func NewSearchClient(client HTTPClient, uri string) *SearchClient {
 
 // Search implements [trc.Searcher].
 func (c *SearchClient) Search(ctx context.Context, req *trc.SearchRequest) (_ *trc.SearchResponse, err error) {
+	ctx, task := trace.NewTask(ctx, "SearchClient.Search")
+	defer task.End()
+
 	tr := trc.Get(ctx)
 
 	defer func() {

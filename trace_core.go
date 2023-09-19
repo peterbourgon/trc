@@ -283,6 +283,48 @@ func (tr *coreTrace) EventsDetail(n int, stacks bool) []Event {
 	return events
 }
 
+func (tr *coreTrace) EventCount() int {
+	tr.mtx.Lock()
+	defer tr.mtx.Unlock()
+
+	return len(tr.events)
+}
+
+func (tr *coreTrace) ObserveStats(cs *CategoryStats, bucketing []time.Duration) bool {
+	tr.mtx.Lock()
+	defer tr.mtx.Unlock()
+
+	cs.EventCount += len(tr.events)
+
+	var (
+		traceStarted  = tr.start
+		traceFinished = tr.finished
+		traceErrored  = tr.errored
+		isActive      = !traceFinished
+		isBucket      = traceFinished && !traceErrored
+		isErrored     = traceFinished && traceErrored
+	)
+	switch {
+	case isActive:
+		cs.ActiveCount++
+	case isBucket:
+		duration := tr.duration
+		for i, bucket := range bucketing {
+			if bucket > duration {
+				break
+			}
+			cs.BucketCounts[i]++
+		}
+	case isErrored:
+		cs.ErroredCount++
+	}
+
+	cs.Oldest = olderOf(cs.Oldest, traceStarted)
+	cs.Newest = newerOf(cs.Newest, traceStarted)
+
+	return true
+}
+
 //
 
 func (tr *coreTrace) SetMaxEvents(max int) {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/peterbourgon/trc/internal/trcutil"
 )
@@ -156,4 +157,20 @@ func (ptr *publishTrace) Free() {
 	if f, ok := ptr.Trace.(interface{ Free() }); ok {
 		f.Free()
 	}
+}
+
+func (ptr *publishTrace) EventCount() int {
+	if ec, ok := ptr.Trace.(interface{ EventCount() int }); ok {
+		return ec.EventCount()
+	}
+	return len(ptr.Trace.Events())
+}
+
+func (ptr *publishTrace) ObserveStats(cs *CategoryStats, bucketing []time.Duration) bool {
+	if os, ok := ptr.Trace.(interface {
+		ObserveStats(cs *CategoryStats, bucketing []time.Duration) bool
+	}); ok {
+		return os.ObserveStats(cs, bucketing)
+	}
+	return false
 }

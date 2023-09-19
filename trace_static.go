@@ -72,6 +72,12 @@ func NewSearchTrace(tr Trace) *StaticTrace {
 // active, only the most recent event is included. Also, stacks are removed from
 // every event.
 func NewStreamTrace(tr Trace) *StaticTrace {
+	if gct, ok := tr.(interface{ getCoreTrace() *coreTrace }); ok {
+		if ctr := gct.getCoreTrace(); ctr != nil {
+			tr = ctr
+		}
+	}
+
 	var (
 		isActive          = !tr.Finished()
 		detail, canDetail = tr.(interface{ EventsDetail(int, bool) []Event })

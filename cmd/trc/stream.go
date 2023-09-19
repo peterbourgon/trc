@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/oklog/run"
@@ -68,6 +68,7 @@ func (cfg *streamConfig) Exec(ctx context.Context, args []string) error {
 	cfg.debug.Printf("starting streams")
 
 	var g run.Group
+
 	{
 		ctx, cancel := context.WithCancel(ctx)
 		g.Add(func() error {
@@ -76,6 +77,7 @@ func (cfg *streamConfig) Exec(ctx context.Context, args []string) error {
 			cancel()
 		})
 	}
+
 	{
 		ctx, cancel := context.WithCancel(ctx)
 		g.Add(func() error {
@@ -84,9 +86,27 @@ func (cfg *streamConfig) Exec(ctx context.Context, args []string) error {
 			cancel()
 		})
 	}
+
+	// {
+	// ctx, cancel := context.WithCancel(ctx)
+	// g.Add(func() error {
+	// sig := make(chan os.Signal, 1)
+	// signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	// select {
+	// case <-ctx.Done():
+	// return ctx.Err()
+	// case s := <-sig:
+	// return fmt.Errorf("received signalz %s", s)
+	// }
+	// }, func(err error) {
+	// cancel()
+	// })
+	// }
+
 	{
-		g.Add(run.SignalHandler(ctx, os.Interrupt, os.Kill))
+		g.Add(run.SignalHandler(ctx, syscall.SIGINT, syscall.SIGTERM))
 	}
+
 	return g.Run()
 }
 
@@ -114,11 +134,27 @@ func (cfg *streamConfig) runStreams(ctx context.Context) error {
 func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 	ctx, _ = trc.Prefix(ctx, "<%s>", uri)
 
-	var lastData atomic.Value
+	var (
+		lastData  atomic.Value
+		lastDrops uint64
+		lastSends uint64
+	)
 	onRead := func(ctx context.Context, eventType string, eventData []byte) {
 		lastData.Store(time.Now())
-		if eventType == "init" {
+		switch eventType {
+		case "init":
 			cfg.debug.Printf("%s: stream re/connected", uri)
+		case "stats":
+			var stats trc.StreamStats
+			if err := json.Unmarshal(eventData, &stats); err != nil {
+				cfg.debug.Printf("%s: stats error: %v", uri, err)
+				return
+			}
+			if stats.Drops > lastDrops {
+				cfg.debug.Printf("%s: sends=%d had drops=%d", uri, stats.Sends-lastSends, stats.Drops-lastDrops)
+			}
+			lastSends = stats.Sends
+			lastDrops = stats.Drops
 		}
 	}
 
