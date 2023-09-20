@@ -9,5 +9,3 @@ require (
 	github.com/oklog/ulid/v2 v2.1.0
 	github.com/peterbourgon/ff/v4 v4.0.0-alpha.3
 )
-
-replace github.com/oklog/run => ../../oklog/run
