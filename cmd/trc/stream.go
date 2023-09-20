@@ -134,39 +134,36 @@ func (cfg *streamConfig) runStreams(ctx context.Context) error {
 func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 	ctx, _ = trc.Prefix(ctx, "<%s>", uri)
 
-	var (
-		lastData  atomic.Value
-		lastDrops uint64
-		lastSends uint64
-	)
+	var lastDataTime atomic.Value
+
 	onRead := func(ctx context.Context, eventType string, eventData []byte) {
-		lastData.Store(time.Now())
+		lastDataTime.Store(time.Now())
+
 		switch eventType {
 		case "init":
 			cfg.debug.Printf("%s: stream re/connected", uri)
+
 		case "stats":
 			var stats trc.StreamStats
 			if err := json.Unmarshal(eventData, &stats); err != nil {
 				cfg.debug.Printf("%s: stats error: %v", uri, err)
-				return
+			} else {
+				cfg.debug.Printf("%s: %s", uri, stats)
 			}
-			if stats.Drops > lastDrops {
-				cfg.debug.Printf("%s: sends=%d had drops=%d", uri, stats.Sends-lastSends, stats.Drops-lastDrops)
-			}
-			lastSends = stats.Sends
-			lastDrops = stats.Drops
 		}
 	}
 
 	reporterDone := make(chan struct{})
 	go func() {
 		defer close(reporterDone)
+
 		ticker := time.NewTicker(cfg.statsInterval)
 		defer ticker.Stop()
+
 		for {
 			select {
 			case ts := <-ticker.C:
-				last, ok := lastData.Load().(time.Time)
+				last, ok := lastDataTime.Load().(time.Time)
 				delta := ts.Sub(last)
 				switch {
 				case !ok:
@@ -174,6 +171,7 @@ func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 				case delta > 2*cfg.statsInterval:
 					cfg.debug.Printf("%s: last data %s ago", uri, delta.Truncate(100*time.Millisecond))
 				}
+
 			case <-ctx.Done():
 				return
 			}

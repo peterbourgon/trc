@@ -150,6 +150,9 @@ func (f *Filter) Allow(tr Trace) bool {
 
 	f.initializeQueryRegexp()
 	if f.regexp != nil {
+		if f.regexp.MatchString(tr.ID()) {
+			return true
+		}
 		for _, ev := range tr.Events() {
 			if f.regexp.MatchString(ev.What) {
 				return true

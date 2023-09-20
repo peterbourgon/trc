@@ -148,7 +148,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 			var categoryTraces []*StaticTrace
 			ringBuf.Walk(func(candidate Trace) error {
 				// Every candidate trace should be observed.
-				stats.Observe(candidate)
+				stats.Observe(ctx, candidate)
 				totalCount++
 
 				// If we already have the max number of traces from this category,
@@ -172,7 +172,7 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 		}
 	}()
 
-	tr.LazyTracef("walk all traces complete")
+	tr.LazyTracef("walked trace count %d", totalCount)
 
 	// Sort most recent first.
 	sort.Sort(staticTracesNewestFirst(traces))
@@ -214,11 +214,8 @@ func (c *Collector) StreamStats(ctx context.Context, ch chan<- Trace) (StreamSta
 	return c.broker.Stats(ctx, ch)
 }
 
+// StreamStats represents statistics for an active stream.
 type StreamStats = trcpubsub.Stats
-
-//
-//
-//
 
 func maybeFree(tr Trace) {
 	if f, ok := tr.(interface{ Free() }); ok {

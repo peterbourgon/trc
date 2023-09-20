@@ -388,7 +388,7 @@ function highlightQuery() {
 	<div class="metadata">
 		{{ $href := printf "id=%s" .ID | SafeURL }}
 
-		<strong><a href="?{{$href}}">{{ .ID }}</a></strong>
+		<strong><a href="?{{$href}}" class="searchable">{{ .ID }}</a></strong>
 
 		(<a href="?{{$href}}&json">JSON</a>)
 

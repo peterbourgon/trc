@@ -41,8 +41,6 @@ func (s *SearchServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		body := http.MaxBytesReader(w, r.Body, maxRequestBodySizeBytes)
 		var req trc.SearchRequest
 		if err := json.NewDecoder(body).Decode(&req); err != nil {
-			//tr.Errorf("decode JSON request failed, using defaults (%v)", err)
-			//data.Problems = append(data.Problems, fmt.Errorf("decode JSON request: %w", err))
 			tr.Errorf("decode JSON request failed (%v) -- returning error", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -130,6 +128,7 @@ func (c *SearchClient) Search(ctx context.Context, req *trc.SearchRequest) (_ *t
 
 	httpReq.Header.Set("content-type", "application/json; charset=utf-8")
 	httpReq.Header.Set("accept", "application/json")
+	httpReq.Header.Set("x-trc-id", tr.ID())
 
 	httpRes, err := c.client.Do(httpReq)
 	if err != nil {

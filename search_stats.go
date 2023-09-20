@@ -1,6 +1,7 @@
 package trc
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"time"
@@ -36,7 +37,7 @@ func (ss *SearchStats) IsZero() bool {
 }
 
 // Observe the given traces into the search stats.
-func (ss *SearchStats) Observe(trs ...Trace) {
+func (ss *SearchStats) Observe(ctx context.Context, trs ...Trace) {
 	for _, tr := range trs {
 		category := tr.Category()
 		cs, ok := ss.Categories[category]
@@ -51,11 +52,7 @@ func (ss *SearchStats) Observe(trs ...Trace) {
 			continue
 		}
 
-		if ec, ok := tr.(interface{ EventCount() int }); ok {
-			cs.EventCount += ec.EventCount()
-		} else {
-			cs.EventCount += len(tr.Events())
-		}
+		cs.EventCount += len(tr.Events())
 
 		var (
 			traceStarted  = tr.Started()

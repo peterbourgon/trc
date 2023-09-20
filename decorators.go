@@ -102,6 +102,15 @@ func (ltr *logTrace) Free() {
 	}
 }
 
+func (ltr *logTrace) ObserveStats(cs *CategoryStats, bucketing []time.Duration) bool {
+	if os, ok := ltr.Trace.(interface {
+		ObserveStats(cs *CategoryStats, bucketing []time.Duration) bool
+	}); ok {
+		return os.ObserveStats(cs, bucketing)
+	}
+	return false
+}
+
 //
 //
 //
@@ -157,13 +166,6 @@ func (ptr *publishTrace) Free() {
 	if f, ok := ptr.Trace.(interface{ Free() }); ok {
 		f.Free()
 	}
-}
-
-func (ptr *publishTrace) EventCount() int {
-	if ec, ok := ptr.Trace.(interface{ EventCount() int }); ok {
-		return ec.EventCount()
-	}
-	return len(ptr.Trace.Events())
 }
 
 func (ptr *publishTrace) ObserveStats(cs *CategoryStats, bucketing []time.Duration) bool {

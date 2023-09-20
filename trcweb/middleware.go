@@ -27,7 +27,7 @@ func Middleware(
 
 			tr.LazyTracef("%s %s %s", r.RemoteAddr, r.Method, r.URL.String())
 
-			for _, header := range []string{"User-Agent", "Accept", "Content-Type"} {
+			for _, header := range []string{"User-Agent", "Accept", "Content-Type", "X-TRC-ID"} {
 				if val := r.Header.Get(header); val != "" {
 					tr.LazyTracef("%s: %s", header, val)
 				}
