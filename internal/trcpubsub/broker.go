@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 )
 
 type Broker[T any] struct {
 	mtx         sync.Mutex
 	transform   func(T) T
 	subscribers map[chan<- T]*subscriber[T]
+	active      atomic.Bool
 }
 
 type subscriber[T any] struct {
@@ -26,10 +28,14 @@ func NewBroker[T any](transform func(T) T) *Broker[T] {
 }
 
 func (b *Broker[T]) Publish(ctx context.Context, val T) {
+	if !b.active.Load() { // optimization
+		return
+	}
+
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
-	if len(b.subscribers) <= 0 {
+	if len(b.subscribers) <= 0 { // re-check, might have changed
 		return
 	}
 
@@ -55,13 +61,18 @@ func (b *Broker[T]) Subscribe(ctx context.Context, allow func(T) bool, ch chan<-
 	if err := func() error {
 		b.mtx.Lock()
 		defer b.mtx.Unlock()
+
 		if _, ok := b.subscribers[ch]; ok {
 			return fmt.Errorf("already subscribed")
 		}
+
 		b.subscribers[ch] = &subscriber[T]{
 			allow: allow,
 			ch:    ch,
 		}
+
+		b.active.Store(len(b.subscribers) > 0)
+
 		return nil
 	}(); err != nil {
 		return Stats{}, err
@@ -72,8 +83,12 @@ func (b *Broker[T]) Subscribe(ctx context.Context, allow func(T) bool, ch chan<-
 	sub := func() *subscriber[T] {
 		b.mtx.Lock()
 		defer b.mtx.Unlock()
+
 		sub := b.subscribers[ch]
 		delete(b.subscribers, ch)
+
+		b.active.Store(len(b.subscribers) > 0)
+
 		return sub
 	}()
 	if sub == nil {
@@ -86,10 +101,12 @@ func (b *Broker[T]) Subscribe(ctx context.Context, allow func(T) bool, ch chan<-
 func (b *Broker[T]) Stats(ctx context.Context, ch chan<- T) (Stats, error) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
+
 	sub, ok := b.subscribers[ch]
 	if !ok {
 		return Stats{}, fmt.Errorf("not subscribed")
 	}
+
 	return sub.stats, nil
 }
 

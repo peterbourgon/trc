@@ -14,22 +14,6 @@ import (
 	"github.com/peterbourgon/trc/internal/trcdebug"
 )
 
-//
-//
-//
-
-const (
-	traceMaxEventsMin     = 10
-	traceMaxEventsDefault = 1000
-	traceMaxEventsMax     = 10000
-)
-
-var traceMaxEvents = func() *atomic.Int32 {
-	var v atomic.Int32
-	v.Store(traceMaxEventsDefault)
-	return &v
-}()
-
 // SetTraceMaxEvents sets the max number of events that will be stored in a core
 // trace. Once a core trace has the maximum number of events, additional events
 // increment a "truncated" counter, which is represented as a single final
@@ -46,7 +30,21 @@ func SetTraceMaxEvents(n int) {
 	traceMaxEvents.Store(int32(n))
 }
 
-var traceNoStacks atomic.Bool
+const (
+	traceMaxEventsMin     = 10
+	traceMaxEventsDefault = 1000
+	traceMaxEventsMax     = 10000
+)
+
+var traceMaxEvents = func() *atomic.Int32 {
+	var v atomic.Int32
+	v.Store(traceMaxEventsDefault)
+	return &v
+}()
+
+//
+//
+//
 
 // SetTraceStacks sets a boolean that determines whether trace events include
 // stack traces. By default, trace event stacks are enabled, because they're
@@ -59,6 +57,8 @@ func SetTraceStacks(enable bool) {
 	traceNoStacks.Store(!enable)
 }
 
+var traceNoStacks atomic.Bool
+
 //
 //
 //
@@ -70,7 +70,7 @@ var traceIDEntropy = ulid.DefaultEntropy()
 // events that can be stored in a trace is set when the trace is created, based
 // on the current value of TraceMaxEvents.
 type coreTrace struct {
-	mtx         sync.Mutex
+	mtx         sync.RWMutex
 	source      string
 	id          ulid.ULID
 	category    string
@@ -151,8 +151,8 @@ func (tr *coreTrace) Started() time.Time {
 }
 
 func (tr *coreTrace) Duration() time.Duration {
-	tr.mtx.Lock()
-	defer tr.mtx.Unlock()
+	tr.mtx.RLock()
+	defer tr.mtx.RUnlock()
 
 	if tr.finished {
 		return tr.duration
@@ -242,15 +242,15 @@ func (tr *coreTrace) Finish() {
 }
 
 func (tr *coreTrace) Finished() bool {
-	tr.mtx.Lock()
-	defer tr.mtx.Unlock()
+	tr.mtx.RLock()
+	defer tr.mtx.RUnlock()
 
 	return tr.finished
 }
 
 func (tr *coreTrace) Errored() bool {
-	tr.mtx.Lock()
-	defer tr.mtx.Unlock()
+	tr.mtx.RLock()
+	defer tr.mtx.RUnlock()
 
 	return tr.errored
 }
@@ -260,8 +260,8 @@ func (tr *coreTrace) Events() []Event {
 }
 
 func (tr *coreTrace) EventsDetail(n int, stacks bool) []Event {
-	tr.mtx.Lock()
-	defer tr.mtx.Unlock()
+	tr.mtx.RLock()
+	defer tr.mtx.RUnlock()
 
 	if n <= 0 || n > len(tr.events) {
 		n = len(tr.events)
@@ -284,8 +284,8 @@ func (tr *coreTrace) EventsDetail(n int, stacks bool) []Event {
 }
 
 func (tr *coreTrace) ObserveStats(cs *CategoryStats, bucketing []time.Duration) bool {
-	tr.mtx.Lock()
-	defer tr.mtx.Unlock()
+	tr.mtx.RLock()
+	defer tr.mtx.RUnlock()
 
 	cs.EventCount += len(tr.events)
 

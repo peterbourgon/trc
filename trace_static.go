@@ -24,36 +24,6 @@ type StaticTrace struct {
 
 var _ Trace = (*StaticTrace)(nil) // needs to be passed to Filter.Allow
 
-var staticTracePool = sync.Pool{
-	New: func() any {
-		trcdebug.StaticTraceAllocCount.Add(1)
-		return &StaticTrace{}
-	},
-}
-
-func newStaticTrace() *StaticTrace {
-	trcdebug.StaticTraceNewCount.Add(1)
-	st := staticTracePool.Get().(*StaticTrace)
-
-	runtime.SetFinalizer(st, func(st *StaticTrace) {
-		trcdebug.StaticTraceFreeCount.Add(1)
-		staticTracePool.Put(st)
-	})
-
-	st.TraceSource = ""
-	st.TraceID = ""
-	st.TraceCategory = ""
-	st.TraceStarted = time.Time{}
-	st.TraceDuration = 0
-	st.TraceDurationStr = ""
-	st.TraceDurationSec = 0
-	st.TraceFinished = false
-	st.TraceErrored = false
-	st.TraceEvents = st.TraceEvents[:0]
-
-	return st
-}
-
 // NewSearchTrace produces a static trace intended for a search response.
 func NewSearchTrace(tr Trace) *StaticTrace {
 	st := newStaticTrace()
@@ -72,12 +42,6 @@ func NewSearchTrace(tr Trace) *StaticTrace {
 // active, only the most recent event is included. Also, stacks are removed from
 // every event.
 func NewStreamTrace(tr Trace) *StaticTrace {
-	if gct, ok := tr.(interface{ getCoreTrace() *coreTrace }); ok {
-		if ctr := gct.getCoreTrace(); ctr != nil {
-			tr = ctr
-		}
-	}
-
 	var (
 		isActive          = !tr.Finished()
 		detail, canDetail = tr.(interface{ EventsDetail(int, bool) []Event })
@@ -172,6 +136,40 @@ func (st *StaticTrace) TrimStacks(depth int) *StaticTrace {
 			st.TraceEvents[i] = ev
 		}
 	}
+	return st
+}
+
+//
+//
+//
+
+var staticTracePool = sync.Pool{
+	New: func() any {
+		trcdebug.StaticTraceAllocCount.Add(1)
+		return &StaticTrace{}
+	},
+}
+
+func newStaticTrace() *StaticTrace {
+	trcdebug.StaticTraceNewCount.Add(1)
+	st := staticTracePool.Get().(*StaticTrace)
+
+	runtime.SetFinalizer(st, func(st *StaticTrace) {
+		trcdebug.StaticTraceFreeCount.Add(1)
+		staticTracePool.Put(st)
+	})
+
+	st.TraceSource = ""
+	st.TraceID = ""
+	st.TraceCategory = ""
+	st.TraceStarted = time.Time{}
+	st.TraceDuration = 0
+	st.TraceDurationStr = ""
+	st.TraceDurationSec = 0
+	st.TraceFinished = false
+	st.TraceErrored = false
+	st.TraceEvents = st.TraceEvents[:0]
+
 	return st
 }
 
