@@ -8,6 +8,10 @@ import (
 	"github.com/peterbourgon/trc"
 )
 
+type HTTPClient interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
 const maxRequestBodySizeBytes = 1 * 1024 * 1024 // 1MB
 
 func encodeFilter(f trc.Filter, r *http.Request) {
@@ -127,4 +131,12 @@ func contains[T comparable](haystack []T, needle T) bool {
 		}
 	}
 	return false
+}
+
+func makeErrorStrings(errs ...error) []string {
+	strs := make([]string, len(errs))
+	for i := range errs {
+		strs[i] = errs[i].Error()
+	}
+	return strs
 }

@@ -46,6 +46,17 @@ func SetMaxEvents(tr Trace, maxEvents int) (Trace, bool) {
 	return tr, true
 }
 
+// Task TODO
+func Task(ctx context.Context, name string) (context.Context, Trace, func()) {
+	ctx, task := trace.NewTask(ctx, name)
+	tr := Get(ctx)
+	tr.LazyTracef("⇒ %s", name)
+	return ctx, tr, func() {
+		tr.LazyTracef("⇐ %s", name)
+		task.End()
+	}
+}
+
 // Region provides more detailed tracing of regions of code, usually functions,
 // which is visible in the trace event "what" text. It decorates the trace in
 // the context by annotating events with the provided name, and also creates a

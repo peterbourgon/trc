@@ -12,40 +12,47 @@ import (
 	"strings"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trcweb/assets"
 )
 
-// SearchData is returned by normal trace search requests.
+// SearchData is returned by the search server.
 type SearchData struct {
 	Request  trc.SearchRequest  `json:"request"`
 	Response trc.SearchResponse `json:"response"`
-	Problems []error            `json:"-"` // for rendering, not transmitting
+	Problems []string           `json:"problems,omitempty"`
 }
 
+//
+//
+//
+
 type SearchServer struct {
-	Searcher
+	trc.Searcher
+}
+
+func NewSearchServer(s trc.Searcher) *SearchServer {
+	return &SearchServer{
+		Searcher: s,
+	}
 }
 
 func (s *SearchServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx, task := trace.NewTask(r.Context(), "SearchServer.Search")
+	ctx, task := trace.NewTask(r.Context(), "SearchServer.ServeHTTP")
 	defer task.End()
 
 	var (
 		tr     = trc.Get(ctx)
-		isJSON = strings.Contains(r.Header.Get("content-type"), "application/json")
+		isJSON = RequestHasContentType(r, "application/json")
 		data   = SearchData{}
 	)
 
 	switch {
 	case isJSON:
 		body := http.MaxBytesReader(w, r.Body, maxRequestBodySizeBytes)
-		var req trc.SearchRequest
-		if err := json.NewDecoder(body).Decode(&req); err != nil {
+		if err := json.NewDecoder(body).Decode(&data.Request); err != nil {
 			tr.Errorf("decode JSON request failed (%v) -- returning error", err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			respondError(w, r, err, http.StatusBadRequest)
 			return
 		}
-		data.Request = req
 
 	default:
 		urlquery := r.URL.Query()
@@ -57,26 +64,26 @@ func (s *SearchServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data.Problems = append(data.Problems, data.Request.Normalize()...)
+	data.Problems = append(data.Problems, makeErrorStrings(data.Request.Normalize()...)...)
 
 	tr.LazyTracef("search request %s", data.Request)
 
 	res, err := s.Searcher.Search(ctx, &data.Request)
 	if err != nil {
-		data.Problems = append(data.Problems, fmt.Errorf("execute select request: %w", err))
+		data.Problems = append(data.Problems, fmt.Errorf("execute search request: %w", err).Error())
 	} else {
 		data.Response = *res
 	}
 
 	for _, problem := range data.Response.Problems {
-		data.Problems = append(data.Problems, fmt.Errorf("response: %s", problem))
+		data.Problems = append(data.Problems, fmt.Errorf("response: %s", problem).Error())
 	}
 
 	if n := len(data.Response.Stats.Categories); n >= 100 {
-		data.Problems = append(data.Problems, fmt.Errorf("way too many categories (%d)", n))
+		data.Problems = append(data.Problems, fmt.Errorf("way too many categories (%d)", n).Error())
 	}
 
-	renderResponse(ctx, w, r, assets.FS, "traces.html", nil, data)
+	respondData(ctx, w, r, 200, "traces.html", data)
 }
 
 //

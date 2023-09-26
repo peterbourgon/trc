@@ -54,7 +54,9 @@ func NewStreamTrace(tr Trace) *StaticTrace {
 		events = detail.EventsDetail(-1, false)
 	case !canDetail && isActive:
 		events = tr.Events()
-		events = events[len(events)-1:]
+		if len(events) > 0 {
+			events = events[len(events)-1:]
+		}
 		for i := range events {
 			events[i].Stack = events[i].Stack[:0]
 		}
@@ -197,4 +199,51 @@ func (sts staticTracesNewestFirst) Less(i, j int) bool {
 		return sts[i].ID() > sts[j].ID()
 	}
 
+}
+
+//
+//
+//
+
+type transformStreamTrace struct {
+	Trace
+
+	events []Event
+	init   sync.Once
+}
+
+func newTransformStreamTrace(tr Trace) Trace {
+	return &transformStreamTrace{
+		Trace: tr,
+	}
+}
+
+func (xtr *transformStreamTrace) Events() []Event {
+	xtr.init.Do(func() {
+		var (
+			isActive          = !xtr.Trace.Finished()
+			detail, canDetail = xtr.Trace.(interface{ EventsDetail(int, bool) []Event })
+			events            = []Event{}
+		)
+		switch {
+		case canDetail && isActive:
+			events = detail.EventsDetail(1, false)
+		case canDetail && !isActive:
+			events = detail.EventsDetail(-1, false)
+		case !canDetail && isActive:
+			events = xtr.Trace.Events()
+			events = events[len(events)-1:]
+			for i := range events {
+				events[i].Stack = events[i].Stack[:0]
+			}
+		case !canDetail && !isActive:
+			events = xtr.Trace.Events()
+			for i := range events {
+				events[i].Stack = events[i].Stack[:0]
+			}
+		}
+		xtr.events = events
+	})
+
+	return xtr.events
 }

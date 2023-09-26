@@ -13,6 +13,7 @@ import (
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffval"
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/trcstream"
 	"github.com/peterbourgon/trc/trcweb"
 )
 
@@ -134,17 +135,26 @@ func (cfg *streamConfig) runStreams(ctx context.Context) error {
 func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 	ctx, _ = trc.Prefix(ctx, "<%s>", uri)
 
-	var lastDataTime atomic.Value
+	var (
+		lastDataTime atomic.Value
+		initCount    int
+	)
 
+	// This function is called on every received event.
 	onRead := func(ctx context.Context, eventType string, eventData []byte) {
 		lastDataTime.Store(time.Now())
 
 		switch eventType {
 		case "init":
-			cfg.debug.Printf("%s: stream re/connected", uri)
+			if initCount == 0 {
+				cfg.debug.Printf("%s: stream connected", uri)
+			} else {
+				cfg.debug.Printf("%s: stream reconnected", uri)
+			}
+			initCount++
 
 		case "stats":
-			var stats trc.StreamStats
+			var stats trcstream.Stats
 			if err := json.Unmarshal(eventData, &stats); err != nil {
 				cfg.debug.Printf("%s: stats error: %v", uri, err)
 			} else {
@@ -153,6 +163,7 @@ func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 		}
 	}
 
+	// This goroutine reports if it's been too long without any data.
 	reporterDone := make(chan struct{})
 	go func() {
 		defer close(reporterDone)

@@ -66,11 +66,12 @@ func BenchmarkTraceEvents(b *testing.B) {
 	})
 }
 
-func BenchmarkCollector(b *testing.B) {
+/*
+func BenchmarkCollectorStream(b *testing.B) {
 	ctx := context.Background()
 	category := "category"
 
-	b.Run("baseline", func(b *testing.B) {
+	b.Run("zero subscribers baseline test", func(b *testing.B) {
 		collector := trc.NewDefaultCollector()
 
 		b.ResetTimer()
@@ -83,8 +84,14 @@ func BenchmarkCollector(b *testing.B) {
 		}
 	})
 
-	b.Run("publish no subscribers", func(b *testing.B) {
+	b.Run("one subscriber bad category", func(b *testing.B) {
 		collector := trc.NewDefaultCollector()
+
+		ctx, cancel := context.WithCancel(ctx)
+		ch := make(chan trc.Trace)
+		errc := make(chan error, 1)
+		go func() { _, err := collector.Stream(ctx, trc.Filter{Category: "xxx"}, ch); errc <- err }()
+		defer func() { cancel(); <-errc }()
 
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -96,7 +103,7 @@ func BenchmarkCollector(b *testing.B) {
 		}
 	})
 
-	b.Run("publish one skip subscriber", func(b *testing.B) {
+	b.Run("one subscriber bad IsErrored", func(b *testing.B) {
 		collector := trc.NewDefaultCollector()
 
 		ctx, cancel := context.WithCancel(ctx)
@@ -115,7 +122,7 @@ func BenchmarkCollector(b *testing.B) {
 		}
 	})
 
-	b.Run("publish one drop subscriber", func(b *testing.B) {
+	b.Run("one subscriber always drop", func(b *testing.B) {
 		collector := trc.NewDefaultCollector()
 
 		ctx, cancel := context.WithCancel(ctx)
@@ -133,4 +140,40 @@ func BenchmarkCollector(b *testing.B) {
 			tr.Finish()
 		}
 	})
+
+	b.Run("one subscriber should recv", func(b *testing.B) {
+		collector := trc.NewDefaultCollector()
+
+		ctx, cancel := context.WithCancel(ctx)
+
+		ch := make(chan trc.Trace)
+		defer close(ch)
+
+		var received int
+		go func() {
+			for range ch {
+				received++
+			}
+		}()
+
+		errc := make(chan error, 1)
+		go func() {
+			_, err := collector.Stream(ctx, trc.Filter{}, ch)
+			errc <- err
+		}()
+		defer func() {
+			cancel()
+			<-errc
+		}()
+
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			_, tr := collector.NewTrace(ctx, category)
+			tr.Tracef("trace event")
+			tr.Finish()
+		}
+	})
 }
+*/

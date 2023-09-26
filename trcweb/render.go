@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
-	"mime"
 	"net/http"
 	"net/url"
 	"os"
@@ -22,83 +21,59 @@ import (
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/internal/trcdebug"
 	"github.com/peterbourgon/trc/internal/trcutil"
+	"github.com/peterbourgon/trc/trcweb/assets"
 )
 
-func renderResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, fs fs.FS, templateName string, funcs template.FuncMap, data any) {
-	var (
-		asksForJSON = r.URL.Query().Has("json")
-		acceptsJSON = requestExplicitlyAccepts(r, "application/json")
-		acceptsHTML = requestExplicitlyAccepts(r, "text/html")
-		useHTML     = acceptsHTML && !asksForJSON
-		useJSON     = acceptsJSON || asksForJSON
-	)
+func respondData(ctx context.Context, w http.ResponseWriter, r *http.Request, code int, templateName string, data any) {
+	tr := trc.Get(ctx)
+
 	switch {
-	case useHTML:
-		renderHTML(ctx, w, fs, templateName, funcs, data)
-	case useJSON:
-		renderJSON(ctx, w, data)
+	case RequestExplicitlyAccepts(r, "text/html"):
+		body, err := renderTemplate(ctx, assets.FS, templateName, data)
+		if err != nil {
+			tr.LazyErrorf("render template: %v", err)
+			code = http.StatusInternalServerError
+			body = []byte(fmt.Sprintf(`<html><body><h1>Error</h1><p>%v</p>`, err))
+		}
+		w.Header().Set("content-type", "text/html; charset=utf-8")
+		w.WriteHeader(code)
+		w.Write(body)
+
 	default:
-		renderJSON(ctx, w, data)
+		respondJSON(w, r, code, data)
 	}
 }
 
-func renderHTML(ctx context.Context, w http.ResponseWriter, fs fs.FS, templateName string, funcs template.FuncMap, data any) {
-	tr := trc.Get(ctx)
+func respondError(w http.ResponseWriter, r *http.Request, err error, code int) {
+	switch {
+	case RequestExplicitlyAccepts(r, "text/html"):
+		w.Header().Set("content-type", "text/html")
+		w.WriteHeader(code)
+		fmt.Fprintf(w, `
+			<html>
+			<head>
+			<title>trc - error</title>
+			</head>
+			<body>
+			<h1>Error</h1>
+			<p>HTTP %d (%s) -- %s</p>
+			</body>
+			</html>
+		`, code, http.StatusText(code), err.Error())
 
-	code := http.StatusOK
-	body, err := renderTemplate(ctx, fs, templateName, funcs, data)
-	if err != nil {
-		tr.LazyErrorf("render template: %v", err)
-		code = http.StatusInternalServerError
-		body = []byte(fmt.Sprintf(`<html><body><h1>Error</h1><p>%v</p>`, err))
+	default:
+		respondJSON(w, r, code, map[string]any{
+			"error":       err.Error(),
+			"status_code": code,
+			"status_text": http.StatusText(code),
+		})
 	}
-
-	w.Header().Set("content-type", "text/html; charset=utf-8")
-	w.WriteHeader(code)
-	w.Write(body)
 }
 
-func renderJSON(ctx context.Context, w http.ResponseWriter, data any) {
-	tr := trc.Get(ctx)
-
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-
-	code := http.StatusOK
-	if err := enc.Encode(data); err != nil {
-		code = http.StatusInternalServerError
-		tr.LazyErrorf("marshal JSON: %v", err)
-		buf.Reset()
-		buf.WriteString(`{"error":"failed to marshal response"}`)
-	} else {
-		tr.LazyTracef("marshaled JSON response (%s)", trcutil.HumanizeBytes(buf.Len()))
-	}
-
+func respondJSON(w http.ResponseWriter, r *http.Request, code int, data any) {
 	w.Header().Set("content-type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
-	buf.WriteTo(w)
-}
-
-func requestExplicitlyAccepts(r *http.Request, acceptable ...string) bool {
-	accept := parseAcceptMediaTypes(r)
-	for _, want := range acceptable {
-		if _, ok := accept[want]; ok {
-			return true
-		}
-	}
-	return false
-}
-
-func parseAcceptMediaTypes(r *http.Request) map[string]map[string]string {
-	mediaTypes := map[string]map[string]string{} // type: params
-	for _, a := range strings.Split(r.Header.Get("accept"), ",") {
-		mediaType, params, err := mime.ParseMediaType(a)
-		if err != nil {
-			continue
-		}
-		mediaTypes[mediaType] = params
-	}
-	return mediaTypes
+	json.NewEncoder(w).Encode(data)
 }
 
 // AssetsDirEnvKey can be set to a local path for the assets directory, in which
@@ -106,7 +81,7 @@ func parseAcceptMediaTypes(r *http.Request) map[string]map[string]string {
 // assets. This is especially useful when developing.
 const AssetsDirEnvKey = "TRC_ASSETS_DIR"
 
-func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFuncs template.FuncMap, data any) (_ []byte, err error) {
+func renderTemplate(ctx context.Context, fs fs.FS, templateName string, data any) (_ []byte, err error) {
 	_, tr, finish := trc.Region(ctx, "renderTemplate")
 	defer finish()
 
@@ -116,7 +91,7 @@ func renderTemplate(ctx context.Context, fs fs.FS, templateName string, userFunc
 		}
 	}()
 
-	templateRoot, err := template.New("root").Funcs(templateFuncs).Funcs(userFuncs).ParseFS(fs, "*")
+	templateRoot, err := template.New("root").Funcs(templateFuncs).ParseFS(fs, "*")
 	if err != nil {
 		return nil, fmt.Errorf("parse assets: %w", err)
 	}

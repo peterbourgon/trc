@@ -17,7 +17,7 @@ func TestE2E(t *testing.T) {
 
 	ctx := context.Background()
 	collector := trc.NewDefaultCollector()
-	collectorServer := trcweb.NewTraceServer(collector)
+	collectorServer := trcweb.NewSearchServer(collector)
 	httpServer := httptest.NewServer(collectorServer)
 	defer httpServer.Close()
 	traceClient := trcweb.NewSearchClient(http.DefaultClient, httpServer.URL)

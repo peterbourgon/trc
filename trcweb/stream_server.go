@@ -14,10 +14,17 @@ import (
 	"github.com/bernerdschaefer/eventsource"
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/internal/trcutil"
+	"github.com/peterbourgon/trc/trcstream"
 )
 
 type StreamServer struct {
-	Streamer
+	trcstream.Streamer
+}
+
+func NewStreamServer(s trcstream.Streamer) *StreamServer {
+	return &StreamServer{
+		Streamer: s,
+	}
 }
 
 func (s *StreamServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -28,7 +35,7 @@ func (s *StreamServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var f trc.Filter
 	switch {
-	case strings.Contains(r.Header.Get("content-type"), "application/json"):
+	case RequestHasContentType(r, "application/json"):
 		body := http.MaxBytesReader(w, r.Body, maxRequestBodySizeBytes)
 		if err := json.NewDecoder(body).Decode(&f); err != nil {
 			tr.Errorf("decode filter error (%v), using default", err)
@@ -71,6 +78,7 @@ func (s *StreamServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 	defer func() {
 		<-donec
+		cancel()
 	}()
 
 	eventsource.Handler(func(lastId string, encoder *eventsource.Encoder, stop <-chan bool) {
@@ -142,13 +150,18 @@ func (s *StreamServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 
-			case <-ctx.Done():
-				tr.LazyTracef("stopping: context done (%v)", ctx.Err())
+			case <-donec:
+				tr.LazyTracef("stopping: stream done")
+				cancel()
 				return
 
 			case <-stop:
 				tr.LazyTracef("stopping: stop signal (canceling context)")
 				cancel()
+				return
+
+			case <-ctx.Done():
+				tr.LazyTracef("stopping: context done (%v)", ctx.Err())
 				return
 			}
 		}
@@ -280,9 +293,11 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 	for {
 		ev, err := es.Read()
 		if errors.Is(err, eventsource.ErrClosed) {
+			tr.LazyTracef("read server-sent event: connection closed (%v)", err)
 			return nil
 		}
 		if err != nil {
+			tr.LazyTracef("read server-sent event: error (%v)", err)
 			return fmt.Errorf("read server-sent event: %w", err)
 		}
 
@@ -299,11 +314,13 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 			}
 			select {
 			case <-ctx.Done():
+				tr.LazyTracef("emit event: context done")
 			case ch <- &st:
+				// OK
 			}
 
 		case "stats":
-			var stats trc.StreamStats
+			var stats trcstream.Stats
 			if err := json.Unmarshal(ev.Data, &stats); err == nil {
 				tr.LazyTracef("%s", stats)
 			} else {

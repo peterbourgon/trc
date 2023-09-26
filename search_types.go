@@ -212,6 +212,9 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	// Fix up the sources.
 	sourceIndex := make(map[string]struct{}, len(aggregate.Sources))
 	for _, source := range aggregate.Sources {
+		if source == "" {
+			continue
+		}
 		sourceIndex[source] = struct{}{}
 	}
 	sourceList := make([]string, 0, len(sourceIndex))
