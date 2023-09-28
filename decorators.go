@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/peterbourgon/trc/internal/trcutil"
 )
@@ -55,9 +54,7 @@ type logTrace struct {
 
 var _ interface{ Free() } = (*logTrace)(nil)
 
-var _ interface {
-	ObserveStats(*CategoryStats, []time.Duration) bool
-} = (*logTrace)(nil)
+//var _ interface { ObserveStats(*CategoryStats, []time.Duration) bool } = (*logTrace)(nil)
 
 func (ltr *logTrace) Tracef(format string, args ...any) {
 	ltr.logEvent(format, args...)
@@ -105,11 +102,9 @@ func (ltr *logTrace) Free() {
 	}
 }
 
-func (ltr *logTrace) ObserveStats(cs *CategoryStats, bucketing []time.Duration) bool {
-	if os, ok := ltr.Trace.(interface {
-		ObserveStats(cs *CategoryStats, bucketing []time.Duration) bool
-	}); ok {
-		return os.ObserveStats(cs, bucketing)
+func (ltr *logTrace) StreamEvents() ([]Event, bool) {
+	if s, ok := ltr.Trace.(interface{ StreamEvents() ([]Event, bool) }); ok {
+		return s.StreamEvents()
 	}
-	return false
+	return nil, false
 }

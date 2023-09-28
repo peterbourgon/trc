@@ -27,7 +27,11 @@ func NewBroker[T any](transform func(T) T) *Broker[T] {
 	}
 }
 
-func (b *Broker[T]) Publish(ctx context.Context, val T) {
+func (b *Broker[T]) IsActive() bool {
+	return b.active.Load()
+}
+
+func (b *Broker[T]) Publish(val T) {
 	if !b.active.Load() { // optimization
 		return
 	}

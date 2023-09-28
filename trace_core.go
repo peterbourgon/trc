@@ -14,20 +14,27 @@ import (
 	"github.com/peterbourgon/trc/internal/trcdebug"
 )
 
-// SetTraceMaxEvents sets the max number of events that will be stored in a core
+// TraceMaxEvents sets the max number of events that will be stored in a core
 // trace. Once a core trace has the maximum number of events, additional events
 // increment a "truncated" counter, which is represented as a single final
-// event. The default is 1000, the minimum is 10, and the maximum is 10000.
+// event.
+//
+// The default is 1000, the minimum is 10, and the maximum is 10000. The
+// function returns the previous value. If n is less than zero, the function
+// simply returns the current value.
 //
 // Changing this value does not affect traces that have already been created.
-func SetTraceMaxEvents(n int) {
+func TraceMaxEvents(n int) int {
+	if n < 0 {
+		return int(traceMaxEvents.Load())
+	}
+
 	if n < traceMaxEventsMin {
 		n = traceMaxEventsMin
-	}
-	if n > traceMaxEventsMax {
+	} else if n > traceMaxEventsMax {
 		n = traceMaxEventsMax
 	}
-	traceMaxEvents.Store(int32(n))
+	return int(traceMaxEvents.Swap(int32(n)))
 }
 
 const (
@@ -46,14 +53,14 @@ var traceMaxEvents = func() *atomic.Int32 {
 //
 //
 
-// SetTraceStacks sets a boolean that determines whether trace events include
-// stack traces. By default, trace event stacks are enabled, because they're
-// generally very useful. However, computing stack traces can be the single most
-// computationally heavy part of using package trc, so disabling them altogether
-// can be a significant performance optimization.
+// TraceStacks sets a boolean that determines whether trace events include stack
+// traces. By default, stack traces are enabled, because they're generally very
+// useful. However, computing stack traces can be the single most costly part of
+// using package trc, so disabling them altogether can be a significant
+// performance optimization.
 //
 // Changing this value does not affect traces that have already been created.
-func SetTraceStacks(enable bool) {
+func TraceStacks(enable bool) {
 	traceNoStacks.Store(!enable)
 }
 
@@ -68,7 +75,7 @@ var traceIDEntropy = ulid.DefaultEntropy()
 // coreTrace is the default, mutable implementation of a trace. Trace IDs are
 // ULIDs, using a default monotonic source of entropy. The maximum number of
 // events that can be stored in a trace is set when the trace is created, based
-// on the current value of TraceMaxEvents.
+// on the current value of traceMaxEvents.
 type coreTrace struct {
 	mtx         sync.RWMutex
 	source      string
@@ -84,7 +91,10 @@ type coreTrace struct {
 	truncated   int
 }
 
-var _ Trace = (*coreTrace)(nil)
+var (
+	_ Trace = (*coreTrace)(nil)
+	_ Freer = (*coreTrace)(nil)
+)
 
 // New creates a new core trace with the given source and category, and injects
 // it into the given context. It returns a new context containing that trace,
@@ -103,14 +113,14 @@ var traceContextVal traceContextKey
 
 var coreTracePool = sync.Pool{
 	New: func() any {
-		trcdebug.CoreTraceAllocCount.Add(1)
+		trcdebug.CoreTraceCounters.Alloc.Add(1)
 		return &coreTrace{}
 	},
 }
 
 // newCoreTrace starts a new trace with the given source and category.
 func newCoreTrace(source, category string) *coreTrace {
-	trcdebug.CoreTraceNewCount.Add(1)
+	trcdebug.CoreTraceCounters.Get.Add(1)
 	now := time.Now().UTC()
 	tr := coreTracePool.Get().(*coreTrace)
 	tr.id = ulid.MustNew(ulid.Timestamp(now), traceIDEntropy) // defer String computation
@@ -121,7 +131,7 @@ func newCoreTrace(source, category string) *coreTrace {
 	tr.finished = false
 	tr.duration = 0
 	tr.nostackflag = iff(traceNoStacks.Load(), flagNoStack, uint8(0))
-	tr.events = tr.events[:0]
+	tr.events = nil
 	tr.eventsmax = int(traceMaxEvents.Load())
 	tr.truncated = 0
 	return tr
@@ -256,19 +266,10 @@ func (tr *coreTrace) Errored() bool {
 }
 
 func (tr *coreTrace) Events() []Event {
-	return tr.EventsDetail(-1, true)
-}
-
-func (tr *coreTrace) EventsDetail(n int, stacks bool) []Event {
 	tr.mtx.RLock()
 	defer tr.mtx.RUnlock()
 
-	if n <= 0 || n > len(tr.events) {
-		n = len(tr.events)
-	}
-
-	latest := tr.events[len(tr.events)-n:]
-	events := snapshotEvents(latest, stacks)
+	events := snapshotEvents(tr.events, true)
 
 	if tr.truncated > 0 {
 		events = append(events, Event{
@@ -277,46 +278,37 @@ func (tr *coreTrace) EventsDetail(n int, stacks bool) []Event {
 			Stack:   nil,
 			IsError: false,
 		})
-		events = events[1:]
 	}
 
 	return events
 }
 
-func (tr *coreTrace) ObserveStats(cs *CategoryStats, bucketing []time.Duration) bool {
+func (tr *coreTrace) StreamEvents() ([]Event, bool) {
 	tr.mtx.RLock()
 	defer tr.mtx.RUnlock()
 
-	cs.EventCount += len(tr.events)
-
 	var (
-		traceFinished = tr.finished
-		traceErrored  = tr.errored
-		isActive      = !traceFinished
-		isBucket      = traceFinished && !traceErrored
-		isErrored     = traceFinished && traceErrored
+		n      = len(tr.events)
+		events []Event
 	)
 	switch {
-	case isActive:
-		cs.ActiveCount++
-	case isBucket:
-		for i, bucket := range bucketing {
-			if bucket > tr.duration {
-				break
-			}
-			cs.BucketCounts[i]++
-		}
-	case isErrored:
-		cs.ErroredCount++
+	case tr.finished:
+		events = snapshotEvents(tr.events, false)
+	case !tr.finished && n <= 0:
+		events = []Event{}
+	case !tr.finished && n > 0 && tr.truncated <= 0:
+		events = snapshotEvents(tr.events[len(tr.events)-1:], false)
+	case !tr.finished && n > 0 && tr.truncated > 0:
+		events = []Event{{
+			When:    time.Now().UTC(),
+			What:    fmt.Sprintf("(truncated event count %d)", tr.truncated),
+			Stack:   nil,
+			IsError: false,
+		}}
 	}
 
-	cs.Oldest = olderOf(cs.Oldest, tr.start)
-	cs.Newest = newerOf(cs.Newest, tr.start)
-
-	return true
+	return events, true
 }
-
-//
 
 func (tr *coreTrace) SetMaxEvents(max int) {
 	tr.mtx.Lock()
@@ -337,16 +329,16 @@ func (tr *coreTrace) Free() {
 	defer tr.mtx.Unlock()
 
 	if !tr.finished { // presumably still in use by caller(s)
-		trcdebug.CoreTraceLostCount.Add(1)
+		trcdebug.CoreTraceCounters.Lost.Add(1)
 		return // can't recycle, will be GC'd
 	}
 
 	for _, ev := range tr.events {
-		ev.free() // TODO: these individual frees can show up in profiles, maybe pre-allocate?
+		ev.release() // TODO: these individual frees can show up in profiles, maybe pre-allocate?
 	}
-	tr.events = tr.events[:0]
+	tr.events = nil
 
-	trcdebug.CoreTraceFreeCount.Add(1)
+	trcdebug.CoreTraceCounters.Put.Add(1)
 	coreTracePool.Put(tr)
 }
 
@@ -356,7 +348,7 @@ func (tr *coreTrace) Free() {
 
 var coreEventPool = sync.Pool{
 	New: func() any {
-		trcdebug.CoreEventAllocCount.Add(1)
+		trcdebug.CoreEventCounters.Alloc.Add(1)
 		return &coreEvent{}
 	},
 }
@@ -381,7 +373,7 @@ const (
 )
 
 func newCoreEvent(flags uint8, format string, args ...any) *coreEvent {
-	trcdebug.CoreEventNewCount.Add(1)
+	trcdebug.CoreEventCounters.Get.Add(1)
 
 	cev := coreEventPool.Get().(*coreEvent)
 
@@ -430,20 +422,20 @@ func (cev *coreEvent) getStack() []Frame {
 	return cev.stack
 }
 
-func (cev *coreEvent) free() {
-	cev.what.free()
+func (cev *coreEvent) release() {
+	cev.what.release()
 	cev.what = nil
 	cev.pcn = 0
 	cev.stack = cev.stack[:0]
-	trcdebug.CoreEventFreeCount.Add(1)
+	trcdebug.CoreEventCounters.Put.Add(1)
 	coreEventPool.Put(cev)
 }
 
-func snapshotEvents(cevs []*coreEvent, stacks bool) []Event {
+func snapshotEvents(cevs []*coreEvent, withStack bool) []Event {
 	res := make([]Event, len(cevs))
 	for i, cev := range cevs {
 		var stack []Frame
-		if stacks {
+		if withStack {
 			stack = cev.getStack()
 		}
 		res[i] = Event{
@@ -478,7 +470,7 @@ func ignoreStackFrameFunction(function string) bool {
 
 var stringerPool = sync.Pool{
 	New: func() any {
-		trcdebug.StringerAllocCount.Add(1)
+		trcdebug.StringerCounters.Alloc.Add(1)
 		return &stringer{}
 	},
 }
@@ -497,7 +489,7 @@ type nullString struct {
 var zeroNullString nullString // valid false, value empty
 
 func newNormalStringer(format string, args ...any) *stringer {
-	trcdebug.StringerNewCount.Add(1)
+	trcdebug.StringerCounters.Get.Add(1)
 	z := stringerPool.Get().(*stringer)
 	z.fmt = format
 	z.args = args
@@ -506,7 +498,7 @@ func newNormalStringer(format string, args ...any) *stringer {
 }
 
 func newLazyStringer(format string, args ...any) *stringer {
-	trcdebug.StringerNewCount.Add(1)
+	trcdebug.StringerCounters.Get.Add(1)
 	z := stringerPool.Get().(*stringer)
 	z.fmt = format
 	z.args = args
@@ -536,7 +528,7 @@ func (z *stringer) String() string {
 	return ns.value
 }
 
-func (z *stringer) free() {
-	trcdebug.StringerFreeCount.Add(1)
+func (z *stringer) release() {
+	trcdebug.StringerCounters.Put.Add(1)
 	stringerPool.Put(z)
 }

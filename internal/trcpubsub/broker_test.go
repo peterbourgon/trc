@@ -9,12 +9,12 @@ import (
 )
 
 func BenchmarkBrokerPublish(b *testing.B) {
-	ctxbg := context.Background()
+	ctx := context.Background()
 
 	fn := func(name string, fs ...trc.Filter) {
 		b.Run(name, func(b *testing.B) {
 			var (
-				ctx, cancel = context.WithCancel(ctxbg)
+				ctx, cancel = context.WithCancel(ctx)
 				broker      = trcpubsub.NewBroker(func(tr trc.Trace) trc.Trace { return trc.NewStreamTrace(tr) })
 			)
 			for _, f := range fs {
@@ -26,13 +26,13 @@ func BenchmarkBrokerPublish(b *testing.B) {
 				}(f)
 			}
 
-			_, tr := trc.New(ctxbg, "source", "category")
+			_, tr := trc.New(ctx, "source", "category")
 			defer tr.Finish()
 
 			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				broker.Publish(ctxbg, tr)
+				broker.Publish(tr)
 			}
 
 			cancel()

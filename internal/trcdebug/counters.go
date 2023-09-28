@@ -2,57 +2,49 @@ package trcdebug
 
 import "sync/atomic"
 
+// PoolCounters track operations on a sync.Pool for a specific type.
+type PoolCounters struct {
+	Get   atomic.Uint64
+	Alloc atomic.Uint64
+	Put   atomic.Uint64
+	Lost  atomic.Uint64
+}
+
+// ReusePercent returns the percent (0..100) reuse of the pool type.
+func (pc *PoolCounters) ReusePercent() float64 {
+	var (
+		get   = pc.Get.Load()
+		alloc = pc.Alloc.Load()
+		reuse = get - alloc
+	)
+	if get <= 0 {
+		return 0.0
+	}
+	return 100 * float64(reuse) / float64(get)
+}
+
+// Values returns the current values of the counters.
+func (pc *PoolCounters) Values() (get, alloc, put, lost uint64, reuse float64) {
+	var (
+		g = pc.Get.Load()
+		a = pc.Alloc.Load()
+		p = pc.Put.Load()
+		l = pc.Lost.Load()
+		r = pc.ReusePercent()
+	)
+	return g, a, p, l, r
+}
+
 var (
-	// CoreTraceNewCount tracks when a new core trace is requested.
-	CoreTraceNewCount atomic.Uint64
+	// CoreTraceCounters tracks the core trace pool.
+	CoreTraceCounters PoolCounters
 
-	// CoreTraceAllocCount tracks when the core trace pool allocs a new value.
-	CoreTraceAllocCount atomic.Uint64
+	// CoreEventCounters tracks the core event pool.
+	CoreEventCounters PoolCounters
 
-	// CoreTraceFreeCount tracks when a core trace returns to the pool.
-	CoreTraceFreeCount atomic.Uint64
+	// StringerCounters tracks the stringer pool.
+	StringerCounters PoolCounters
 
-	// CoreTraceLostCount tracks when a core trace which is still active
-	// is requested to be free'd, which will result in a no-op and the trace
-	// (eventually) being GC'd.
-	CoreTraceLostCount atomic.Uint64
-
-	// CoreEventNewCount tracks when a new core event is requested.
-	CoreEventNewCount atomic.Uint64
-
-	// CoreEventAllocCount tracks when the core event pool allocs a new value.
-	CoreEventAllocCount atomic.Uint64
-
-	// CoreEventFreeCount tracks when a core event returns to the pool.
-	CoreEventFreeCount atomic.Uint64
-
-	// CoreEventLostCount tracks when a core event is lost (see above).
-	CoreEventLostCount atomic.Uint64
-
-	// StringerNewCount tracks when a new stringer is requested.
-	StringerNewCount atomic.Uint64
-
-	// StringerAllocCount tracks when the stringer pool allocs a new value.
-	StringerAllocCount atomic.Uint64
-
-	// StringerFreeCount tracks when a stringer returns to the pool.
-	StringerFreeCount atomic.Uint64
-
-	// StringerLostCount tracks when a stringer is lost (see above).
-	StringerLostCount atomic.Uint64
-
-	// StaticTraceNewCount tracks when a new static trace is requested.
-	StaticTraceNewCount atomic.Uint64
-
-	// StaticTraceAllocCount tracks when the static trace pool allocs a new
-	// value.
-	StaticTraceAllocCount atomic.Uint64
-
-	// StaticTraceFreeCount tracks when a static trace returns to the pool.
-	StaticTraceFreeCount atomic.Uint64
-
-	// StaticTraceLostCount tracks when a static trace which is still active is
-	// requested to be free'd, which will result in a no-op and the trace
-	// (eventually) being GC'd.
-	StaticTraceLostCount atomic.Uint64
+	// StaticTraceCounters tracks the StaticTrace pool.
+	StaticTraceCounters PoolCounters
 )

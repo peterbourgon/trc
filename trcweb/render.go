@@ -245,38 +245,23 @@ func highlightClasses(f trc.Filter) []string {
 func debugInfo() string {
 	buf := &bytes.Buffer{}
 
-	var (
-		tn = trcdebug.CoreTraceNewCount.Load()
-		ta = trcdebug.CoreTraceAllocCount.Load()
-		tf = trcdebug.CoreTraceFreeCount.Load()
-		tl = trcdebug.CoreTraceLostCount.Load()
-		tr = 100 * float64(tf) / float64(tn)
-
-		en = trcdebug.CoreEventNewCount.Load()
-		ea = trcdebug.CoreEventAllocCount.Load()
-		ef = trcdebug.CoreEventFreeCount.Load()
-		el = trcdebug.CoreEventLostCount.Load()
-		er = 100 * float64(ef) / float64(en)
-
-		sn = trcdebug.StringerNewCount.Load()
-		sa = trcdebug.StringerAllocCount.Load()
-		sf = trcdebug.StringerFreeCount.Load()
-		sl = trcdebug.StringerLostCount.Load()
-		sr = 100 * float64(sf) / float64(sn)
-
-		xn = trcdebug.StaticTraceNewCount.Load()
-		xa = trcdebug.StaticTraceAllocCount.Load()
-		xf = trcdebug.StaticTraceFreeCount.Load()
-		xl = trcdebug.StaticTraceLostCount.Load()
-		xr = 100 * float64(xf) / float64(xn)
-	)
-	tw := tabwriter.NewWriter(buf, 0, 2, 2, ' ', 0)
-	fmt.Fprintf(tw, "POOL\tNEW\tALLOC\tFREE\tLOST\tREUSE\n")
-	fmt.Fprintf(tw, "coreTrace\t%d\t%d\t%d\t%d\t%.2f%%\n", tn, ta, tf, tl, tr)
-	fmt.Fprintf(tw, "coreEvent\t%d\t%d\t%d\t%d\t%.2f%%\n", en, ea, ef, el, er)
-	fmt.Fprintf(tw, "stringer\t%d\t%d\t%d\t%d\t%.2f%%\n", sn, sa, sf, sl, sr)
-	fmt.Fprintf(tw, "StaticTrace\t%d\t%d\t%d\t%d\t%.2f%%\n", xn, xa, xf, xl, xr)
-	tw.Flush()
+	{
+		tw := tabwriter.NewWriter(buf, 0, 2, 2, ' ', 0)
+		fmt.Fprintf(tw, "POOL\tGET\tALLOC\tPUT\tACTIVE\tLOST\tREUSE\n")
+		for _, pair := range []struct {
+			name     string
+			counters *trcdebug.PoolCounters
+		}{
+			{"coreTrace", &trcdebug.CoreTraceCounters},
+			{"coreEvent", &trcdebug.CoreEventCounters},
+			{"stringer", &trcdebug.StringerCounters},
+			{"StaticTrace", &trcdebug.StaticTraceCounters},
+		} {
+			get, alloc, put, lost, reuse := pair.counters.Values()
+			fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%.2f%%\n", pair.name, get, alloc, put, int64(get)-int64(put), lost, reuse)
+		}
+		tw.Flush()
+	}
 
 	return buf.String()
 }

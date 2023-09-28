@@ -83,6 +83,7 @@ func (s *StreamServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	eventsource.Handler(func(lastId string, encoder *eventsource.Encoder, stop <-chan bool) {
 		tr.LazyTracef("event source handler started")
+		trID := tr.ID()
 
 		stats := time.NewTicker(stats)
 		defer stats.Stop()
@@ -132,7 +133,7 @@ func (s *StreamServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 
 			case recv := <-tracec:
-				if recv.ID() == tr.ID() {
+				if recv.ID() == trID {
 					continue // don't publish our own trace events
 				}
 

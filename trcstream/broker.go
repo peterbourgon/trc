@@ -2,7 +2,6 @@ package trcstream
 
 import (
 	"context"
-	"time"
 
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/internal/trcpubsub"
@@ -25,8 +24,8 @@ type Streamer interface {
 
 var _ Streamer = (*Broker)(nil)
 
-func (b *Broker) Publish(ctx context.Context, tr trc.Trace) {
-	b.broker.Publish(ctx, tr)
+func (b *Broker) Publish(tr trc.Trace) {
+	b.broker.Publish(tr)
 }
 
 type Stats = trcpubsub.Stats
@@ -39,60 +38,87 @@ func (b *Broker) StreamStats(ctx context.Context, ch chan<- trc.Trace) (Stats, e
 	return b.broker.Stats(ctx, ch)
 }
 
-func (b *Broker) PublishDecorator() trc.DecoratorFunc {
+//
+
+func (b *Broker) PublishTracesDecorator() trc.DecoratorFunc {
+	return b.publishDecorator(false)
+}
+
+func (b *Broker) PublishEventsDecorator() trc.DecoratorFunc {
+	return b.publishDecorator(true)
+}
+
+func (b *Broker) publishDecorator(publishEvents bool) trc.DecoratorFunc {
 	return func(tr trc.Trace) trc.Trace {
-		ptr := &publishTrace{
-			Trace:  tr,
-			broker: b,
+		if !b.broker.IsActive() { // TODO: maybe not a good optimization?
+			return tr
 		}
-		b.Publish(context.Background(), ptr.Trace)
+		ptr := &publishTrace{
+			Trace:         tr,
+			broker:        b,
+			publishEvents: publishEvents,
+		}
+		if ptr.publishEvents {
+			b.Publish(ptr.Trace)
+		}
 		return ptr
 	}
 }
 
+//
+//
+//
+
 type publishTrace struct {
 	trc.Trace
-	broker *Broker
+	broker        *Broker
+	publishEvents bool
 }
 
-var _ interface{ Free() } = (*publishTrace)(nil)
+var _ trc.Freer = (*publishTrace)(nil)
 
 func (ptr *publishTrace) Tracef(format string, args ...any) {
 	ptr.Trace.Tracef(format, args...)
-	ptr.broker.Publish(context.Background(), ptr.Trace)
+	if ptr.publishEvents {
+		ptr.broker.Publish(ptr.Trace)
+	}
 }
 
 func (ptr *publishTrace) LazyTracef(format string, args ...any) {
 	ptr.Trace.LazyTracef(format, args...)
-	ptr.broker.Publish(context.Background(), ptr.Trace)
+	if ptr.publishEvents {
+		ptr.broker.Publish(ptr.Trace)
+	}
 }
 
 func (ptr *publishTrace) Errorf(format string, args ...any) {
 	ptr.Trace.Errorf(format, args...)
-	ptr.broker.Publish(context.Background(), ptr.Trace)
+	if ptr.publishEvents {
+		ptr.broker.Publish(ptr.Trace)
+	}
 }
 
 func (ptr *publishTrace) LazyErrorf(format string, args ...any) {
 	ptr.Trace.LazyErrorf(format, args...)
-	ptr.broker.Publish(context.Background(), ptr.Trace)
+	if ptr.publishEvents {
+		ptr.broker.Publish(ptr.Trace)
+	}
 }
 
 func (ptr *publishTrace) Finish() {
 	ptr.Trace.Finish()
-	ptr.broker.Publish(context.Background(), ptr.Trace)
+	ptr.broker.Publish(ptr.Trace)
 }
 
 func (ptr *publishTrace) Free() {
-	if f, ok := ptr.Trace.(interface{ Free() }); ok {
+	if f, ok := ptr.Trace.(trc.Freer); ok {
 		f.Free()
 	}
 }
 
-func (ptr *publishTrace) ObserveStats(cs *trc.CategoryStats, bucketing []time.Duration) bool {
-	if os, ok := ptr.Trace.(interface {
-		ObserveStats(cs *trc.CategoryStats, bucketing []time.Duration) bool
-	}); ok {
-		return os.ObserveStats(cs, bucketing)
+func (ptr *publishTrace) StreamEvents() ([]trc.Event, bool) {
+	if s, ok := ptr.Trace.(interface{ StreamEvents() ([]trc.Event, bool) }); ok {
+		return s.StreamEvents()
 	}
-	return false
+	return nil, false
 }

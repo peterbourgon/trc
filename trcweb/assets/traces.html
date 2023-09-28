@@ -226,7 +226,7 @@ function highlightQuery() {
 			{{ end }}
 		</td>
 
-		<td class="rate numeric {{$category_class_name}}" title="{{.TraceRate|HumanizeFloat}} traces/sec, {{.EventRate|HumanizeFloat}} events/sec">
+		<td class="rate numeric {{$category_class_name}}" title="{{.TraceRate|HumanizeFloat}} traces/sec">
 			{{ HumanizeFloat .TraceRate }}/s
 		</td>
 	</tr>
@@ -538,7 +538,7 @@ function highlightQuery() {
 	}
 
 	document.body.addEventListener("keydown", (ev) => {
-		if (ev.srcElement !== document.body) {
+	if (ev.srcElement !== document.body) {
 			return;
 		}
 		if (ev.keyCode === 68) { // "d" or "D"
@@ -551,10 +551,6 @@ function highlightQuery() {
 			document.getElementById("search-box").focus();
 			ev.preventDefault();
 		}
-	});
-
-	document.getElementById("debug-info").addEventListener("click", (ev) => {
-		toggleDebug();
 	});
 
 	updateDebugInfo();

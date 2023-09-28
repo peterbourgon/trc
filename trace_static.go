@@ -43,31 +43,27 @@ func NewSearchTrace(tr Trace) *StaticTrace {
 // every event.
 func NewStreamTrace(tr Trace) *StaticTrace {
 	var (
-		isActive          = !tr.Finished()
-		detail, canDetail = tr.(interface{ EventsDetail(int, bool) []Event })
-		events            = []Event{}
+		duration   = tr.Duration()
+		isActive   = !tr.Finished()
+		events     []Event
+		haveEvents bool
 	)
-	switch {
-	case canDetail && isActive:
-		events = detail.EventsDetail(1, false)
-	case canDetail && !isActive:
-		events = detail.EventsDetail(-1, false)
-	case !canDetail && isActive:
-		events = tr.Events()
-		if len(events) > 0 {
-			events = events[len(events)-1:]
-		}
-		for i := range events {
-			events[i].Stack = events[i].Stack[:0]
-		}
-	case !canDetail && !isActive:
-		events = tr.Events()
-		for i := range events {
-			events[i].Stack = events[i].Stack[:0]
-		}
+
+	if s, ok := tr.(interface{ StreamEvents() ([]Event, bool) }); ok {
+		events, haveEvents = s.StreamEvents()
 	}
 
-	duration := tr.Duration()
+	if !haveEvents {
+		events = tr.Events()
+
+		if isActive && len(events) > 0 {
+			events = events[len(events)-1:]
+		}
+
+		for i := range events {
+			events[i].Stack = nil
+		}
+	}
 
 	st := newStaticTrace()
 	st.TraceSource = tr.Source()
@@ -80,7 +76,6 @@ func NewStreamTrace(tr Trace) *StaticTrace {
 	st.TraceFinished = tr.Finished()
 	st.TraceErrored = tr.Errored()
 	st.TraceEvents = events
-
 	return st
 }
 
@@ -147,20 +142,18 @@ func (st *StaticTrace) TrimStacks(depth int) *StaticTrace {
 
 var staticTracePool = sync.Pool{
 	New: func() any {
-		trcdebug.StaticTraceAllocCount.Add(1)
+		trcdebug.StaticTraceCounters.Alloc.Add(1)
 		return &StaticTrace{}
 	},
 }
 
 func newStaticTrace() *StaticTrace {
-	trcdebug.StaticTraceNewCount.Add(1)
+	trcdebug.StaticTraceCounters.Get.Add(1)
 	st := staticTracePool.Get().(*StaticTrace)
-
 	runtime.SetFinalizer(st, func(st *StaticTrace) {
-		trcdebug.StaticTraceFreeCount.Add(1)
+		trcdebug.StaticTraceCounters.Put.Add(1)
 		staticTracePool.Put(st)
 	})
-
 	st.TraceSource = ""
 	st.TraceID = ""
 	st.TraceCategory = ""
@@ -170,8 +163,7 @@ func newStaticTrace() *StaticTrace {
 	st.TraceDurationSec = 0
 	st.TraceFinished = false
 	st.TraceErrored = false
-	st.TraceEvents = st.TraceEvents[:0]
-
+	st.TraceEvents = nil
 	return st
 }
 
@@ -199,51 +191,4 @@ func (sts staticTracesNewestFirst) Less(i, j int) bool {
 		return sts[i].ID() > sts[j].ID()
 	}
 
-}
-
-//
-//
-//
-
-type transformStreamTrace struct {
-	Trace
-
-	events []Event
-	init   sync.Once
-}
-
-func newTransformStreamTrace(tr Trace) Trace {
-	return &transformStreamTrace{
-		Trace: tr,
-	}
-}
-
-func (xtr *transformStreamTrace) Events() []Event {
-	xtr.init.Do(func() {
-		var (
-			isActive          = !xtr.Trace.Finished()
-			detail, canDetail = xtr.Trace.(interface{ EventsDetail(int, bool) []Event })
-			events            = []Event{}
-		)
-		switch {
-		case canDetail && isActive:
-			events = detail.EventsDetail(1, false)
-		case canDetail && !isActive:
-			events = detail.EventsDetail(-1, false)
-		case !canDetail && isActive:
-			events = xtr.Trace.Events()
-			events = events[len(events)-1:]
-			for i := range events {
-				events[i].Stack = events[i].Stack[:0]
-			}
-		case !canDetail && !isActive:
-			events = xtr.Trace.Events()
-			for i := range events {
-				events[i].Stack = events[i].Stack[:0]
-			}
-		}
-		xtr.events = events
-	})
-
-	return xtr.events
 }
