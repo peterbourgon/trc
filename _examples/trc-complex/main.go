@@ -8,16 +8,34 @@ import (
 	"net/http"
 	"net/http/httptest"
 	_ "net/http/pprof"
+	"os"
 	"strings"
 
 	"github.com/felixge/fgprof"
 
+	"github.com/peterbourgon/ff/v4"
+	"github.com/peterbourgon/ff/v4/ffhelp"
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/trcstream"
 	"github.com/peterbourgon/trc/trcweb"
 )
 
 func main() {
+	log.SetFlags(0)
+
+	fs := ff.NewFlagSet("trc-complex")
+	var (
+		publish = fs.StringEnum('p', "publish", "what to publish: nothing, traces, events", "nothing", "traces", "events")
+		workers = fs.Int('w', "workers", 1, "load generation workers")
+	)
+	if err := ff.Parse(fs, os.Args[1:]); err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", ffhelp.Flags(fs))
+		log.Fatal(err)
+	}
+
+	log.Printf("publish %s", *publish)
+	log.Printf("workers %d", *workers)
+
 	// Open stack trace links in VS Code.
 	trcweb.SetSourceLinkFunc(trcweb.SourceLinkVSCode)
 
@@ -27,14 +45,16 @@ func main() {
 	// TODO
 	var instances []*instance
 	for _, port := range ports {
-		instances = append(instances, newInstance(port))
+		instances = append(instances, newInstance(port, *publish))
 	}
 
 	// Generate random load for each instance.
-	go load(context.Background(), instances...)
+	for i := 0; i < *workers; i++ {
+		go load(context.Background(), instances...)
+	}
 
 	// TODO
-	global := newGlobal(ports)
+	global := newGlobal(ports, *publish)
 
 	// Run an HTTP server for each instance.
 	httpServers := make([]*http.Server, len(ports))
@@ -66,12 +86,20 @@ type instance struct {
 	tracesHandler http.Handler
 }
 
-func newInstance(port string) *instance {
+func newInstance(port string, publish string) *instance {
 	broker := trcstream.NewBroker()
+
+	var decorators []trc.DecoratorFunc
+	switch publish {
+	case "traces":
+		decorators = append(decorators, broker.PublishTracesDecorator())
+	case "events":
+		decorators = append(decorators, broker.PublishEventsDecorator())
+	}
 
 	collector := trc.NewCollector(trc.CollectorConfig{
 		Source:     port,
-		Decorators: []trc.DecoratorFunc{broker.PublishEventsDecorator()},
+		Decorators: decorators,
 	})
 
 	var apiHandler http.Handler
@@ -109,12 +137,20 @@ type global struct {
 	tracesHandler http.Handler
 }
 
-func newGlobal(ports []string) *global {
+func newGlobal(ports []string, publish string) *global {
 	broker := trcstream.NewBroker()
+
+	var decorators []trc.DecoratorFunc
+	switch publish {
+	case "traces":
+		decorators = append(decorators, broker.PublishTracesDecorator())
+	case "events":
+		decorators = append(decorators, broker.PublishEventsDecorator())
+	}
 
 	collector := trc.NewCollector(trc.CollectorConfig{
 		Source:     "global",
-		Decorators: []trc.DecoratorFunc{broker.PublishEventsDecorator()},
+		Decorators: decorators,
 	})
 
 	var searcher trc.MultiSearcher

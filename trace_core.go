@@ -361,7 +361,7 @@ type coreEvent struct {
 	what  *stringer
 	pc    [8]uintptr
 	pcn   int
-	stack []Frame
+	stack stackFrames
 	iserr bool
 }
 
@@ -385,7 +385,7 @@ func newCoreEvent(flags uint8, format string, args ...any) *coreEvent {
 		cev.what = newNormalStringer(format, args...)
 	}
 
-	cev.stack = cev.stack[:0] // be safe
+	cev.stack.reset() // be safe
 
 	if flags&flagNoStack != 0 {
 		cev.pcn = 0 // be safe
@@ -399,34 +399,14 @@ func newCoreEvent(flags uint8, format string, args ...any) *coreEvent {
 }
 
 func (cev *coreEvent) getStack() []Frame {
-	if cev.pcn <= 0 {
-		return nil
-	}
-
-	if len(cev.stack) > 0 {
-		return cev.stack
-	}
-
-	stdframes := runtime.CallersFrames(cev.pc[:cev.pcn])
-	fr, more := stdframes.Next()
-	for more {
-		if !ignoreStackFrameFunction(fr.Function) {
-			cev.stack = append(cev.stack, Frame{
-				Function: fr.Function,
-				FileLine: fr.File + ":" + strconv.Itoa(fr.Line),
-			})
-		}
-		fr, more = stdframes.Next()
-	}
-
-	return cev.stack
+	return cev.stack.getFrom(cev.pc[:cev.pcn])
 }
 
 func (cev *coreEvent) release() {
 	cev.what.release()
 	cev.what = nil
 	cev.pcn = 0
-	cev.stack = cev.stack[:0]
+	cev.stack.reset()
 	trcdebug.CoreEventCounters.Put.Add(1)
 	coreEventPool.Put(cev)
 }
@@ -462,6 +442,46 @@ func ignoreStackFrameFunction(function string) bool {
 		return true
 	}
 	return false
+}
+
+type stackFrames struct {
+	mtx    sync.Mutex
+	frames []Frame
+}
+
+func (sf *stackFrames) reset() {
+	sf.mtx.Lock()
+	defer sf.mtx.Unlock()
+
+	sf.frames = nil
+}
+
+func (sf *stackFrames) getFrom(pc []uintptr) []Frame {
+	sf.mtx.Lock()
+	defer sf.mtx.Unlock()
+
+	if sf.frames != nil {
+		return sf.frames
+	}
+
+	if len(pc) <= 0 {
+		sf.frames = []Frame{}
+		return sf.frames
+	}
+
+	stdframes := runtime.CallersFrames(pc)
+	fr, more := stdframes.Next()
+	for more {
+		if !ignoreStackFrameFunction(fr.Function) {
+			sf.frames = append(sf.frames, Frame{
+				Function: fr.Function,
+				FileLine: fr.File + ":" + strconv.Itoa(fr.Line),
+			})
+		}
+		fr, more = stdframes.Next()
+	}
+
+	return sf.frames
 }
 
 //
