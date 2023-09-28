@@ -30,11 +30,11 @@ type streamConfig struct {
 }
 
 func (cfg *streamConfig) register(fs *ff.FlagSet) {
-	fs.AddFlag(ff.FlagConfig{ShortName: 'e', LongName: "events" /*         */, Value: ffval.NewValue(&cfg.streamEvents) /*                         */, Usage: "stream individual events rather than complete traces", NoDefault: true})
-	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "send-buffer" /*    */, Value: ffval.NewValueDefault(&cfg.sendBuf, 100) /*                  */, Usage: "remote send buffer size"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "recv-buffer" /*    */, Value: ffval.NewValueDefault(&cfg.recvBuf, 100) /*                  */, Usage: "local receive buffer size"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "stats-interval" /* */, Value: ffval.NewValueDefault(&cfg.statsInterval, 10*time.Second) /* */, Usage: "stats reporting interval"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "retry-interval" /* */, Value: ffval.NewValueDefault(&cfg.retryInterval, 1*time.Second) /*  */, Usage: "connection retry interval"})
+	fs.AddFlag(ff.FlagConfig{ShortName: 'e', LongName: "events" /*  */, Value: ffval.NewValue(&cfg.streamEvents) /*                         */, Usage: "stream individual events rather than complete traces", NoDefault: true})
+	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "sendbuf" /* */, Value: ffval.NewValueDefault(&cfg.sendBuf, 100) /*                  */, Usage: "remote send buffer size"})
+	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "recvbuf" /* */, Value: ffval.NewValueDefault(&cfg.recvBuf, 100) /*                  */, Usage: "local receive buffer size"})
+	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "stats" /*   */, Value: ffval.NewValueDefault(&cfg.statsInterval, 10*time.Second) /* */, Usage: "stats reporting interval"})
+	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "retry" /*   */, Value: ffval.NewValueDefault(&cfg.retryInterval, 1*time.Second) /*  */, Usage: "connection retry interval"})
 }
 
 func (cfg *streamConfig) Exec(ctx context.Context, args []string) error {
