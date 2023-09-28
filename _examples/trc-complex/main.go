@@ -16,8 +16,8 @@ import (
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffhelp"
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/trchttp"
 	"github.com/peterbourgon/trc/trcstream"
-	"github.com/peterbourgon/trc/trcweb"
 )
 
 func main() {
@@ -37,7 +37,7 @@ func main() {
 	log.Printf("workers %d", *workers)
 
 	// Open stack trace links in VS Code.
-	trcweb.SetSourceLinkFunc(trcweb.SourceLinkVSCode)
+	trchttp.SetSourceLinkFunc(trchttp.SourceLinkVSCode)
 
 	// Each port is a distinct instance.
 	ports := []string{"8081", "8082", "8083"}
@@ -104,19 +104,19 @@ func newInstance(port string, publish string) *instance {
 
 	var apiHandler http.Handler
 	apiHandler = NewKV(NewStore())
-	apiHandler = trcweb.Middleware(collector.NewTrace, apiCategory)(apiHandler)
+	apiHandler = trchttp.Middleware(collector.NewTrace, apiCategory)(apiHandler)
 
 	var streamHandler http.Handler
-	streamHandler = trcweb.NewStreamServer(broker)
-	streamHandler = trcweb.Middleware(collector.NewTrace, func(r *http.Request) string { return "stream" })(streamHandler)
+	streamHandler = trchttp.NewStreamServer(broker)
+	streamHandler = trchttp.Middleware(collector.NewTrace, func(r *http.Request) string { return "stream" })(streamHandler)
 
 	var searchHandler http.Handler
-	searchHandler = trcweb.NewSearchServer(collector)
-	searchHandler = trcweb.Middleware(collector.NewTrace, func(r *http.Request) string { return "traces" })(searchHandler)
+	searchHandler = trchttp.NewSearchServer(collector)
+	searchHandler = trchttp.Middleware(collector.NewTrace, func(r *http.Request) string { return "traces" })(searchHandler)
 
 	tracesHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case trcweb.RequestExplicitlyAccepts(r, "text/event-stream"):
+		case trchttp.RequestExplicitlyAccepts(r, "text/event-stream"):
 			streamHandler.ServeHTTP(w, r)
 		default:
 			searchHandler.ServeHTTP(w, r)
@@ -155,21 +155,21 @@ func newGlobal(ports []string, publish string) *global {
 
 	var searcher trc.MultiSearcher
 	for _, port := range ports {
-		searcher = append(searcher, trcweb.NewSearchClient(http.DefaultClient, "localhost:"+port+"/traces"))
+		searcher = append(searcher, trchttp.NewSearchClient(http.DefaultClient, "localhost:"+port+"/traces"))
 	}
 	searcher = append(searcher, collector)
 
 	var streamHandler http.Handler
-	streamHandler = trcweb.NewStreamServer(broker)
-	streamHandler = trcweb.Middleware(collector.NewTrace, func(r *http.Request) string { return "stream" })(streamHandler)
+	streamHandler = trchttp.NewStreamServer(broker)
+	streamHandler = trchttp.Middleware(collector.NewTrace, func(r *http.Request) string { return "stream" })(streamHandler)
 
 	var searchHandler http.Handler
-	searchHandler = trcweb.NewSearchServer(searcher)
-	searchHandler = trcweb.Middleware(collector.NewTrace, func(r *http.Request) string { return "traces" })(searchHandler)
+	searchHandler = trchttp.NewSearchServer(searcher)
+	searchHandler = trchttp.Middleware(collector.NewTrace, func(r *http.Request) string { return "traces" })(searchHandler)
 
 	tracesHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case trcweb.RequestExplicitlyAccepts(r, "text/event-stream"):
+		case trchttp.RequestExplicitlyAccepts(r, "text/event-stream"):
 			streamHandler.ServeHTTP(w, r)
 		default:
 			searchHandler.ServeHTTP(w, r)

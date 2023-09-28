@@ -1,4 +1,4 @@
-package trcweb_test
+package trchttp_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trcweb"
+	"github.com/peterbourgon/trc/trchttp"
 )
 
 func TestE2E(t *testing.T) {
@@ -17,10 +17,10 @@ func TestE2E(t *testing.T) {
 
 	ctx := context.Background()
 	collector := trc.NewDefaultCollector()
-	collectorServer := trcweb.NewSearchServer(collector)
+	collectorServer := trchttp.NewSearchServer(collector)
 	httpServer := httptest.NewServer(collectorServer)
 	defer httpServer.Close()
-	traceClient := trcweb.NewSearchClient(http.DefaultClient, httpServer.URL)
+	traceClient := trchttp.NewSearchClient(http.DefaultClient, httpServer.URL)
 
 	for _, tuple := range []struct {
 		category string

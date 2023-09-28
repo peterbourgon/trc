@@ -1,6 +1,6 @@
 // Package trc provides in-process request tracing, an efficient alternative to
-// logging. The package is inspired by https://golang.org/x/net/trace, much
-// gratitude to those authors.
+// logging. The package is inspired by x/net/trace, much gratitude to those
+// authors.
 //
 // The basic idea is that applications should log not by sending events to a
 // destination like stdout or a file on disk, but instead by adding events to a
@@ -13,8 +13,8 @@
 // the operation completes.
 //
 // [Collector] collects traces into per-category ring buffers. Collected traces
-// can be queried over HTTP via [trcweb.NewServer]. That interface is fairly
-// rich, allowing traces to be selected by category, minimum duration,
+// can be queried over HTTP via [trchttp.NewSearchServer]. That interface is
+// fairly rich, allowing traces to be selected by category, minimum duration,
 // successful vs. errored, and so on.
 //
 // There are a few caveats. This approach is only suitable for applications that

@@ -9,7 +9,7 @@ import (
 
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trcweb"
+	"github.com/peterbourgon/trc/trchttp"
 )
 
 type searchConfig struct {
@@ -49,7 +49,7 @@ func (cfg *searchConfig) Exec(ctx context.Context, args []string) error {
 
 	var searcher trc.MultiSearcher
 	for _, uri := range cfg.uris {
-		searcher = append(searcher, trcweb.NewSearchClient(http.DefaultClient, uri))
+		searcher = append(searcher, trchttp.NewSearchClient(http.DefaultClient, uri))
 	}
 
 	if cfg.StackDepth == 0 {

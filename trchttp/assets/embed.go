@@ -3,7 +3,7 @@ package assets
 
 import "embed"
 
-// FS is the embedded FS of web assets.
+// FS contains embedded web assets.
 //
 //go:embed *.css *.html
 var FS embed.FS

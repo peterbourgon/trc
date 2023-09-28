@@ -13,8 +13,8 @@ import (
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffval"
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/trchttp"
 	"github.com/peterbourgon/trc/trcstream"
-	"github.com/peterbourgon/trc/trcweb"
 )
 
 type streamConfig struct {
@@ -195,7 +195,7 @@ func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 	cfg.debug.Printf("%s: starting", uri)
 	defer cfg.debug.Printf("%s: stopped", uri)
 
-	sc := &trcweb.StreamClient{
+	sc := &trchttp.StreamClient{
 		HTTPClient:    http.DefaultClient,
 		URI:           uri,
 		SendBuffer:    cfg.sendBuf,

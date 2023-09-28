@@ -1,4 +1,4 @@
-package trcweb
+package trchttp
 
 import (
 	"bytes"
@@ -21,7 +21,7 @@ import (
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/internal/trcdebug"
 	"github.com/peterbourgon/trc/internal/trcutil"
-	"github.com/peterbourgon/trc/trcweb/assets"
+	"github.com/peterbourgon/trc/trchttp/assets"
 )
 
 func respondData(ctx context.Context, w http.ResponseWriter, r *http.Request, code int, templateName string, data any) {
