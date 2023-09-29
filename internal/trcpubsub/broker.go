@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 )
 
+// Broker provides publish and subscribe semantics for values of any type T.
 type Broker[T any] struct {
 	mtx         sync.Mutex
 	transform   func(T) T
@@ -20,6 +21,9 @@ type subscriber[T any] struct {
 	stats Stats
 }
 
+// NewBroker returns a new broker for type T. If the transform function is
+// non-nil, it will be applied to every published value before that value is
+// emitted to subscribers.
 func NewBroker[T any](transform func(T) T) *Broker[T] {
 	return &Broker[T]{
 		transform:   transform,
@@ -27,10 +31,14 @@ func NewBroker[T any](transform func(T) T) *Broker[T] {
 	}
 }
 
+// IsActive returns true if there are any active subscribers.
 func (b *Broker[T]) IsActive() bool {
 	return b.active.Load()
 }
 
+// Publish the value to all active subscribers that allow it. Publishing takes
+// an exclusive lock on the broker, but doesn't block when sending the value to
+// matching subscribers.
 func (b *Broker[T]) Publish(val T) {
 	if !b.active.Load() { // optimization
 		return
@@ -61,6 +69,9 @@ func (b *Broker[T]) Publish(val T) {
 	}
 }
 
+// Subscribe forwards all published values which pass the allow function to the
+// provided channel ch. If the channel is not able to receive a published value,
+// the value will be dropped. Subscribe returns when the context is canceled.
 func (b *Broker[T]) Subscribe(ctx context.Context, allow func(T) bool, ch chan<- T) (Stats, error) {
 	if err := func() error {
 		b.mtx.Lock()
@@ -102,6 +113,7 @@ func (b *Broker[T]) Subscribe(ctx context.Context, allow func(T) bool, ch chan<-
 	return sub.stats, ctx.Err()
 }
 
+// Stats returns statistics for the active subscription represented by ch.
 func (b *Broker[T]) Stats(ctx context.Context, ch chan<- T) (Stats, error) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
@@ -114,12 +126,14 @@ func (b *Broker[T]) Stats(ctx context.Context, ch chan<- T) (Stats, error) {
 	return sub.stats, nil
 }
 
+// Stats represents details about published values for a specific subscription.
 type Stats struct {
 	Skips uint64 `json:"skips"`
 	Sends uint64 `json:"sends"`
 	Drops uint64 `json:"drops"`
 }
 
+// String implements [fmt.Stringer].
 func (s Stats) String() string {
 	return fmt.Sprintf("skips=%d sends=%d drops=%d", s.Skips, s.Sends, s.Drops)
 }

@@ -17,21 +17,31 @@ import (
 	"github.com/peterbourgon/trc/trcstream"
 )
 
+// StreamServer provides an HTTP interface to a [trcstream.Streamer].
 type StreamServer struct {
 	trcstream.Streamer
 }
 
+// NewStreamServer returns a stream server wrapping the provided streamer.
 func NewStreamServer(s trcstream.Streamer) *StreamServer {
 	return &StreamServer{
 		Streamer: s,
 	}
 }
 
+// ServeHTTP implements [http.Handler]. Requests must Accept: text/event-stream.
 func (s *StreamServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var (
 		ctx = r.Context()
 		tr  = trc.Get(ctx)
 	)
+
+	if !RequestExplicitlyAccepts(r, "text/event-stream") {
+		err := fmt.Errorf("invalid request Accept header (%s)", r.Header.Get("accept"))
+		tr.Errorf("%v", err)
+		respondError(w, r, err, http.StatusBadRequest)
+		return
+	}
 
 	var f trc.Filter
 	switch {
@@ -46,7 +56,7 @@ func (s *StreamServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if normalizeErrs := f.Normalize(); len(normalizeErrs) > 0 {
 		err := fmt.Errorf("bad request: %s", strings.Join(trcutil.FlattenErrors(normalizeErrs...), "; "))
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		respondError(w, r, err, http.StatusBadRequest)
 		return
 	}
 

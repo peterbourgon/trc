@@ -506,8 +506,6 @@ type nullString struct {
 	value string
 }
 
-var zeroNullString nullString // valid false, value empty
-
 func newNormalStringer(format string, args ...any) *stringer {
 	trcdebug.StringerCounters.Get.Add(1)
 	z := stringerPool.Get().(*stringer)
@@ -522,7 +520,7 @@ func newLazyStringer(format string, args ...any) *stringer {
 	z := stringerPool.Get().(*stringer)
 	z.fmt = format
 	z.args = args
-	z.str.Store(zeroNullString) // don't pre-compute the string
+	z.str.Store(nullString{}) // don't pre-compute the string
 	return z
 }
 
@@ -536,7 +534,7 @@ func (z *stringer) String() string {
 	// If we don't, do the formatting work and try to swap it in.
 	ns.valid = true
 	ns.value = fmt.Sprintf(z.fmt, z.args...)
-	if z.str.CompareAndSwap(zeroNullString, ns) {
+	if z.str.CompareAndSwap(nullString{}, ns) {
 		return ns.value
 	}
 

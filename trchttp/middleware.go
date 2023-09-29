@@ -42,9 +42,7 @@ func Middleware(
 				tr.LazyTracef("HTTP %d, %s, %s", code, sent, took)
 			}(time.Now())
 
-			w = iw
-			r = r.WithContext(ctx)
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(iw, r.WithContext(ctx))
 		})
 	}
 }

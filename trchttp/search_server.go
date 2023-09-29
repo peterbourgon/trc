@@ -25,16 +25,19 @@ type SearchData struct {
 //
 //
 
+// SearchServer provides an HTTP interface to a [trc.Searcher].
 type SearchServer struct {
 	trc.Searcher
 }
 
+// NewSearchServer returns a search server wrapping the provided searcher.
 func NewSearchServer(s trc.Searcher) *SearchServer {
 	return &SearchServer{
 		Searcher: s,
 	}
 }
 
+// ServeHTTP implements [http.Handler].
 func (s *SearchServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, task := trace.NewTask(r.Context(), "SearchServer.ServeHTTP")
 	defer task.End()

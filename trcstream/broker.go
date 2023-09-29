@@ -7,16 +7,19 @@ import (
 	"github.com/peterbourgon/trc/internal/trcpubsub"
 )
 
+// Broker provides publish and subscribe semantics for [trc.Trace] values.
 type Broker struct {
 	broker *trcpubsub.Broker[trc.Trace]
 }
 
+// NewBroker returns a broker that transforms traces via [trc.NewStreamTrace].
 func NewBroker() *Broker {
 	return &Broker{
 		broker: trcpubsub.NewBroker(func(tr trc.Trace) trc.Trace { return trc.NewStreamTrace(tr) }),
 	}
 }
 
+// Streamer is analogous to [trc.Searcher] and describes the broker.
 type Streamer interface {
 	Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) (Stats, error)
 	StreamStats(ctx context.Context, ch chan<- trc.Trace) (Stats, error)
@@ -24,26 +27,37 @@ type Streamer interface {
 
 var _ Streamer = (*Broker)(nil)
 
+// Publish the trace to any active subscribers.
 func (b *Broker) Publish(tr trc.Trace) {
 	b.broker.Publish(tr)
 }
 
+// Stats for active subscribers.
 type Stats = trcpubsub.Stats
 
+// Stream traces matching the filter to the provided channel. The method blocks
+// until ctx is canceled.
 func (b *Broker) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) (Stats, error) {
 	return b.broker.Subscribe(ctx, f.Allow, ch)
 }
 
+// StreamStats for the active stream represented by the given channel.
 func (b *Broker) StreamStats(ctx context.Context, ch chan<- trc.Trace) (Stats, error) {
 	return b.broker.Stats(ctx, ch)
 }
 
 //
 
+// PublishTracesDecorator returns a decorator that will publish complete traces
+// when they are finished.
 func (b *Broker) PublishTracesDecorator() trc.DecoratorFunc {
 	return b.publishDecorator(false)
 }
 
+// PublishEventsDecorator returns a decorator that will publish each individual
+// trace event as they occur, and also complete traces when they are finished.
+// Be careful: this can result in an enormous amount of data, which can
+// significantly impact the performance of your application.
 func (b *Broker) PublishEventsDecorator() trc.DecoratorFunc {
 	return b.publishDecorator(true)
 }

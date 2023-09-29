@@ -10,6 +10,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/felixge/fgprof"
 
@@ -26,7 +27,8 @@ func main() {
 	fs := ff.NewFlagSet("trc-complex")
 	var (
 		publish = fs.StringEnum('p', "publish", "what to publish: nothing, traces, events", "nothing", "traces", "events")
-		workers = fs.Int('w', "workers", 1, "load generation workers")
+		workers = fs.Int('w', "workers", 1, "loadgen workers")
+		delay   = fs.Duration('d', "delay", 0, "delay between loadgen requests")
 	)
 	if err := ff.Parse(fs, os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", ffhelp.Flags(fs))
@@ -35,6 +37,7 @@ func main() {
 
 	log.Printf("publish %s", *publish)
 	log.Printf("workers %d", *workers)
+	log.Printf("delay %s", *delay)
 
 	// Open stack trace links in VS Code.
 	trchttp.SetSourceLinkFunc(trchttp.SourceLinkVSCode)
@@ -42,7 +45,7 @@ func main() {
 	// Each port is a distinct instance.
 	ports := []string{"8081", "8082", "8083"}
 
-	// TODO
+	// Construct the instances.
 	var instances []*instance
 	for _, port := range ports {
 		instances = append(instances, newInstance(port, *publish))
@@ -50,10 +53,10 @@ func main() {
 
 	// Generate random load for each instance.
 	for i := 0; i < *workers; i++ {
-		go load(context.Background(), instances...)
+		go load(context.Background(), *delay, instances...)
 	}
 
-	// TODO
+	// Construct a "global" instance, abstracting over the concrete instances.
 	global := newGlobal(ports, *publish)
 
 	// Run an HTTP server for each instance.
@@ -95,6 +98,8 @@ func newInstance(port string, publish string) *instance {
 		decorators = append(decorators, broker.PublishTracesDecorator())
 	case "events":
 		decorators = append(decorators, broker.PublishEventsDecorator())
+	default:
+		// no publishing
 	}
 
 	collector := trc.NewCollector(trc.CollectorConfig{
@@ -114,14 +119,8 @@ func newInstance(port string, publish string) *instance {
 	searchHandler = trchttp.NewSearchServer(collector)
 	searchHandler = trchttp.Middleware(collector.NewTrace, func(r *http.Request) string { return "traces" })(searchHandler)
 
-	tracesHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case trchttp.RequestExplicitlyAccepts(r, "text/event-stream"):
-			streamHandler.ServeHTTP(w, r)
-		default:
-			searchHandler.ServeHTTP(w, r)
-		}
-	})
+	tracesHandler := trchttp.NewRuleRouter(searchHandler)
+	tracesHandler.Add(func(r *http.Request) bool { return trchttp.RequestExplicitlyAccepts(r, "text/event-stream") }, streamHandler)
 
 	return &instance{
 		broker:        broker,
@@ -146,6 +145,8 @@ func newGlobal(ports []string, publish string) *global {
 		decorators = append(decorators, broker.PublishTracesDecorator())
 	case "events":
 		decorators = append(decorators, broker.PublishEventsDecorator())
+	default:
+		// no publishing
 	}
 
 	collector := trc.NewCollector(trc.CollectorConfig{
@@ -167,14 +168,8 @@ func newGlobal(ports []string, publish string) *global {
 	searchHandler = trchttp.NewSearchServer(searcher)
 	searchHandler = trchttp.Middleware(collector.NewTrace, func(r *http.Request) string { return "traces" })(searchHandler)
 
-	tracesHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case trchttp.RequestExplicitlyAccepts(r, "text/event-stream"):
-			streamHandler.ServeHTTP(w, r)
-		default:
-			searchHandler.ServeHTTP(w, r)
-		}
-	})
+	tracesHandler := trchttp.NewRuleRouter(searchHandler)
+	tracesHandler.Add(func(r *http.Request) bool { return trchttp.RequestExplicitlyAccepts(r, "text/event-stream") }, streamHandler)
 
 	return &global{
 		broker:        broker,
@@ -183,31 +178,28 @@ func newGlobal(ports []string, publish string) *global {
 	}
 }
 
-func load(ctx context.Context, instances ...*instance) {
-	for i := 0; ctx.Err() == nil; i = (i + 1) % len(instances) {
+func load(ctx context.Context, delay time.Duration, instances ...*instance) {
+	rec := httptest.NewRecorder() //discardResponseWriter{}
+	for ctx.Err() == nil {
 		f := rand.Float64()
 		switch {
 		case f < 0.6:
 			key := getWord()
-			url := fmt.Sprintf("http://irrelevant/%s", key)
-			req, _ := http.NewRequest("GET", url, nil)
-			rec := httptest.NewRecorder()
-			instances[i].apiHandler.ServeHTTP(rec, req)
+			req := httptest.NewRequest("GET", "http://irrelevant/"+key, nil)
+			instances[0].apiHandler.ServeHTTP(rec, req)
 
 		case f < 0.9:
 			key := getWord()
 			val := getWord()
-			url := fmt.Sprintf("http://irrelevant/%s", key)
-			req, _ := http.NewRequest("PUT", url, strings.NewReader(val))
-			rec := httptest.NewRecorder()
-			instances[i].apiHandler.ServeHTTP(rec, req)
+			req := httptest.NewRequest("PUT", "http://irrelevant/"+key, strings.NewReader(val))
+			instances[0].apiHandler.ServeHTTP(rec, req)
 
 		default:
 			key := getWord()
-			url := fmt.Sprintf("http://irrelevant/%s", key)
-			req, _ := http.NewRequest("DELETE", url, nil)
-			rec := httptest.NewRecorder()
-			instances[i].apiHandler.ServeHTTP(rec, req)
+			req := httptest.NewRequest("DELETE", "http://irrelevant/"+key, nil)
+			instances[0].apiHandler.ServeHTTP(rec, req)
 		}
+		instances = append(instances[1:], instances[0])
+		time.Sleep(delay)
 	}
 }

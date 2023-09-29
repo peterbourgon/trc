@@ -8,6 +8,7 @@ import (
 	"github.com/peterbourgon/trc"
 )
 
+// HTTPClient models [http.Client].
 type HTTPClient interface {
 	Do(*http.Request) (*http.Response, error)
 }
