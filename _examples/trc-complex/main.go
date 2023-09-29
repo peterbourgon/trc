@@ -179,7 +179,7 @@ func newGlobal(ports []string, publish string) *global {
 }
 
 func load(ctx context.Context, delay time.Duration, instances ...*instance) {
-	rec := httptest.NewRecorder() //discardResponseWriter{}
+	rec := httptest.NewRecorder()
 	for ctx.Err() == nil {
 		f := rand.Float64()
 		switch {
