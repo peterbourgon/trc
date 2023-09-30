@@ -6,9 +6,9 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
-	"net/http/httptest"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -41,6 +41,7 @@ func main() {
 
 	// Open stack trace links in VS Code.
 	trchttp.SetSourceLinkFunc(trchttp.SourceLinkVSCode)
+	runtime.SetMutexProfileFraction(10)
 
 	// Each port is a distinct instance.
 	ports := []string{"8081", "8082", "8083"}
@@ -65,6 +66,7 @@ func main() {
 		addr := "localhost:" + ports[i]
 		mux := http.NewServeMux()
 		mux.Handle("/traces", http.StripPrefix("/traces", instances[i].tracesHandler))
+		mux.Handle("/kv/", http.StripPrefix("/kv", instances[i].apiHandler))
 		s := &http.Server{Addr: addr, Handler: mux}
 		go func() { log.Fatal(s.ListenAndServe()) }()
 		log.Printf("http://localhost:%s/traces", ports[i])
@@ -105,7 +107,7 @@ func newInstance(port string, publish string) *instance {
 	collector := trc.NewCollector(trc.CollectorConfig{
 		Source:     port,
 		Decorators: decorators,
-	})
+	}).SetCategorySize(10000)
 
 	var apiHandler http.Handler
 	apiHandler = NewKV(NewStore())
@@ -179,27 +181,35 @@ func newGlobal(ports []string, publish string) *global {
 }
 
 func load(ctx context.Context, delay time.Duration, instances ...*instance) {
-	rec := httptest.NewRecorder()
+	wri := discard{}
 	for ctx.Err() == nil {
 		f := rand.Float64()
 		switch {
 		case f < 0.6:
 			key := getWord()
-			req := httptest.NewRequest("GET", "http://irrelevant/"+key, nil)
-			instances[0].apiHandler.ServeHTTP(rec, req)
+			req, _ := http.NewRequest("GET", "http://irrelevant/"+key, nil)
+			instances[0].apiHandler.ServeHTTP(wri, req)
 
 		case f < 0.9:
 			key := getWord()
 			val := getWord()
-			req := httptest.NewRequest("PUT", "http://irrelevant/"+key, strings.NewReader(val))
-			instances[0].apiHandler.ServeHTTP(rec, req)
+			req, _ := http.NewRequest("PUT", "http://irrelevant/"+key, strings.NewReader(val))
+			instances[0].apiHandler.ServeHTTP(wri, req)
 
 		default:
 			key := getWord()
-			req := httptest.NewRequest("DELETE", "http://irrelevant/"+key, nil)
-			instances[0].apiHandler.ServeHTTP(rec, req)
+			req, _ := http.NewRequest("DELETE", "http://irrelevant/"+key, nil)
+			instances[0].apiHandler.ServeHTTP(wri, req)
 		}
 		instances = append(instances[1:], instances[0])
 		time.Sleep(delay)
 	}
 }
+
+type discard http.Header
+
+var _ http.ResponseWriter = discard{}
+
+func (d discard) WriteHeader(int)             {}
+func (d discard) Header() http.Header         { return http.Header(d) }
+func (d discard) Write(p []byte) (int, error) { return len(p), nil }

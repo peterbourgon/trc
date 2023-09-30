@@ -131,7 +131,7 @@ func newCoreTrace(source, category string) *coreTrace {
 	tr.finished = false
 	tr.duration = 0
 	tr.nostackflag = iff(traceNoStacks.Load(), flagNoStack, uint8(0))
-	tr.events = nil
+	tr.events = tr.events[:0] // truncating like this saves GC thrashing
 	tr.eventsmax = int(traceMaxEvents.Load())
 	tr.truncated = 0
 	return tr
@@ -336,7 +336,7 @@ func (tr *coreTrace) Free() {
 	for _, ev := range tr.events {
 		ev.release() // TODO: these individual frees can show up in profiles, maybe pre-allocate?
 	}
-	tr.events = nil
+	tr.events = tr.events[:0] // truncating like this saves GC thrashing
 
 	trcdebug.CoreTraceCounters.Put.Add(1)
 	coreTracePool.Put(tr)
@@ -491,14 +491,16 @@ func (sf *stackFrames) getFrom(pc []uintptr) []Frame {
 var stringerPool = sync.Pool{
 	New: func() any {
 		trcdebug.StringerCounters.Alloc.Add(1)
-		return &stringer{}
+		z := &stringer{}
+		z.str.Store(&nullString{})
+		return z
 	},
 }
 
 type stringer struct {
 	fmt  string
 	args []any
-	str  atomic.Value
+	str  atomic.Value // use a pointer to a nullString to avoid a fair amount of GC thrashing
 }
 
 type nullString struct {
@@ -506,12 +508,16 @@ type nullString struct {
 	value string
 }
 
+var zeroNullString nullString
+
 func newNormalStringer(format string, args ...any) *stringer {
 	trcdebug.StringerCounters.Get.Add(1)
 	z := stringerPool.Get().(*stringer)
 	z.fmt = format
 	z.args = args
-	z.str.Store(nullString{valid: true, value: fmt.Sprintf(z.fmt, z.args...)}) // pre-compute the string
+	ns := z.str.Load().(*nullString)
+	ns.valid = true
+	ns.value = fmt.Sprintf(z.fmt, z.args...)
 	return z
 }
 
@@ -520,13 +526,13 @@ func newLazyStringer(format string, args ...any) *stringer {
 	z := stringerPool.Get().(*stringer)
 	z.fmt = format
 	z.args = args
-	z.str.Store(nullString{}) // don't pre-compute the string
+	z.str.Load().(*nullString).valid = false // don't pre-compute the string
 	return z
 }
 
 func (z *stringer) String() string {
 	// If we already have a valid string, return it.
-	ns := z.str.Load().(nullString)
+	ns := z.str.Load().(*nullString)
 	if ns.valid {
 		return ns.value
 	}
@@ -534,12 +540,12 @@ func (z *stringer) String() string {
 	// If we don't, do the formatting work and try to swap it in.
 	ns.valid = true
 	ns.value = fmt.Sprintf(z.fmt, z.args...)
-	if z.str.CompareAndSwap(nullString{}, ns) {
+	if z.str.CompareAndSwap(&zeroNullString, ns) {
 		return ns.value
 	}
 
 	// If that didn't work, then take the value that snuck in.
-	ns = z.str.Load().(nullString)
+	ns = z.str.Load().(*nullString)
 	if !ns.valid {
 		panic(fmt.Errorf("invalid state in pooled stringer"))
 	}
