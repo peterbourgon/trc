@@ -44,15 +44,15 @@ func (b *Broker[T]) Publish(val T) {
 		return
 	}
 
+	if b.transform != nil {
+		val = b.transform(val)
+	}
+
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
 	if len(b.subscribers) <= 0 { // re-check, might have changed
 		return
-	}
-
-	if b.transform != nil {
-		val = b.transform(val)
 	}
 
 	for _, sub := range b.subscribers {

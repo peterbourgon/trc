@@ -181,28 +181,43 @@ func newGlobal(ports []string, publish string) *global {
 }
 
 func load(ctx context.Context, delay time.Duration, instances ...*instance) {
-	wri := discard{}
+	var (
+		begin    = time.Now()
+		writer   = discard{}
+		lastemit = begin
+		countAll = uint64(0)
+		countOne = uint64(0)
+	)
 	for ctx.Err() == nil {
 		f := rand.Float64()
 		switch {
 		case f < 0.6:
 			key := getWord()
 			req, _ := http.NewRequest("GET", "http://irrelevant/"+key, nil)
-			instances[0].apiHandler.ServeHTTP(wri, req)
+			instances[0].apiHandler.ServeHTTP(writer, req)
 
 		case f < 0.9:
 			key := getWord()
 			val := getWord()
 			req, _ := http.NewRequest("PUT", "http://irrelevant/"+key, strings.NewReader(val))
-			instances[0].apiHandler.ServeHTTP(wri, req)
+			instances[0].apiHandler.ServeHTTP(writer, req)
 
 		default:
 			key := getWord()
 			req, _ := http.NewRequest("DELETE", "http://irrelevant/"+key, nil)
-			instances[0].apiHandler.ServeHTTP(wri, req)
+			instances[0].apiHandler.ServeHTTP(writer, req)
 		}
-		instances = append(instances[1:], instances[0])
+		countOne += 1
+		countAll += 1
+		if d := 3 * time.Second; time.Since(lastemit) > d {
+			rateOne := float64(countOne) / d.Seconds()
+			rateAll := float64(countAll) / time.Since(begin).Seconds()
+			log.Printf("RPS inst=%.0f total=%.0f", rateOne, rateAll)
+			countOne = 0
+			lastemit = time.Now()
+		}
 		time.Sleep(delay)
+		instances = append(instances[1:], instances[0])
 	}
 }
 
