@@ -1,7 +1,11 @@
 package trc
 
 import (
+	"runtime"
+	"sync"
 	"time"
+
+	"github.com/peterbourgon/trc/internal/trcdebug"
 )
 
 // StaticTrace is a "snapshot" of a trace which can be sent over the wire.
@@ -22,16 +26,16 @@ var _ Trace = (*StaticTrace)(nil) // needs to be passed to Filter.Allow
 
 // NewSearchTrace produces a static trace intended for a search response.
 func NewSearchTrace(tr Trace) *StaticTrace {
-	return &StaticTrace{
-		TraceSource:   tr.Source(),
-		TraceID:       tr.ID(),
-		TraceCategory: tr.Category(),
-		TraceStarted:  tr.Started(),
-		TraceDuration: tr.Duration(),
-		TraceFinished: tr.Finished(),
-		TraceErrored:  tr.Errored(),
-		TraceEvents:   tr.Events(),
-	}
+	st := newStaticTrace()
+	st.TraceSource = tr.Source()
+	st.TraceID = tr.ID()
+	st.TraceCategory = tr.Category()
+	st.TraceStarted = tr.Started()
+	st.TraceDuration = tr.Duration()
+	st.TraceFinished = tr.Finished()
+	st.TraceErrored = tr.Errored()
+	st.TraceEvents = tr.Events()
+	return st
 }
 
 // NewStreamTrace produces a static trace meant for streaming. If the trace is
@@ -39,41 +43,40 @@ func NewSearchTrace(tr Trace) *StaticTrace {
 // every event.
 func NewStreamTrace(tr Trace) *StaticTrace {
 	var (
-		isActive          = !tr.Finished()
-		detail, canDetail = tr.(interface{ EventsDetail(int, bool) []Event })
-		events            = []Event{}
+		duration   = tr.Duration()
+		isActive   = !tr.Finished()
+		events     []Event
+		haveEvents bool
 	)
-	switch {
-	case canDetail && isActive:
-		events = detail.EventsDetail(1, false)
-	case canDetail && !isActive:
-		events = detail.EventsDetail(-1, false)
-	case !canDetail && isActive:
+
+	if s, ok := tr.(interface{ StreamEvents() ([]Event, bool) }); ok {
+		events, haveEvents = s.StreamEvents()
+	}
+
+	if !haveEvents {
 		events = tr.Events()
-		events = events[len(events)-1:]
-		for i := range events {
-			events[i].Stack = events[i].Stack[:0]
+
+		if isActive && len(events) > 0 {
+			events = events[len(events)-1:]
 		}
-	case !canDetail && !isActive:
-		events = tr.Events()
+
 		for i := range events {
-			events[i].Stack = events[i].Stack[:0]
+			events[i].Stack = nil
 		}
 	}
 
-	duration := tr.Duration()
-	return &StaticTrace{
-		TraceSource:      tr.Source(),
-		TraceID:          tr.ID(),
-		TraceCategory:    tr.Category(),
-		TraceStarted:     tr.Started(),
-		TraceDuration:    duration,
-		TraceDurationStr: duration.String(),
-		TraceDurationSec: duration.Seconds(),
-		TraceFinished:    tr.Finished(),
-		TraceErrored:     tr.Errored(),
-		TraceEvents:      events,
-	}
+	st := newStaticTrace()
+	st.TraceSource = tr.Source()
+	st.TraceID = tr.ID()
+	st.TraceCategory = tr.Category()
+	st.TraceStarted = tr.Started()
+	st.TraceDuration = duration
+	st.TraceDurationStr = duration.String()
+	st.TraceDurationSec = duration.Seconds()
+	st.TraceFinished = tr.Finished()
+	st.TraceErrored = tr.Errored()
+	st.TraceEvents = events
+	return st
 }
 
 // ID implements the Trace interface.
@@ -130,6 +133,37 @@ func (st *StaticTrace) TrimStacks(depth int) *StaticTrace {
 			st.TraceEvents[i] = ev
 		}
 	}
+	return st
+}
+
+//
+//
+//
+
+var staticTracePool = sync.Pool{
+	New: func() any {
+		trcdebug.StaticTraceCounters.Alloc.Add(1)
+		return &StaticTrace{}
+	},
+}
+
+func newStaticTrace() *StaticTrace {
+	trcdebug.StaticTraceCounters.Get.Add(1)
+	st := staticTracePool.Get().(*StaticTrace)
+	runtime.SetFinalizer(st, func(st *StaticTrace) {
+		trcdebug.StaticTraceCounters.Put.Add(1)
+		staticTracePool.Put(st)
+	})
+	st.TraceSource = ""
+	st.TraceID = ""
+	st.TraceCategory = ""
+	st.TraceStarted = time.Time{}
+	st.TraceDuration = 0
+	st.TraceDurationStr = ""
+	st.TraceDurationSec = 0
+	st.TraceFinished = false
+	st.TraceErrored = false
+	st.TraceEvents = nil
 	return st
 }
 

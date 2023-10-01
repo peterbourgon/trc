@@ -156,7 +156,8 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 			tuplec <- tuple{id, res, err}
 		}(strconv.Itoa(i+1), s)
 	}
-	tr.Tracef("scattered request count %d", len(ms))
+
+	tr.LazyTracef("scattered request count %d", len(ms))
 
 	// We'll collect responses into this aggregate value.
 	aggregate := &SearchResponse{
@@ -200,16 +201,20 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	// gonna get. We need to do a little bit of post-processing. First, we need
 	// to sort all of the selected traces by start time, and then limit them by
 	// the request limit.
+	aggregateCount := len(aggregate.Traces)
 	sort.Sort(staticTracesNewestFirst(aggregate.Traces))
 	if len(aggregate.Traces) > req.Limit {
 		aggregate.Traces = aggregate.Traces[:req.Limit]
 	}
 
-	tr.Tracef("total %d, matched %d, returned %d", aggregate.TotalCount, aggregate.MatchCount, len(aggregate.Traces))
+	tr.Tracef("total %d, matched %d, aggregated %d, returned %d", aggregate.TotalCount, aggregate.MatchCount, aggregateCount, len(aggregate.Traces))
 
 	// Fix up the sources.
 	sourceIndex := make(map[string]struct{}, len(aggregate.Sources))
 	for _, source := range aggregate.Sources {
+		if source == "" {
+			continue
+		}
 		sourceIndex[source] = struct{}{}
 	}
 	sourceList := make([]string, 0, len(sourceIndex))

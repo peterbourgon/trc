@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/eztrc"
@@ -152,10 +151,6 @@ var words = strings.Fields(`
 
 func getWord() string {
 	return words[rand.Intn(len(words))]
-}
-
-func getDelay(word string, base time.Duration) time.Duration {
-	return time.Duration(len(word)) * base
 }
 
 //

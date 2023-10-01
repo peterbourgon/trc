@@ -71,7 +71,7 @@ jobs:
         run: gofumpt -d -e -l .
 
       - name: Run revive
-        run: revive --set_exit_status --config="./.revive.toml" --exclude="./_examples/..." ./...
+        run: revive --config=.revive.toml --formatter=stylish ./...
 
       - name: Run lint-parallel-tests
         run: hack/lint-parallel-tests

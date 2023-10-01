@@ -1,37 +1,38 @@
-package trc_test
+package trcpubsub_test
 
 import (
 	"context"
 	"testing"
 
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/internal/trcpubsub"
 )
 
 func BenchmarkBrokerPublish(b *testing.B) {
-	ctxbg := context.Background()
+	ctx := context.Background()
 
 	fn := func(name string, fs ...trc.Filter) {
 		b.Run(name, func(b *testing.B) {
 			var (
-				ctx, cancel = context.WithCancel(ctxbg)
-				broker      = trc.NewBroker()
+				ctx, cancel = context.WithCancel(ctx)
+				broker      = trcpubsub.NewBroker(func(tr trc.Trace) trc.Trace { return trc.NewStreamTrace(tr) })
 			)
 			for _, f := range fs {
 				tracec := make(chan trc.Trace)
 				defer func() { <-tracec }()
 				go func(f trc.Filter) {
-					broker.Stream(ctx, f, tracec)
+					broker.Subscribe(ctx, f.Allow, tracec)
 					close(tracec)
 				}(f)
 			}
 
-			_, tr := trc.New(ctxbg, "source", "category")
+			_, tr := trc.New(ctx, "source", "category")
 			defer tr.Finish()
 
 			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				broker.Publish(ctxbg, tr)
+				broker.Publish(tr)
 			}
 
 			cancel()

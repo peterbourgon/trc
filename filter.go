@@ -1,8 +1,10 @@
 package trc
 
 import (
+	"context"
 	"fmt"
 	"regexp"
+	"runtime/trace"
 	"strings"
 	"time"
 )
@@ -83,6 +85,8 @@ func (f Filter) String() string {
 // Allow returns true if the provided trace satisfies all of the conditions in
 // the filter.
 func (f *Filter) Allow(tr Trace) bool {
+	defer trace.StartRegion(context.Background(), "Filter.Allow").End()
+
 	if len(f.Sources) > 0 {
 		var found bool
 		for _, source := range f.Sources {
@@ -150,6 +154,9 @@ func (f *Filter) Allow(tr Trace) bool {
 
 	f.initializeQueryRegexp()
 	if f.regexp != nil {
+		if f.regexp.MatchString(tr.ID()) {
+			return true
+		}
 		for _, ev := range tr.Events() {
 			if f.regexp.MatchString(ev.What) {
 				return true

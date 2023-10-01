@@ -364,7 +364,6 @@ div#debug-info {
 	position: fixed;
 	top: 2em;
 	right: 2em;
-	max-width: 33%;
 	color: #666;
 	background-color: #eee;
 	border: solid 1px #666;

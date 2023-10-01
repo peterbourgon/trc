@@ -1,4 +1,4 @@
-package trcweb
+package trchttp
 
 import (
 	"context"
@@ -27,7 +27,7 @@ func Middleware(
 
 			tr.LazyTracef("%s %s %s", r.RemoteAddr, r.Method, r.URL.String())
 
-			for _, header := range []string{"User-Agent", "Accept", "Content-Type"} {
+			for _, header := range []string{"User-Agent", "Accept", "Content-Type", "X-TRC-ID"} {
 				if val := r.Header.Get(header); val != "" {
 					tr.LazyTracef("%s: %s", header, val)
 				}
@@ -42,9 +42,7 @@ func Middleware(
 				tr.LazyTracef("HTTP %d, %s, %s", code, sent, took)
 			}(time.Now())
 
-			w = iw
-			r = r.WithContext(ctx)
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(iw, r.WithContext(ctx))
 		})
 	}
 }

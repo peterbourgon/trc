@@ -6,96 +6,76 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
-	"net/http/httptest"
 	_ "net/http/pprof"
+	"os"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/felixge/fgprof"
 
+	"github.com/peterbourgon/ff/v4"
+	"github.com/peterbourgon/ff/v4/ffhelp"
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trcweb"
+	"github.com/peterbourgon/trc/trchttp"
+	"github.com/peterbourgon/trc/trcstream"
 )
 
 func main() {
+	log.SetFlags(0)
+
+	fs := ff.NewFlagSet("trc-complex")
+	var (
+		publish = fs.StringEnum('p', "publish", "what to publish: nothing, traces, events", "nothing", "traces", "events")
+		workers = fs.Int('w', "workers", 1, "loadgen workers")
+		delay   = fs.Duration('d', "delay", 0, "delay between loadgen requests")
+	)
+	if err := ff.Parse(fs, os.Args[1:]); err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", ffhelp.Flags(fs))
+		log.Fatal(err)
+	}
+
+	log.Printf("publish %s", *publish)
+	log.Printf("workers %d", *workers)
+	log.Printf("delay %s", *delay)
+
 	// Open stack trace links in VS Code.
-	trcweb.SetSourceLinkFunc(trcweb.SourceLinkVSCode)
+	trchttp.SetSourceLinkFunc(trchttp.SourceLinkVSCode)
+	runtime.SetMutexProfileFraction(10)
 
 	// Each port is a distinct instance.
 	ports := []string{"8081", "8082", "8083"}
 
-	// Create a trace collector for each instance.
-	instanceCollectors := make([]*trc.Collector, len(ports))
-	for i := range ports {
-		instanceCollectors[i] = trc.NewCollector(trc.CollectorConfig{Source: ports[i]})
+	// Construct the instances.
+	var instances []*instance
+	for _, port := range ports {
+		instances = append(instances, newInstance(port, *publish))
 	}
 
-	// Create a `kv` service for each instance.
-	kvs := make([]*KV, len(ports))
-	for i := range kvs {
-		kvs[i] = NewKV(NewStore())
+	// Generate random load for each instance.
+	for i := 0; i < *workers; i++ {
+		go load(context.Background(), *delay, instances...)
 	}
 
-	// Create a `kv` API HTTP handler for each instance.
-	// Trace each request in the corresponding collector.
-	apiHandlers := make([]http.Handler, len(ports))
-	for i := range apiHandlers {
-		apiHandlers[i] = kvs[i]
-		apiHandlers[i] = trcweb.Middleware(instanceCollectors[i].NewTrace, apiCategory)(apiHandlers[i])
-	}
+	// Construct a "global" instance, abstracting over the concrete instances.
+	global := newGlobal(ports, *publish)
 
-	// Generate random load for each `kv` instance.
-	go load(context.Background(), apiHandlers...)
-
-	// Create a traces HTTP handler for each instance.
-	// We'll also trace each request to this endpoint.
-	instanceHandlers := make([]http.Handler, len(instanceCollectors))
-	for i := range instanceHandlers {
-		instanceHandlers[i] = trcweb.NewTraceServer(instanceCollectors[i])
-		instanceHandlers[i] = trcweb.Middleware(instanceCollectors[i].NewTrace, trcweb.Categorize)(instanceHandlers[i])
-	}
-
-	// TODO
-	var globalCollector *trc.Collector
-	{
-		globalCollector = trc.NewCollector(trc.CollectorConfig{Source: "global"})
-	}
-
-	// TODO
-	var globalSearcher trc.Searcher
-	{
-		var ms trc.MultiSearcher
-		for i := range ports {
-			ms = append(ms, trcweb.NewSearchClient(http.DefaultClient, fmt.Sprintf("localhost:%s/traces", ports[i])))
-		}
-		ms = append(ms, globalCollector)
-
-		globalSearcher = ms
-	}
-
-	// TODO
-	var globalHandler http.Handler
-	{
-		globalHandler = &trcweb.TraceServer{Collector: globalCollector, Searcher: globalSearcher}
-		globalHandler = trcweb.Middleware(globalCollector.NewTrace, trcweb.Categorize)(globalHandler)
-	}
-
-	// Now we run HTTP servers for each instance.
+	// Run an HTTP server for each instance.
 	httpServers := make([]*http.Server, len(ports))
 	for i := range httpServers {
 		addr := "localhost:" + ports[i]
 		mux := http.NewServeMux()
-		mux.Handle("/traces", http.StripPrefix("/traces", instanceHandlers[i]))
+		mux.Handle("/traces", http.StripPrefix("/traces", instances[i].tracesHandler))
+		mux.Handle("/kv/", http.StripPrefix("/kv", instances[i].apiHandler))
 		s := &http.Server{Addr: addr, Handler: mux}
 		go func() { log.Fatal(s.ListenAndServe()) }()
 		log.Printf("http://localhost:%s/traces", ports[i])
 	}
 
-	// And an extra HTTP server for the global trace handler. We'll use this
-	// server for additional stuff like profiling endpoints.
+	// Run an HTTP server for the global traces handler. We'll use this server
+	// for additional stuff like profiling endpoints.
 	go func() {
-		http.Handle("/traces", http.StripPrefix("/traces", globalHandler))
-		http.Handle("/traces/", http.StripPrefix("/traces/", globalHandler))
+		http.Handle("/traces/", http.StripPrefix("/traces", global.tracesHandler))
 		http.Handle("/debug/fgprof", fgprof.Handler())
 		log.Printf("http://localhost:8080/traces")
 		log.Fatal(http.ListenAndServe("localhost:8080", nil))
@@ -104,33 +84,147 @@ func main() {
 	select {}
 }
 
-func load(ctx context.Context, dsts ...http.Handler) {
+type instance struct {
+	broker        *trcstream.Broker
+	collector     *trc.Collector
+	apiHandler    http.Handler
+	tracesHandler http.Handler
+}
+
+func newInstance(port string, publish string) *instance {
+	broker := trcstream.NewBroker()
+
+	var decorators []trc.DecoratorFunc
+	switch publish {
+	case "traces":
+		decorators = append(decorators, broker.PublishTracesDecorator())
+	case "events":
+		decorators = append(decorators, broker.PublishEventsDecorator())
+	default:
+		// no publishing
+	}
+
+	collector := trc.NewCollector(trc.CollectorConfig{
+		Source:     port,
+		Decorators: decorators,
+	}).SetCategorySize(10000)
+
+	var apiHandler http.Handler
+	apiHandler = NewKV(NewStore())
+	apiHandler = trchttp.Middleware(collector.NewTrace, apiCategory)(apiHandler)
+
+	var streamHandler http.Handler
+	streamHandler = trchttp.NewStreamServer(broker)
+	streamHandler = trchttp.Middleware(collector.NewTrace, func(r *http.Request) string { return "stream" })(streamHandler)
+
+	var searchHandler http.Handler
+	searchHandler = trchttp.NewSearchServer(collector)
+	searchHandler = trchttp.Middleware(collector.NewTrace, func(r *http.Request) string { return "traces" })(searchHandler)
+
+	tracesHandler := trchttp.NewRuleRouter(searchHandler)
+	tracesHandler.Add(func(r *http.Request) bool { return trchttp.RequestExplicitlyAccepts(r, "text/event-stream") }, streamHandler)
+
+	return &instance{
+		broker:        broker,
+		collector:     collector,
+		apiHandler:    apiHandler,
+		tracesHandler: tracesHandler,
+	}
+}
+
+type global struct {
+	broker        *trcstream.Broker
+	collector     *trc.Collector
+	tracesHandler http.Handler
+}
+
+func newGlobal(ports []string, publish string) *global {
+	broker := trcstream.NewBroker()
+
+	var decorators []trc.DecoratorFunc
+	switch publish {
+	case "traces":
+		decorators = append(decorators, broker.PublishTracesDecorator())
+	case "events":
+		decorators = append(decorators, broker.PublishEventsDecorator())
+	default:
+		// no publishing
+	}
+
+	collector := trc.NewCollector(trc.CollectorConfig{
+		Source:     "global",
+		Decorators: decorators,
+	})
+
+	var searcher trc.MultiSearcher
+	for _, port := range ports {
+		searcher = append(searcher, trchttp.NewSearchClient(http.DefaultClient, "localhost:"+port+"/traces"))
+	}
+	searcher = append(searcher, collector)
+
+	var streamHandler http.Handler
+	streamHandler = trchttp.NewStreamServer(broker)
+	streamHandler = trchttp.Middleware(collector.NewTrace, func(r *http.Request) string { return "stream" })(streamHandler)
+
+	var searchHandler http.Handler
+	searchHandler = trchttp.NewSearchServer(searcher)
+	searchHandler = trchttp.Middleware(collector.NewTrace, func(r *http.Request) string { return "traces" })(searchHandler)
+
+	tracesHandler := trchttp.NewRuleRouter(searchHandler)
+	tracesHandler.Add(func(r *http.Request) bool { return trchttp.RequestExplicitlyAccepts(r, "text/event-stream") }, streamHandler)
+
+	return &global{
+		broker:        broker,
+		collector:     collector,
+		tracesHandler: tracesHandler,
+	}
+}
+
+func load(ctx context.Context, delay time.Duration, instances ...*instance) {
+	var (
+		begin    = time.Now()
+		writer   = discard{}
+		lastemit = begin
+		countAll = uint64(0)
+		countOne = uint64(0)
+	)
 	for ctx.Err() == nil {
 		f := rand.Float64()
 		switch {
 		case f < 0.6:
 			key := getWord()
-			url := fmt.Sprintf("http://irrelevant/%s", key)
-			req, _ := http.NewRequest("GET", url, nil)
-			rec := httptest.NewRecorder()
-			dsts[0].ServeHTTP(rec, req)
+			req, _ := http.NewRequest("GET", "http://irrelevant/"+key, nil)
+			instances[0].apiHandler.ServeHTTP(writer, req)
 
 		case f < 0.9:
 			key := getWord()
 			val := getWord()
-			url := fmt.Sprintf("http://irrelevant/%s", key)
-			req, _ := http.NewRequest("PUT", url, strings.NewReader(val))
-			rec := httptest.NewRecorder()
-			dsts[0].ServeHTTP(rec, req)
+			req, _ := http.NewRequest("PUT", "http://irrelevant/"+key, strings.NewReader(val))
+			instances[0].apiHandler.ServeHTTP(writer, req)
 
 		default:
 			key := getWord()
-			url := fmt.Sprintf("http://irrelevant/%s", key)
-			req, _ := http.NewRequest("DELETE", url, nil)
-			rec := httptest.NewRecorder()
-			dsts[0].ServeHTTP(rec, req)
+			req, _ := http.NewRequest("DELETE", "http://irrelevant/"+key, nil)
+			instances[0].apiHandler.ServeHTTP(writer, req)
 		}
-		dsts = append(dsts[1:], dsts[0])
-		time.Sleep(time.Millisecond)
+		countOne += 1
+		countAll += 1
+		if d := 3 * time.Second; time.Since(lastemit) > d {
+			rateOne := float64(countOne) / d.Seconds()
+			rateAll := float64(countAll) / time.Since(begin).Seconds()
+			log.Printf("RPS inst=%.0f total=%.0f", rateOne, rateAll)
+			countOne = 0
+			lastemit = time.Now()
+		}
+		time.Sleep(delay)
+		instances = append(instances[1:], instances[0])
 	}
 }
+
+type discard http.Header
+
+var _ http.ResponseWriter = discard{}
+
+func (d discard) WriteHeader(int)             {}
+func (d discard) Header() http.Header         { return http.Header(d) }
+func (d discard) Write(p []byte) (int, error) { return len(p), nil }

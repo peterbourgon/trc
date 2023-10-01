@@ -1,7 +1,6 @@
 package trc
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log"
@@ -55,6 +54,8 @@ type logTrace struct {
 
 var _ interface{ Free() } = (*logTrace)(nil)
 
+//var _ interface { ObserveStats(*CategoryStats, []time.Duration) bool } = (*logTrace)(nil)
+
 func (ltr *logTrace) Tracef(format string, args ...any) {
 	ltr.logEvent(format, args...)
 	ltr.Trace.Tracef(format, args...)
@@ -101,59 +102,9 @@ func (ltr *logTrace) Free() {
 	}
 }
 
-//
-//
-//
-
-func publishDecorator(p publisher) DecoratorFunc {
-	return func(tr Trace) Trace {
-		ptr := &publishTrace{
-			Trace: tr,
-			p:     p,
-		}
-		p.Publish(context.Background(), ptr.Trace)
-		return ptr
+func (ltr *logTrace) StreamEvents() ([]Event, bool) {
+	if s, ok := ltr.Trace.(interface{ StreamEvents() ([]Event, bool) }); ok {
+		return s.StreamEvents()
 	}
-}
-
-type publisher interface {
-	Publish(ctx context.Context, tr Trace)
-}
-
-type publishTrace struct {
-	Trace
-	p publisher
-}
-
-var _ interface{ Free() } = (*publishTrace)(nil)
-
-func (ptr *publishTrace) Tracef(format string, args ...any) {
-	ptr.Trace.Tracef(format, args...)
-	ptr.p.Publish(context.Background(), ptr.Trace)
-}
-
-func (ptr *publishTrace) LazyTracef(format string, args ...any) {
-	ptr.Trace.LazyTracef(format, args...)
-	ptr.p.Publish(context.Background(), ptr.Trace)
-}
-
-func (ptr *publishTrace) Errorf(format string, args ...any) {
-	ptr.Trace.Errorf(format, args...)
-	ptr.p.Publish(context.Background(), ptr.Trace)
-}
-
-func (ptr *publishTrace) LazyErrorf(format string, args ...any) {
-	ptr.Trace.LazyErrorf(format, args...)
-	ptr.p.Publish(context.Background(), ptr.Trace)
-}
-
-func (ptr *publishTrace) Finish() {
-	ptr.Trace.Finish()
-	ptr.p.Publish(context.Background(), ptr.Trace)
-}
-
-func (ptr *publishTrace) Free() {
-	if f, ok := ptr.Trace.(interface{ Free() }); ok {
-		f.Free()
-	}
+	return nil, false
 }

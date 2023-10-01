@@ -132,3 +132,10 @@ func pathSuffix(path string) string {
 	}
 	return path[strings.LastIndex(path[:lastSep], pathSep)+1:]
 }
+
+// Freer can optionally be implemented by traces. It might be called by the
+// collector when the trace is dropped from a ring buffer. It's meant as an
+// optimization to e.g. return the trace to a pool.
+type Freer interface {
+	Free()
+}

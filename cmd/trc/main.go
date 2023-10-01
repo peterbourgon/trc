@@ -28,7 +28,7 @@ func main() {
 	)
 	err := exec(ctx, stdin, stdout, stderr, args)
 	switch {
-	case err == nil, errors.Is(err, context.Canceled), errors.As(err, &(run.SignalError{})):
+	case err == nil, errors.Is(err, ff.ErrHelp), errors.Is(err, context.Canceled), errors.As(err, &(run.SignalError{})):
 		os.Exit(0)
 	case err != nil:
 		fmt.Fprintf(stderr, "error: %v\n", err)
@@ -56,6 +56,7 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 		Name:      "trc",
 		ShortHelp: "query trace data from one or more instances",
 		Flags:     trcFlags,
+		Exec:      func(ctx context.Context, args []string) error { return ff.ErrHelp },
 	}
 
 	// Config for `trc search`.
@@ -65,7 +66,7 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	searchCommand := &ff.Command{
 		Name:      "search",
 		ShortHelp: "search for trace data",
-		LongHelp:  "Fetch traces that match the provided query flags.",
+		LongHelp:  "Fetch traces that match the filter.",
 		Flags:     searchFlags,
 		Exec:      searchConfig.Exec,
 	}
@@ -78,7 +79,7 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	streamCommand := &ff.Command{
 		Name:      "stream",
 		ShortHelp: "stream trace data to the terminal",
-		LongHelp:  "Stream traces, or trace events, that match the provided query flags.",
+		LongHelp:  "Stream traces, or trace events, that match the filter.",
 		Flags:     streamFlags,
 		Exec:      streamConfig.Exec,
 	}
@@ -87,12 +88,8 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	// Print help when appropriate.
 	showHelp := true
 	defer func() {
-		errHelp := errors.Is(err, ff.ErrHelp) || errors.Is(err, ff.ErrNoExec)
-		if showHelp || errHelp {
+		if showHelp || errors.Is(err, ff.ErrHelp) {
 			fmt.Fprintf(stderr, "\n%s\n", ffhelp.Command(trcCommand))
-		}
-		if errHelp {
-			err = nil
 		}
 	}()
 

@@ -23,12 +23,12 @@ import (
 	"net/http"
 
 	"github.com/peterbourgon/trc"
-	"github.com/peterbourgon/trc/trcweb"
+	"github.com/peterbourgon/trc/trchttp"
 )
 
 var collector = trc.NewDefaultCollector()
 
-var handler = trcweb.NewTraceServer(collector)
+var handler = trchttp.NewSearchServer(collector)
 
 // Collector returns the global [trc.Collector].
 func Collector() *trc.Collector {
@@ -44,7 +44,7 @@ func Handler() http.Handler {
 // collector for each received request. The category is determined by the
 // provided categorize function.
 func Middleware(categorize func(*http.Request) string) func(http.Handler) http.Handler {
-	return trcweb.Middleware(collector.NewTrace, categorize)
+	return trchttp.Middleware(collector.NewTrace, categorize)
 }
 
 // New creates a new trace in the global trace collector with the provided

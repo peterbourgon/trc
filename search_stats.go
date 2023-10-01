@@ -1,6 +1,7 @@
 package trc
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"time"
@@ -36,7 +37,7 @@ func (ss *SearchStats) IsZero() bool {
 }
 
 // Observe the given traces into the search stats.
-func (ss *SearchStats) Observe(trs ...Trace) {
+func (ss *SearchStats) Observe(ctx context.Context, trs ...Trace) {
 	for _, tr := range trs {
 		category := tr.Category()
 		cs, ok := ss.Categories[category]
@@ -44,8 +45,6 @@ func (ss *SearchStats) Observe(trs ...Trace) {
 			cs = NewCategoryStats(category, ss.Bucketing)
 			ss.Categories[category] = cs
 		}
-
-		cs.EventCount += len(tr.Events())
 
 		var (
 			traceStarted  = tr.Started()
@@ -104,14 +103,12 @@ func (ss *SearchStats) Merge(other *SearchStats) {
 // Overall returns a synthetic category stats representing all categories.
 func (ss *SearchStats) Overall() *CategoryStats {
 	overall := NewCategoryStats("overall", ss.Bucketing)
-	var tracerate, eventrate float64
+	var tracerate float64
 	for _, sc := range ss.Categories {
 		overall.Merge(sc)
 		tracerate += sc.TraceRate()
-		eventrate += sc.EventRate()
 	}
 	overall.tracerate = tracerate
-	overall.eventrate = eventrate
 	return overall
 }
 
@@ -136,7 +133,6 @@ func (ss *SearchStats) AllCategories() []*CategoryStats {
 // CategoryStats represents statistics for all traces in a specific category.
 type CategoryStats struct {
 	Category     string    `json:"category"`
-	EventCount   int       `json:"event_count"`
 	ActiveCount  int       `json:"active_count"`
 	BucketCounts []int     `json:"bucket_counts"`
 	ErroredCount int       `json:"errored_count"`
@@ -144,7 +140,6 @@ type CategoryStats struct {
 	Newest       time.Time `json:"newest"`
 
 	tracerate float64
-	eventrate float64
 }
 
 // NewCategoryStats returns an empty category stats for the given category, and
@@ -216,32 +211,6 @@ func (cs *CategoryStats) TraceRate() (r float64) {
 	return float64(total) / float64(delta.Seconds())
 }
 
-// EventRate is an approximate measure of events per second in this category.
-func (cs *CategoryStats) EventRate() (r float64) {
-	if cs.eventrate != 0 {
-		return cs.eventrate
-	}
-
-	defer func() {
-		cs.eventrate = r
-	}()
-
-	var (
-		total      = cs.EventCount
-		delta      = time.Since(cs.Oldest)
-		totalZero  = total <= 0
-		deltaZero  = delta <= 0
-		newestZero = cs.Newest.IsZero()
-		oldestZero = cs.Oldest.IsZero()
-		isZero     = totalZero || deltaZero || newestZero || oldestZero
-	)
-	if isZero {
-		return 0
-	}
-
-	return float64(total) / float64(delta.Seconds())
-}
-
 // Merge the other category stats into this one.
 func (cs *CategoryStats) Merge(other *CategoryStats) {
 	if other.IsZero() {
@@ -272,7 +241,6 @@ func (cs *CategoryStats) Merge(other *CategoryStats) {
 	cs.Newest = newerOf(cs.Newest, other.Newest)
 
 	cs.tracerate = cs.TraceRate() + other.TraceRate()
-	cs.eventrate = cs.EventRate() + other.EventRate()
 }
 
 //

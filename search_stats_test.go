@@ -75,3 +75,21 @@ func TestSearchStatsIsZero(t *testing.T) {
 		AssertEqual(t, false, ss.IsZero())
 	})
 }
+
+func BenchmarkSearchStatsObserve(b *testing.B) {
+	ctx, tr := trc.New(context.Background(), "source", "category")
+	defer tr.Finish()
+
+	for i := 0; i < 100; i++ {
+		tr.Tracef("trace event %d", i+1)
+	}
+
+	ss := trc.NewSearchStats(trc.DefaultBucketing)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		ss.Observe(ctx, tr)
+	}
+}

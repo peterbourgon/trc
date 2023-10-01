@@ -1,12 +1,10 @@
-package trcweb
+package trchttp
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -16,226 +14,38 @@ import (
 	"github.com/bernerdschaefer/eventsource"
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/internal/trcutil"
-	"github.com/peterbourgon/trc/trcweb/assets"
+	"github.com/peterbourgon/trc/trcstream"
 )
 
-// HTTPClient models an http.Client.
-type HTTPClient interface {
-	Do(*http.Request) (*http.Response, error)
+// StreamServer provides an HTTP interface to a [trcstream.Streamer].
+type StreamServer struct {
+	trcstream.Streamer
 }
 
-var _ HTTPClient = (*http.Client)(nil)
-
-// Searcher is just a trc.Searcher.
-type Searcher trc.Searcher
-
-// Streamer models the subscriber methods of a trc.Collector.
-type Streamer interface {
-	Stream(ctx context.Context, f trc.Filter, ch chan<- trc.Trace) (trc.StreamStats, error)
-	StreamStats(ctx context.Context, ch chan<- trc.Trace) (trc.StreamStats, error)
-}
-
-//
-//
-//
-
-// TraceServer provides an HTTP interface to a trace collector.
-type TraceServer struct {
-	// Collector is the default implementation for Searcher and Streamer.
-	Collector *trc.Collector
-
-	// Searcher is used to serve requests which Accept: text/html and/or
-	// application/json. If not provided, the Collector will be used.
-	Searcher Searcher
-
-	// Streamer is used to serve requests which Accept: text/event-stream. If
-	// not provided, the Collector will be used.
-	Streamer Streamer
-}
-
-// NewTraceServer returns a standard trace server wrapping the collector.
-func NewTraceServer(c *trc.Collector) *TraceServer {
-	s := &TraceServer{
-		Collector: c,
-	}
-	s.initialize()
-	return s
-}
-
-func (s *TraceServer) initialize() {
-	if s.Searcher == nil {
-		s.Searcher = s.Collector
-	}
-	if s.Streamer == nil {
-		s.Streamer = s.Collector
+// NewStreamServer returns a stream server wrapping the provided streamer.
+func NewStreamServer(s trcstream.Streamer) *StreamServer {
+	return &StreamServer{
+		Streamer: s,
 	}
 }
 
-// ServeHTTP implements http.Handler.
-func (s *TraceServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.initialize()
-
-	switch Categorize(r) {
-	case "stream":
-		s.handleStream(w, r)
-	default:
-		s.handleSearch(w, r)
-	}
-}
-
-// Categorize the request for a [Middleware].
-func Categorize(r *http.Request) string {
-	if requestExplicitlyAccepts(r, "text/event-stream") {
-		return "stream"
-	}
-	return "traces"
-}
-
-//
-//
-//
-
-// SearchData is returned by normal trace search requests.
-type SearchData struct {
-	Request  trc.SearchRequest  `json:"request"`
-	Response trc.SearchResponse `json:"response"`
-	Problems []error            `json:"-"` // for rendering, not transmitting
-}
-
-func (s *TraceServer) handleSearch(w http.ResponseWriter, r *http.Request) {
-	var (
-		ctx    = r.Context()
-		tr     = trc.Get(ctx)
-		isJSON = strings.Contains(r.Header.Get("content-type"), "application/json")
-		data   = SearchData{}
-	)
-
-	switch {
-	case isJSON:
-		body := http.MaxBytesReader(w, r.Body, maxRequestBodySizeBytes)
-		var req trc.SearchRequest
-		if err := json.NewDecoder(body).Decode(&req); err != nil {
-			//tr.Errorf("decode JSON request failed, using defaults (%v)", err)
-			//data.Problems = append(data.Problems, fmt.Errorf("decode JSON request: %w", err))
-			tr.Errorf("decode JSON request failed (%v) -- returning error", err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		data.Request = req
-
-	default:
-		urlquery := r.URL.Query()
-		data.Request = trc.SearchRequest{
-			Bucketing:  parseBucketing(urlquery["b"]), // nil is OK
-			Filter:     parseFilter(r),
-			Limit:      parseRange(urlquery.Get("n"), strconv.Atoi, trc.SearchLimitMin, trc.SearchLimitDefault, trc.SearchLimitMax),
-			StackDepth: parseDefault(urlquery.Get("stack"), strconv.Atoi, 0),
-		}
-	}
-
-	data.Problems = append(data.Problems, data.Request.Normalize()...)
-
-	tr.LazyTracef("search request %s", data.Request)
-
-	res, err := s.Searcher.Search(ctx, &data.Request)
-	if err != nil {
-		data.Problems = append(data.Problems, fmt.Errorf("execute select request: %w", err))
-	} else {
-		data.Response = *res
-	}
-
-	for _, problem := range data.Response.Problems {
-		data.Problems = append(data.Problems, fmt.Errorf("response: %s", problem))
-	}
-
-	if n := len(data.Response.Stats.Categories); n >= 100 {
-		data.Problems = append(data.Problems, fmt.Errorf("way too many categories (%d)", n))
-	}
-
-	renderResponse(ctx, w, r, assets.FS, "traces.html", nil, data)
-}
-
-//
-
-// SearchClient implements [trc.Searcher] by querying a search server.
-type SearchClient struct {
-	client HTTPClient
-	uri    string
-}
-
-var _ trc.Searcher = (*SearchClient)(nil)
-
-// NewSearchClient returns a search client using the given HTTP client to query
-// the given search server URI.
-func NewSearchClient(client HTTPClient, uri string) *SearchClient {
-	if !strings.HasPrefix(uri, "http") {
-		uri = "http://" + uri
-	}
-	return &SearchClient{
-		client: client,
-		uri:    uri,
-	}
-}
-
-// Search implements [trc.Searcher].
-func (c *SearchClient) Search(ctx context.Context, req *trc.SearchRequest) (_ *trc.SearchResponse, err error) {
-	tr := trc.Get(ctx)
-
-	defer func() {
-		if err != nil {
-			tr.Errorf("error: %v", err)
-		}
-	}()
-
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("encode search request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", c.uri, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("create HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("content-type", "application/json; charset=utf-8")
-	httpReq.Header.Set("accept", "application/json")
-
-	httpRes, err := c.client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("execute HTTP request: %w", err)
-	}
-	defer func() {
-		io.Copy(io.Discard, httpRes.Body)
-		httpRes.Body.Close()
-	}()
-
-	if httpRes.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("read HTTP response: server gave HTTP %d (%s)", httpRes.StatusCode, http.StatusText(httpRes.StatusCode))
-	}
-
-	var res SearchData
-	if err := json.NewDecoder(httpRes.Body).Decode(&res); err != nil {
-		return nil, fmt.Errorf("decode search response: %w", err)
-	}
-
-	tr.LazyTracef("%s -> total %d, matched %d, returned %d", c.uri, res.Response.TotalCount, res.Response.MatchCount, len(res.Response.Traces))
-
-	return &res.Response, nil
-}
-
-//
-//
-//
-
-func (s *TraceServer) handleStream(w http.ResponseWriter, r *http.Request) {
+// ServeHTTP implements [http.Handler]. Requests must Accept: text/event-stream.
+func (s *StreamServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var (
 		ctx = r.Context()
 		tr  = trc.Get(ctx)
 	)
 
+	if !RequestExplicitlyAccepts(r, "text/event-stream") {
+		err := fmt.Errorf("invalid request Accept header (%s)", r.Header.Get("accept"))
+		tr.Errorf("%v", err)
+		respondError(w, r, err, http.StatusBadRequest)
+		return
+	}
+
 	var f trc.Filter
 	switch {
-	case strings.Contains(r.Header.Get("content-type"), "application/json"):
+	case RequestHasContentType(r, "application/json"):
 		body := http.MaxBytesReader(w, r.Body, maxRequestBodySizeBytes)
 		if err := json.NewDecoder(body).Decode(&f); err != nil {
 			tr.Errorf("decode filter error (%v), using default", err)
@@ -246,7 +56,7 @@ func (s *TraceServer) handleStream(w http.ResponseWriter, r *http.Request) {
 
 	if normalizeErrs := f.Normalize(); len(normalizeErrs) > 0 {
 		err := fmt.Errorf("bad request: %s", strings.Join(trcutil.FlattenErrors(normalizeErrs...), "; "))
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		respondError(w, r, err, http.StatusBadRequest)
 		return
 	}
 
@@ -273,15 +83,17 @@ func (s *TraceServer) handleStream(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		stats, err := s.Streamer.Stream(ctx, f, tracec)
-		tr.LazyTracef("%s (error: %v)", stats, err)
+		tr.LazyTracef("stream done, %s, error=%v", stats, err)
 		close(donec)
 	}()
 	defer func() {
 		<-donec
+		cancel()
 	}()
 
 	eventsource.Handler(func(lastId string, encoder *eventsource.Encoder, stop <-chan bool) {
 		tr.LazyTracef("event source handler started")
+		trID := tr.ID()
 
 		stats := time.NewTicker(stats)
 		defer stats.Stop()
@@ -331,7 +143,7 @@ func (s *TraceServer) handleStream(w http.ResponseWriter, r *http.Request) {
 				}
 
 			case recv := <-tracec:
-				if recv.ID() == tr.ID() {
+				if recv.ID() == trID {
 					continue // don't publish our own trace events
 				}
 
@@ -349,13 +161,18 @@ func (s *TraceServer) handleStream(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 
-			case <-ctx.Done():
-				tr.LazyTracef("stopping: context done (%v)", ctx.Err())
+			case <-donec:
+				tr.LazyTracef("stopping: stream done")
+				cancel()
 				return
 
 			case <-stop:
 				tr.LazyTracef("stopping: stop signal (canceling context)")
 				cancel()
+				return
+
+			case <-ctx.Done():
+				tr.LazyTracef("stopping: context done (%v)", ctx.Err())
 				return
 			}
 		}
@@ -376,7 +193,7 @@ type StreamClient struct {
 	SendBuffer int
 
 	// OnRead is called for every stream event received by the client.
-	// Implementations must not block.
+	// Implementations must not block and must not modify event data.
 	OnRead func(ctx context.Context, eventType string, eventData []byte)
 
 	// RetryInterval between reconnect attempts. Default 3s, min 1s, max 60s.
@@ -487,9 +304,11 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 	for {
 		ev, err := es.Read()
 		if errors.Is(err, eventsource.ErrClosed) {
+			tr.LazyTracef("read server-sent event: connection closed (%v)", err)
 			return nil
 		}
 		if err != nil {
+			tr.LazyTracef("read server-sent event: error (%v)", err)
 			return fmt.Errorf("read server-sent event: %w", err)
 		}
 
@@ -500,17 +319,19 @@ func (c *StreamClient) Stream(ctx context.Context, f trc.Filter, ch chan<- trc.T
 			tr.LazyTracef("init: %s", string(ev.Data))
 
 		case "trace":
-			var str trc.StaticTrace
-			if err := json.Unmarshal(ev.Data, &str); err != nil {
+			var st trc.StaticTrace
+			if err := json.Unmarshal(ev.Data, &st); err != nil {
 				return fmt.Errorf("decode trace event: %w", err)
 			}
 			select {
 			case <-ctx.Done():
-			case ch <- &str:
+				tr.LazyTracef("emit event: context done")
+			case ch <- &st:
+				// OK
 			}
 
 		case "stats":
-			var stats trc.StreamStats
+			var stats trcstream.Stats
 			if err := json.Unmarshal(ev.Data, &stats); err == nil {
 				tr.LazyTracef("%s", stats)
 			} else {
