@@ -515,9 +515,9 @@ func newNormalStringer(format string, args ...any) *stringer {
 	z := stringerPool.Get().(*stringer)
 	z.fmt = format
 	z.args = args
-	ns := z.str.Load().(*nullString)
-	ns.valid = true
-	ns.value = fmt.Sprintf(z.fmt, z.args...)
+	ns := z.str.Load().(*nullString)         // pre-compute the string
+	ns.valid = true                          //
+	ns.value = fmt.Sprintf(z.fmt, z.args...) //
 	return z
 }
 
@@ -526,20 +526,18 @@ func newLazyStringer(format string, args ...any) *stringer {
 	z := stringerPool.Get().(*stringer)
 	z.fmt = format
 	z.args = args
-	z.str.Load().(*nullString).valid = false // don't pre-compute the string
+	z.str.Store(&zeroNullString) // don't pre-compute the string
 	return z
 }
 
 func (z *stringer) String() string {
 	// If we already have a valid string, return it.
-	ns := z.str.Load().(*nullString)
-	if ns.valid {
+	if ns := z.str.Load().(*nullString); ns.valid {
 		return ns.value
 	}
 
 	// If we don't, do the formatting work and try to swap it in.
-	ns.valid = true
-	ns.value = fmt.Sprintf(z.fmt, z.args...)
+	ns := &nullString{valid: true, value: fmt.Sprintf(z.fmt, z.args...)}
 	if z.str.CompareAndSwap(&zeroNullString, ns) {
 		return ns.value
 	}
