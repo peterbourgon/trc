@@ -1,4 +1,4 @@
-# trc [![Go Reference](https://pkg.go.dev/badge/github.com/peterbourgon/trc.svg)](https://pkg.go.dev/github.com/peterbourgon/trc) ![Latest Release](https://img.shields.io/github/v/release/peterbourgon/trc?style=flat-square) ![Build Status](https://github.com/peterbourgon/trc/actions/workflows/test.yaml/badge.svg?branch=main)
+# trc [![Go Reference](https://pkg.go.dev/badge/github.com/peterbourgon/trc.svg)](https://pkg.go.dev/github.com/peterbourgon/trc) ![Latest Release](https://img.shields.io/github/v/release/peterbourgon/trc?style=flat-square) ![Build Status](https://github.com/peterbourgon/trc/actions/workflows/test.yaml/badge.svg?branch=main)[![go-recipes](https://raw.githubusercontent.com/nikolaydubina/go-recipes/main/badge.svg?raw=true)](https://github.com/nikolaydubina/go-recipes)
 
 trc provides in-process request tracing, an efficient alternative to logging.
 The package is heavily inspired by https://golang.org/x/net/trace, much
