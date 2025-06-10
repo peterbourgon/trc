@@ -156,5 +156,4 @@ func (sts staticTracesNewestFirst) Less(i, j int) bool {
 	default:
 		return sts[i].ID() > sts[j].ID()
 	}
-
 }

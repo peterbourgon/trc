@@ -134,3 +134,91 @@ func BenchmarkCollector(b *testing.B) {
 		}
 	})
 }
+
+func BenchmarkParallelCollector(b *testing.B) {
+	ctx := context.Background()
+	category := "category"
+
+	b.Run("publish no subscribers", func(b *testing.B) {
+		collector := trc.NewDefaultCollector()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				_, tr := collector.NewTrace(ctx, category)
+				tr.Tracef("trace event")
+				tr.Finish()
+			}
+		})
+	})
+
+	b.Run("publish one skip subscriber", func(b *testing.B) {
+		collector := trc.NewDefaultCollector()
+		ctx, cancel := context.WithCancel(ctx)
+		ch := make(chan trc.Trace)
+		errc := make(chan error, 1)
+		go func() {
+			_, err := collector.Stream(ctx, trc.Filter{IsErrored: true}, ch)
+			errc <- err
+		}()
+		defer func() {
+			cancel()
+			<-errc
+		}()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				_, tr := collector.NewTrace(ctx, category)
+				tr.LazyTracef("trace event")
+				tr.Finish()
+			}
+		})
+	})
+
+	b.Run("publish one drop subscriber", func(b *testing.B) {
+		collector := trc.NewDefaultCollector()
+		ctx, cancel := context.WithCancel(ctx)
+		ch := make(chan trc.Trace)
+		errc := make(chan error, 1)
+		go func() {
+			_, err := collector.Stream(ctx, trc.Filter{}, ch)
+			errc <- err
+		}()
+		defer func() {
+			cancel()
+			<-errc
+		}()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				_, tr := collector.NewTrace(ctx, category)
+				tr.LazyTracef("trace event")
+				tr.Finish()
+			}
+		})
+	})
+
+	b.Run("publish one pass subscriber", func(b *testing.B) {
+		collector := trc.NewDefaultCollector()
+		ctx, cancel := context.WithCancel(ctx)
+		ch := make(chan trc.Trace, 1000)
+		go func() {
+			for range ch {
+				//
+			}
+		}()
+		errc := make(chan error, 1)
+		go func() {
+			defer close(ch)
+			_, err := collector.Stream(ctx, trc.Filter{}, ch)
+			errc <- err
+		}()
+		defer func() {
+			cancel()
+			<-errc
+		}()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				_, tr := collector.NewTrace(ctx, category)
+				tr.LazyTracef("trace event")
+				tr.Finish()
+			}
+		})
+	})
+}

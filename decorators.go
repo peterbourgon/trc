@@ -43,7 +43,7 @@ func LoggerDecorator(logger *log.Logger) DecoratorFunc {
 type loggerWriter struct{ logger *log.Logger }
 
 func (lw *loggerWriter) Write(p []byte) (int, error) {
-	lw.logger.Printf(string(p))
+	lw.logger.Print(string(p))
 	return len(p), nil
 }
 
