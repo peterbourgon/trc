@@ -264,6 +264,7 @@ div#traces div.event div.what {
 	min-width: 25%;
 	padding-left: 2em;
 	text-indent: -2em;
+	line-height: 1em;
 	overflow: scroll;
 }
 
