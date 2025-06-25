@@ -37,59 +37,68 @@ func main() {
 }
 
 func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args []string) (err error) {
-	// Config for `trc`.
 	rootConfig := &rootConfig{
 		stdin:  stdin,
 		stdout: stdout,
 		stderr: stderr,
 	}
 
-	baseFlags := ff.NewFlagSet("base")
-	rootConfig.registerBaseFlags(baseFlags)
+	rootFlags := ff.NewFlagSet("base")
+	rootConfig.registerBaseFlags(rootFlags)
 
-	filterFlags := ff.NewFlagSet("filter").SetParent(baseFlags)
+	filterFlags := ff.NewFlagSet("filter").SetParent(rootFlags)
 	rootConfig.registerFilterFlags(filterFlags)
 
-	trcFlags := filterFlags
-
-	trcCommand := &ff.Command{
+	rootCommand := &ff.Command{
 		Name:      "trc",
-		ShortHelp: "query trace data from one or more instances",
-		Flags:     trcFlags,
+		ShortHelp: "access trace data from one or more trc server instances",
+		Flags:     rootFlags,
 	}
 
 	// Config for `trc search`.
 	searchConfig := &searchConfig{rootConfig: rootConfig}
-	searchFlags := ff.NewFlagSet("search").SetParent(trcFlags)
+	searchFlags := ff.NewFlagSet("search").SetParent(filterFlags)
 	searchConfig.register(searchFlags)
 	searchCommand := &ff.Command{
 		Name:      "search",
-		ShortHelp: "search for trace data",
+		ShortHelp: "run a single search request",
 		LongHelp:  "Fetch traces that match the provided query flags.",
 		Flags:     searchFlags,
 		Exec:      searchConfig.Exec,
 	}
-	trcCommand.Subcommands = append(trcCommand.Subcommands, searchCommand)
+	rootCommand.Subcommands = append(rootCommand.Subcommands, searchCommand)
 
 	// Config for `trc stream`.
 	streamConfig := &streamConfig{rootConfig: rootConfig}
-	streamFlags := ff.NewFlagSet("stream").SetParent(trcFlags)
+	streamFlags := ff.NewFlagSet("stream").SetParent(filterFlags)
 	streamConfig.register(streamFlags)
 	streamCommand := &ff.Command{
 		Name:      "stream",
-		ShortHelp: "stream trace data to the terminal",
+		ShortHelp: "continuously stream trace data to the terminal",
 		LongHelp:  "Stream traces, or trace events, that match the provided query flags.",
 		Flags:     streamFlags,
 		Exec:      streamConfig.Exec,
 	}
-	trcCommand.Subcommands = append(trcCommand.Subcommands, streamCommand)
+	rootCommand.Subcommands = append(rootCommand.Subcommands, streamCommand)
+
+	// Config for `trc serve`.
+	serveConfig := &serveConfig{rootConfig: rootConfig}
+	serveFlags := ff.NewFlagSet("serve").SetParent(rootFlags)
+	serveConfig.register(serveFlags)
+	serveCommand := &ff.Command{
+		Name:      "serve",
+		ShortHelp: "run a local web UI over all provided instances",
+		Flags:     serveFlags,
+		Exec:      serveConfig.Exec,
+	}
+	rootCommand.Subcommands = append(rootCommand.Subcommands, serveCommand)
 
 	// Print help when appropriate.
 	showHelp := true
 	defer func() {
 		errHelp := errors.Is(err, ff.ErrHelp) || errors.Is(err, ff.ErrNoExec)
 		if showHelp || errHelp {
-			fmt.Fprintf(stderr, "\n%s\n", ffhelp.Command(trcCommand))
+			fmt.Fprintf(stderr, "\n%s\n", ffhelp.Command(rootCommand))
 		}
 		if errHelp {
 			err = nil
@@ -97,7 +106,7 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	}()
 
 	// Initial parsing.
-	if err := trcCommand.Parse(args, ff.WithEnvVarPrefix("TRC")); err != nil {
+	if err := rootCommand.Parse(args, ff.WithEnvVarPrefix("TRC")); err != nil {
 		return err
 	}
 
@@ -174,5 +183,5 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	showHelp = false
 
 	// Run the selected command.
-	return trcCommand.Run(ctx)
+	return rootCommand.Run(ctx)
 }

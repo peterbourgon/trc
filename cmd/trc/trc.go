@@ -37,10 +37,33 @@ type rootConfig struct {
 }
 
 func (cfg *rootConfig) registerBaseFlags(fs *ff.FlagSet) {
-	fs.AddFlag(ff.FlagConfig{ShortName: 'u', LongName: "uri" /*      */, Value: ffval.NewUniqueList(&cfg.uris) /*                                                     */, Usage: "trace server URI (repeatable, required)" /*     */, Placeholder: "URI"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "uri-path" /* */, Value: ffval.NewValue(&cfg.uriPath) /*                                                       */, Usage: "path that will be applied to every URI" /*      */, Placeholder: "PATH"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 'l', LongName: "log" /*      */, Value: ffval.NewEnum(&cfg.logLevel, "info", "i", "debug", "d", "trace", "t", "none", "n") /* */, Usage: "log level: i/info, d/debug, t/trace, n/none" /* */, Placeholder: "LEVEL"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 'o', LongName: "output" /*   */, Value: ffval.NewEnum(&cfg.output, "ndjson", "prettyjson") /*                                 */, Usage: "output format: ndjson, prettyjson" /*           */, Placeholder: "FORMAT"})
+	fs.AddFlag(ff.FlagConfig{
+		ShortName:   'u',
+		LongName:    "uri",
+		Value:       ffval.NewUniqueList(&cfg.uris),
+		Usage:       "trc instance URI e.g. 'localhost:1234/traces' (repeatable)",
+		Placeholder: "URI",
+	})
+	fs.AddFlag(ff.FlagConfig{
+		LongName:    "uri-path",
+		Value:       ffval.NewValue(&cfg.uriPath),
+		Usage:       "if set, override every -u, --uri path",
+		Placeholder: "PATH",
+	})
+	fs.AddFlag(ff.FlagConfig{
+		ShortName:   'l',
+		LongName:    "log",
+		Value:       ffval.NewEnum(&cfg.logLevel, "info", "i", "debug", "d", "trace", "t", "none", "n"),
+		Usage:       "log level: i/info, d/debug, t/trace, n/none",
+		Placeholder: "LEVEL",
+	})
+	fs.AddFlag(ff.FlagConfig{
+		ShortName:   'o',
+		LongName:    "output",
+		Value:       ffval.NewEnum(&cfg.output, "ndjson", "prettyjson"),
+		Usage:       "output format: ndjson, prettyjson",
+		Placeholder: "FORMAT",
+	})
 }
 
 func (cfg *rootConfig) registerFilterFlags(fs *ff.FlagSet) {
