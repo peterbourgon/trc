@@ -8,9 +8,8 @@ require (
 	github.com/oklog/run v1.1.0
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/peterbourgon/ff/v4 v4.0.0-alpha.3
+	github.com/peterbourgon/unixtransport v0.0.6
 )
-
-require github.com/peterbourgon/unixtransport v0.0.5
 
 require (
 	github.com/miekg/dns v1.1.54 // indirect
