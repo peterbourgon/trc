@@ -16,6 +16,7 @@ import (
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffhelp"
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/unixtransport"
 )
 
 func main() {
@@ -37,6 +38,8 @@ func main() {
 }
 
 func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args []string) (err error) {
+	unixtransport.RegisterDefault()
+
 	rootConfig := &rootConfig{
 		stdin:  stdin,
 		stdout: stdout,
@@ -62,7 +65,7 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	searchCommand := &ff.Command{
 		Name:      "search",
 		ShortHelp: "run a single search request",
-		LongHelp:  "Fetch traces that match the provided query flags.",
+		LongHelp:  "Fetch traces that match the provided filter flags.",
 		Flags:     searchFlags,
 		Exec:      searchConfig.Exec,
 	}
@@ -75,7 +78,7 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	streamCommand := &ff.Command{
 		Name:      "stream",
 		ShortHelp: "continuously stream trace data to the terminal",
-		LongHelp:  "Stream traces, or trace events, that match the provided query flags.",
+		LongHelp:  "Stream traces (or trace events) that match the provided filter flags.",
 		Flags:     streamFlags,
 		Exec:      streamConfig.Exec,
 	}
@@ -87,7 +90,7 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	serveConfig.register(serveFlags)
 	serveCommand := &ff.Command{
 		Name:      "serve",
-		ShortHelp: "run a local web UI over all provided instances",
+		ShortHelp: "run a local UI that shows trace data from arbitrary instances",
 		Flags:     serveFlags,
 		Exec:      serveConfig.Exec,
 	}

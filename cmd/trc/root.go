@@ -41,13 +41,13 @@ func (cfg *rootConfig) registerBaseFlags(fs *ff.FlagSet) {
 		ShortName:   'u',
 		LongName:    "uri",
 		Value:       ffval.NewUniqueList(&cfg.uris),
-		Usage:       "trc instance URI e.g. 'localhost:1234/traces' (repeatable)",
+		Usage:       "server instance URI e.g. 'localhost:1234/traces' (repeatable)",
 		Placeholder: "URI",
 	})
 	fs.AddFlag(ff.FlagConfig{
 		LongName:    "uri-path",
 		Value:       ffval.NewValue(&cfg.uriPath),
-		Usage:       "if set, override every -u, --uri path",
+		Usage:       "if set, override every server instance URI path with this one",
 		Placeholder: "PATH",
 	})
 	fs.AddFlag(ff.FlagConfig{

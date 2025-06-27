@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"sync"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/oklog/run"
 	"github.com/peterbourgon/ff/v4"
-	"github.com/peterbourgon/ff/v4/ffval"
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/trcweb"
 )
@@ -19,28 +19,26 @@ import (
 type streamConfig struct {
 	*rootConfig
 
-	streamEvents  bool
-	sendBuf       int
-	recvBuf       int
-	statsInterval time.Duration
-	retryInterval time.Duration
+	StreamEvents  bool          `ff:"short: e | long: events         | nodefault    | usage: stream individual events rather than complete traces "`
+	SendBuf       int           `ff:"         | long: send-buffer    | default: 100 | usage: remote send buffer size                              "`
+	RecvBuf       int           `ff:"         | long: recv-buffer    | default: 100 | usage: local receive buffer size                            "`
+	StatsInterval time.Duration `ff:"         | long: stats-interval | default: 10s | usage: stats reporting interval                             "`
+	RetryInterval time.Duration `ff:"         | long: retry-interval | default: 1s  | usage: connection retry interval                            "`
 
 	traces chan trc.Trace
 }
 
 func (cfg *streamConfig) register(fs *ff.FlagSet) {
-	fs.AddFlag(ff.FlagConfig{ShortName: 'e', LongName: "events" /*         */, Value: ffval.NewValue(&cfg.streamEvents) /*                         */, Usage: "stream individual events rather than complete traces", NoDefault: true})
-	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "send-buffer" /*    */, Value: ffval.NewValueDefault(&cfg.sendBuf, 100) /*                  */, Usage: "remote send buffer size"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "recv-buffer" /*    */, Value: ffval.NewValueDefault(&cfg.recvBuf, 100) /*                  */, Usage: "local receive buffer size"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "stats-interval" /* */, Value: ffval.NewValueDefault(&cfg.statsInterval, 10*time.Second) /* */, Usage: "stats reporting interval"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "retry-interval" /* */, Value: ffval.NewValueDefault(&cfg.retryInterval, 1*time.Second) /*  */, Usage: "connection retry interval"})
+	if err := fs.AddStruct(cfg); err != nil {
+		panic(fmt.Errorf("invalid struct config: %w", err))
+	}
 }
 
 func (cfg *streamConfig) Exec(ctx context.Context, args []string) error {
 	ctx, tr := cfg.newTrace(ctx, "stream")
 	defer tr.Finish()
 
-	cfg.traces = make(chan trc.Trace, cfg.recvBuf)
+	cfg.traces = make(chan trc.Trace, cfg.RecvBuf)
 
 	var streaming string
 	{
@@ -48,7 +46,7 @@ func (cfg *streamConfig) Exec(ctx context.Context, args []string) error {
 		// rejects every trace except the last one, which is what we want to
 		// control by the streamEvents flag.
 		cfg.filter.IsActive = false
-		if cfg.streamEvents {
+		if cfg.StreamEvents {
 			streaming = "events"
 			cfg.filter.IsFinished = false
 		} else {
@@ -59,10 +57,10 @@ func (cfg *streamConfig) Exec(ctx context.Context, args []string) error {
 	{
 		cfg.info.Printf("streaming: %s", streaming)
 		cfg.info.Printf("filter: %s", cfg.filter)
-		cfg.debug.Printf("send buffer: %d", cfg.sendBuf)
-		cfg.debug.Printf("recv buffer: %d", cfg.recvBuf)
-		cfg.debug.Printf("stats interval: %s", cfg.statsInterval)
-		cfg.debug.Printf("retry interval: %s", cfg.retryInterval)
+		cfg.debug.Printf("send buffer: %d", cfg.SendBuf)
+		cfg.debug.Printf("recv buffer: %d", cfg.RecvBuf)
+		cfg.debug.Printf("stats interval: %s", cfg.StatsInterval)
+		cfg.debug.Printf("retry interval: %s", cfg.RetryInterval)
 	}
 
 	cfg.debug.Printf("starting streams")
@@ -125,7 +123,7 @@ func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 	reporterDone := make(chan struct{})
 	go func() {
 		defer close(reporterDone)
-		ticker := time.NewTicker(cfg.statsInterval)
+		ticker := time.NewTicker(cfg.StatsInterval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -135,7 +133,7 @@ func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 				switch {
 				case !ok:
 					cfg.debug.Printf("%s: no data", uri)
-				case delta > 2*cfg.statsInterval:
+				case delta > 2*cfg.StatsInterval:
 					cfg.debug.Printf("%s: last data %s ago", uri, delta.Truncate(100*time.Millisecond))
 				}
 			case <-ctx.Done():
@@ -153,10 +151,10 @@ func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 	sc := &trcweb.StreamClient{
 		HTTPClient:    http.DefaultClient,
 		URI:           uri,
-		SendBuffer:    cfg.sendBuf,
+		SendBuffer:    cfg.SendBuf,
 		OnRead:        onRead,
-		RetryInterval: cfg.retryInterval,
-		StatsInterval: cfg.statsInterval,
+		RetryInterval: cfg.RetryInterval,
+		StatsInterval: cfg.StatsInterval,
 	}
 
 	for ctx.Err() == nil {
@@ -174,7 +172,7 @@ func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 		case err := <-errc:
 			cfg.debug.Printf("%s: stream error, will retry (%v)", uri, err) // our stream failed (usually) independently, so we try again
 			cancel()                                                        // just to be safe, but note this means contextSleep needs ctx, not subctx
-			contextSleep(ctx, cfg.retryInterval)                            // can be interrupted by parent context
+			contextSleep(ctx, cfg.RetryInterval)                            // can be interrupted by parent context
 			continue                                                        // try again
 		}
 	}
