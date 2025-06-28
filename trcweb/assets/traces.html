@@ -315,9 +315,25 @@ function highlightQuery() {
 		{{ if .Response.Sources }}
 		<div id="topline-search-sources" class="topline-search">
 			<details>
-				<summary>sources={{ len .Response.Sources }}</summary>
+				{{ $all_sources   := .Response.Sources }}
+				{{ $match_sources := .Response.MatchSources }}
+
+				<summary>
+					{{ if eq (len $all_sources) (len $match_sources) }}
+						sources={{ len $all_sources }}
+					{{ else }}
+						sources={{ len $match_sources }}/{{ len $all_sources }}
+					{{ end }}
+				</summary>
 				<div>
-					{{ range .Response.Sources }} {{.}}<br/> {{ end }}
+					{{ range $all_sources }}
+						{{ if StringSliceContains $match_sources . }}
+							{{.}}
+						{{ else }}
+							<span class="faded">{{.}}</span>
+						{{ end }}
+						<br/>
+					{{ end }}
 				</div>
 			</details>
 		</div>
