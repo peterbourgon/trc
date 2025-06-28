@@ -136,7 +136,7 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	}
 
 	if len(rootConfig.URIs) <= 0 {
-		return fmt.Errorf("at least one URI is required")
+		return fmt.Errorf("at least one -u, --uri is required")
 	}
 
 	for i, uri := range rootConfig.URIs {

@@ -24,6 +24,10 @@ func (cfg *serveConfig) register(fs *ff.FlagSet) {
 }
 
 func (cfg *serveConfig) Exec(ctx context.Context, args []string) error {
+	//eztrc.Collector().SetNewTrace(func(ctx context.Context, source, category string, decorators ...trc.DecoratorFunc) (context.Context, trc.Trace) {
+	//	return cfg.newTrace(ctx, "trc serve: "+category)
+	//})
+
 	var ms trc.MultiSearcher
 	for _, uri := range cfg.rootConfig.URIs {
 		ms = append(ms, trcweb.NewSearchClient(http.DefaultClient, uri))
@@ -42,8 +46,10 @@ func (cfg *serveConfig) Exec(ctx context.Context, args []string) error {
 		Searcher: ms,
 	}
 
+	wrapped := trcweb.Middleware(cfg.newTrace, func(r *http.Request) string { return "trc serve" })(traceServer)
+
 	httpServer := &http.Server{
-		Handler: traceServer,
+		Handler: wrapped,
 	}
 
 	return httpServer.Serve(ln)

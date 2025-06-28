@@ -169,6 +169,7 @@ func NewSearchClient(client HTTPClient, uri string) *SearchClient {
 	if !strings.HasPrefix(uri, "http") {
 		uri = "http://" + uri
 	}
+
 	return &SearchClient{
 		client: client,
 		uri:    uri,
