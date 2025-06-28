@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 
+	"github.com/oklog/run"
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/trc"
 	"github.com/peterbourgon/trc/trcweb"
@@ -24,10 +26,6 @@ func (cfg *serveConfig) register(fs *ff.FlagSet) {
 }
 
 func (cfg *serveConfig) Exec(ctx context.Context, args []string) error {
-	//eztrc.Collector().SetNewTrace(func(ctx context.Context, source, category string, decorators ...trc.DecoratorFunc) (context.Context, trc.Trace) {
-	//	return cfg.newTrace(ctx, "trc serve: "+category)
-	//})
-
 	var ms trc.MultiSearcher
 	for _, uri := range cfg.rootConfig.URIs {
 		ms = append(ms, trcweb.NewSearchClient(http.DefaultClient, uri))
@@ -40,17 +38,32 @@ func (cfg *serveConfig) Exec(ctx context.Context, args []string) error {
 		return fmt.Errorf("listen: %w", err)
 	}
 
-	cfg.info.Printf("listening on %s", cfg.ListenAddr)
+	cfg.info.Printf("listening on %s", ln.Addr().String())
 
 	traceServer := &trcweb.TraceServer{
 		Searcher: ms,
 	}
 
-	wrapped := trcweb.Middleware(cfg.newTrace, func(r *http.Request) string { return "trc serve" })(traceServer)
-
-	httpServer := &http.Server{
-		Handler: wrapped,
+	categorize := func(r *http.Request) string {
+		return "trc serve"
 	}
 
-	return httpServer.Serve(ln)
+	handler := trcweb.Middleware(cfg.newTrace, categorize)(traceServer)
+
+	httpServer := &http.Server{
+		Handler: handler,
+	}
+
+	var g run.Group
+	{
+		g.Add(func() error {
+			return httpServer.Serve(ln)
+		}, func(error) {
+			ln.Close()
+		})
+	}
+	{
+		g.Add(run.SignalHandler(ctx, os.Interrupt, os.Kill))
+	}
+	return g.Run()
 }
