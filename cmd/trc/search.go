@@ -15,10 +15,13 @@ import (
 type searchConfig struct {
 	*rootConfig
 
+	*filterConfig
+
 	Limit          int  `ff:"short: n | long: limit            | default: 10 | usage: maximum number of traces to return                "`
 	StackDepth     int  `ff:"         | long: stack-depth      |             | usage: number of stack frames to include with each event "`
 	IncludeRequest bool `ff:"         | long: include-request  | nodefault   | usage: include search request in output                  "`
 	IncludeStats   bool `ff:"         | long: include-stats    | nodefault   | usage: include search statistics in output               "`
+	NoEvents       bool `ff:"         | long: no-events        | nodefault   | usage: don't include events in output                    "`
 }
 
 func (cfg *searchConfig) register(fs *ff.FlagSet) {
@@ -29,7 +32,7 @@ func (cfg *searchConfig) register(fs *ff.FlagSet) {
 
 func (cfg *searchConfig) writeResult(ctx context.Context, res *trc.SearchResponse) error {
 	enc := json.NewEncoder(cfg.stdout)
-	switch cfg.output {
+	switch cfg.Output {
 	case "prettyjson":
 		enc.SetIndent("", "    ")
 	case "ndjson":
@@ -48,7 +51,7 @@ func (cfg *searchConfig) Exec(ctx context.Context, args []string) error {
 	defer tr.Finish()
 
 	var searcher trc.MultiSearcher
-	for _, uri := range cfg.uris {
+	for _, uri := range cfg.URIs {
 		searcher = append(searcher, trcweb.NewSearchClient(http.DefaultClient, uri))
 	}
 
@@ -85,6 +88,13 @@ func (cfg *searchConfig) Exec(ctx context.Context, args []string) error {
 	if !cfg.IncludeStats {
 		cfg.debug.Printf("removing stats from response")
 		res.Stats = nil
+	}
+
+	if cfg.NoEvents {
+		cfg.debug.Printf("removing events from response")
+		for _, tr := range res.Traces {
+			tr.TraceEvents = nil
+		}
 	}
 
 	if err := cfg.writeResult(ctx, res); err != nil {

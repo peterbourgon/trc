@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"log"
-	"time"
 
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffval"
@@ -16,66 +15,42 @@ type rootConfig struct {
 	stdout io.Writer
 	stderr io.Writer
 
-	uris     []string
-	uriPath  string
-	logLevel string
-	output   string
+	URIs     []string `ff:" short: u | long: uri       | placeholder: URI    | usage: server instance URI e.g. 'localhost:1234/traces' (repeatable) "`
+	URIPath  string   `ff:"          | long: uri-path  | placeholder: PATH   | usage: if set, override every server instance URI path with this one "`
+	LogLevel string   `ff:" short: l | long: log-level | placeholder: LEVEL  | usage: log level: i/info, d/debug, t/trace, n/none "`
+	Output   string   `ff:" short: o | long: output    | placeholder: FORMAT | usage: output format: ndjson, prettyjson "`
 
 	info, debug, trace *log.Logger
-
-	sources     []string
-	ids         []string
-	category    string
-	query       string
-	isActive    bool
-	isFinished  bool
-	minDuration time.Duration
-	isSuccess   bool
-	isErrored   bool
-
-	filter trc.Filter
 }
 
 func (cfg *rootConfig) registerBaseFlags(fs *ff.FlagSet) {
 	fs.AddFlag(ff.FlagConfig{
 		ShortName:   'u',
 		LongName:    "uri",
-		Value:       ffval.NewUniqueList(&cfg.uris),
+		Value:       ffval.NewUniqueList(&cfg.URIs),
 		Usage:       "server instance URI e.g. 'localhost:1234/traces' (repeatable)",
 		Placeholder: "URI",
 	})
 	fs.AddFlag(ff.FlagConfig{
 		LongName:    "uri-path",
-		Value:       ffval.NewValue(&cfg.uriPath),
+		Value:       ffval.NewValue(&cfg.URIPath),
 		Usage:       "if set, override every server instance URI path with this one",
 		Placeholder: "PATH",
 	})
 	fs.AddFlag(ff.FlagConfig{
 		ShortName:   'l',
 		LongName:    "log",
-		Value:       ffval.NewEnum(&cfg.logLevel, "info", "i", "debug", "d", "trace", "t", "none", "n"),
+		Value:       ffval.NewEnum(&cfg.LogLevel, "info", "i", "debug", "d", "trace", "t", "none", "n"),
 		Usage:       "log level: i/info, d/debug, t/trace, n/none",
 		Placeholder: "LEVEL",
 	})
 	fs.AddFlag(ff.FlagConfig{
 		ShortName:   'o',
 		LongName:    "output",
-		Value:       ffval.NewEnum(&cfg.output, "ndjson", "prettyjson"),
+		Value:       ffval.NewEnum(&cfg.Output, "ndjson", "prettyjson"),
 		Usage:       "output format: ndjson, prettyjson",
 		Placeholder: "FORMAT",
 	})
-}
-
-func (cfg *rootConfig) registerFilterFlags(fs *ff.FlagSet) {
-	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "source" /*   */, Value: ffval.NewUniqueList(&cfg.sources) /* */, NoDefault: true, Usage: "trace source (repeatable)"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 'i', LongName: "id" /*       */, Value: ffval.NewUniqueList(&cfg.ids) /*     */, NoDefault: true, Usage: "trace ID (repeatable)"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 'c', LongName: "category" /* */, Value: ffval.NewValue(&cfg.category) /*     */, NoDefault: true, Usage: "trace category"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 'q', LongName: "query" /*    */, Value: ffval.NewValue(&cfg.query) /*        */, NoDefault: true, Usage: "query expression", Placeholder: "REGEX"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 'a', LongName: "active" /*   */, Value: ffval.NewValue(&cfg.isActive) /*     */, NoDefault: true, Usage: "only active traces"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 'f', LongName: "finished" /* */, Value: ffval.NewValue(&cfg.isFinished) /*   */, NoDefault: true, Usage: "only finished traces"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 'd', LongName: "duration" /* */, Value: ffval.NewValue(&cfg.minDuration) /*  */, NoDefault: true, Usage: "only finished traces of at least this duration"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "success" /*  */, Value: ffval.NewValue(&cfg.isSuccess) /*    */, NoDefault: true, Usage: "only successful (non-errored) traces"})
-	fs.AddFlag(ff.FlagConfig{ShortName: 0x0, LongName: "errored" /*  */, Value: ffval.NewValue(&cfg.isErrored) /*    */, NoDefault: true, Usage: "only errored traces"})
 }
 
 func (cfg *rootConfig) newTrace(ctx context.Context, category string) (context.Context, trc.Trace) {

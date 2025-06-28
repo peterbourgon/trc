@@ -40,26 +40,27 @@ func main() {
 func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args []string) (err error) {
 	unixtransport.RegisterDefault()
 
+	// Config for `trc` root command.
 	rootConfig := &rootConfig{
 		stdin:  stdin,
 		stdout: stdout,
 		stderr: stderr,
 	}
-
-	rootFlags := ff.NewFlagSet("base")
+	rootFlags := ff.NewFlagSet("root")
 	rootConfig.registerBaseFlags(rootFlags)
-
-	filterFlags := ff.NewFlagSet("filter").SetParent(rootFlags)
-	rootConfig.registerFilterFlags(filterFlags)
-
 	rootCommand := &ff.Command{
 		Name:      "trc",
-		ShortHelp: "access trace data from one or more trc server instances",
+		ShortHelp: "access trace data from one or more trc instances",
 		Flags:     rootFlags,
 	}
 
+	// Shared flags for `trc search` and `trc stream`.
+	filterConfig := &filterConfig{}
+	filterFlags := ff.NewFlagSet("filter").SetParent(rootFlags)
+	filterConfig.registerFilterFlags(filterFlags)
+
 	// Config for `trc search`.
-	searchConfig := &searchConfig{rootConfig: rootConfig}
+	searchConfig := &searchConfig{rootConfig: rootConfig, filterConfig: filterConfig}
 	searchFlags := ff.NewFlagSet("search").SetParent(filterFlags)
 	searchConfig.register(searchFlags)
 	searchCommand := &ff.Command{
@@ -72,7 +73,7 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	rootCommand.Subcommands = append(rootCommand.Subcommands, searchCommand)
 
 	// Config for `trc stream`.
-	streamConfig := &streamConfig{rootConfig: rootConfig}
+	streamConfig := &streamConfig{rootConfig: rootConfig, filterConfig: filterConfig}
 	streamFlags := ff.NewFlagSet("stream").SetParent(filterFlags)
 	streamConfig.register(streamFlags)
 	streamCommand := &ff.Command{
@@ -90,7 +91,8 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	serveConfig.register(serveFlags)
 	serveCommand := &ff.Command{
 		Name:      "serve",
-		ShortHelp: "run a local UI that shows trace data from arbitrary instances",
+		ShortHelp: "run a local traces UI",
+		LongHelp:  "Serve a local web UI with trace data from all provided trc instances.",
 		Flags:     serveFlags,
 		Exec:      serveConfig.Exec,
 	}
@@ -116,7 +118,7 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	// Validation and set-up.
 	{
 		var infodst, debugdst, tracedst io.Writer
-		switch rootConfig.logLevel {
+		switch rootConfig.LogLevel {
 		case "n", "none":
 			infodst, debugdst, tracedst = io.Discard, io.Discard, io.Discard
 		case "i", "info":
@@ -126,18 +128,18 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 		case "t", "trace":
 			infodst, debugdst, tracedst = stderr, stderr, stderr
 		default:
-			return fmt.Errorf("invalid log level %q", rootConfig.logLevel)
+			return fmt.Errorf("invalid log level %q", rootConfig.LogLevel)
 		}
 		rootConfig.info = log.New(infodst, "", 0)
 		rootConfig.debug = log.New(debugdst, "[DEBUG] ", log.Lmsgprefix)
 		rootConfig.trace = log.New(tracedst, "[TRACE] ", log.Lmsgprefix)
 	}
 
-	if len(rootConfig.uris) <= 0 {
+	if len(rootConfig.URIs) <= 0 {
 		return fmt.Errorf("at least one URI is required")
 	}
 
-	for i, uri := range rootConfig.uris {
+	for i, uri := range rootConfig.URIs {
 		uri = strings.TrimSpace(uri)
 		if uri == "" {
 			continue
@@ -152,12 +154,12 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 			return fmt.Errorf("%s: invalid: %w", uri, err)
 		}
 
-		if rootConfig.uriPath != "" {
-			u.Path = rootConfig.uriPath
+		if rootConfig.URIPath != "" {
+			u.Path = rootConfig.URIPath
 		}
 
 		uri = u.String()
-		rootConfig.uris[i] = uri
+		rootConfig.URIs[i] = uri
 
 		rootConfig.debug.Printf("URI: %s", uri)
 	}
@@ -165,20 +167,20 @@ func exec(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args [
 	{
 		var minDuration *time.Duration
 		if f, ok := filterFlags.GetFlag("duration"); ok && f.IsSet() {
-			rootConfig.debug.Printf("using --duration %s", rootConfig.minDuration)
-			minDuration = &rootConfig.minDuration
+			rootConfig.debug.Printf("using --duration %s", filterConfig.MinDuration)
+			minDuration = &filterConfig.MinDuration
 		}
 
-		rootConfig.filter = trc.Filter{
-			Sources:     rootConfig.sources,
-			IDs:         rootConfig.ids,
-			Category:    rootConfig.category,
-			IsActive:    rootConfig.isActive,
-			IsFinished:  rootConfig.isFinished,
+		filterConfig.filter = trc.Filter{
+			Sources:     filterConfig.Sources,
+			IDs:         filterConfig.IDs,
+			Category:    filterConfig.Category,
+			IsActive:    filterConfig.IsActive,
+			IsFinished:  filterConfig.IsFinished,
 			MinDuration: minDuration,
-			IsSuccess:   rootConfig.isSuccess,
-			IsErrored:   rootConfig.isErrored,
-			Query:       rootConfig.query,
+			IsSuccess:   filterConfig.IsSuccess,
+			IsErrored:   filterConfig.IsErrored,
+			Query:       filterConfig.Query,
 		}
 	}
 

@@ -14,7 +14,7 @@ import (
 type serveConfig struct {
 	*rootConfig
 
-	ListenAddr string `ff:"short: a | long: listen-addr | default: localhost:8001 | usage: HTTP server listen address"`
+	ListenAddr string `ff:"short: a | long: listen-addr | default: localhost:8001 | placeholder: ADDR | usage: HTTP server listen address"`
 }
 
 func (cfg *serveConfig) register(fs *ff.FlagSet) {
@@ -25,7 +25,7 @@ func (cfg *serveConfig) register(fs *ff.FlagSet) {
 
 func (cfg *serveConfig) Exec(ctx context.Context, args []string) error {
 	var ms trc.MultiSearcher
-	for _, uri := range cfg.rootConfig.uris {
+	for _, uri := range cfg.rootConfig.URIs {
 		ms = append(ms, trcweb.NewSearchClient(http.DefaultClient, uri))
 	}
 

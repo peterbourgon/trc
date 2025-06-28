@@ -19,11 +19,13 @@ import (
 type streamConfig struct {
 	*rootConfig
 
-	StreamEvents  bool          `ff:"short: e | long: events         | nodefault    | usage: stream individual events rather than complete traces "`
-	SendBuf       int           `ff:"         | long: send-buffer    | default: 100 | usage: remote send buffer size                              "`
-	RecvBuf       int           `ff:"         | long: recv-buffer    | default: 100 | usage: local receive buffer size                            "`
-	StatsInterval time.Duration `ff:"         | long: stats-interval | default: 10s | usage: stats reporting interval                             "`
-	RetryInterval time.Duration `ff:"         | long: retry-interval | default: 1s  | usage: connection retry interval                            "`
+	*filterConfig
+
+	StreamEvents  bool          `ff:"short: e | long: events         | nodefault    | usage: stream individual events rather than complete traces (WARNING: can be a lot of data!) "`
+	SendBuf       int           `ff:"         | long: send-buffer    | default: 100 | usage: remote send buffer size "`
+	RecvBuf       int           `ff:"         | long: recv-buffer    | default: 100 | usage: local receive buffer size "`
+	StatsInterval time.Duration `ff:"         | long: stats-interval | default: 10s | usage: stats reporting interval (shown under log level trace) "`
+	RetryInterval time.Duration `ff:"         | long: retry-interval | default: 1s  | usage: connection retry interval "`
 
 	traces chan trc.Trace
 }
@@ -45,18 +47,18 @@ func (cfg *streamConfig) Exec(ctx context.Context, args []string) error {
 		// IsActive rejects the final trace, which we always want. IsFinished
 		// rejects every trace except the last one, which is what we want to
 		// control by the streamEvents flag.
-		cfg.filter.IsActive = false
+		cfg.filterConfig.IsActive = false
 		if cfg.StreamEvents {
 			streaming = "events"
-			cfg.filter.IsFinished = false
+			cfg.filterConfig.IsFinished = false
 		} else {
 			streaming = "traces"
-			cfg.filter.IsFinished = true
+			cfg.filterConfig.IsFinished = true
 		}
 	}
 	{
 		cfg.info.Printf("streaming: %s", streaming)
-		cfg.info.Printf("filter: %s", cfg.filter)
+		cfg.info.Printf("filter: %s", cfg.filterConfig.filter.String())
 		cfg.debug.Printf("send buffer: %d", cfg.SendBuf)
 		cfg.debug.Printf("recv buffer: %d", cfg.RecvBuf)
 		cfg.debug.Printf("stats interval: %s", cfg.StatsInterval)
@@ -92,7 +94,7 @@ func (cfg *streamConfig) runStreams(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 
 	var wg sync.WaitGroup
-	for _, uri := range cfg.uris {
+	for _, uri := range cfg.URIs {
 		wg.Add(1)
 		go func(uri string) {
 			defer wg.Done()
@@ -158,9 +160,9 @@ func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 	}
 
 	for ctx.Err() == nil {
-		subctx, cancel := context.WithCancel(ctx)                         // per-iteration sub-context
-		errc := make(chan error, 1)                                       // per-iteration stream result
-		go func() { errc <- sc.Stream(subctx, cfg.filter, cfg.traces) }() // returns only on terminal errors
+		subctx, cancel := context.WithCancel(ctx)                                      // per-iteration sub-context
+		errc := make(chan error, 1)                                                    // per-iteration stream result
+		go func() { errc <- sc.Stream(subctx, cfg.filterConfig.filter, cfg.traces) }() // returns only on terminal errors
 
 		select {
 		case <-subctx.Done():
@@ -180,7 +182,7 @@ func (cfg *streamConfig) runStream(ctx context.Context, uri string) {
 
 func (cfg *streamConfig) writeTraces(ctx context.Context) error {
 	var encode func(tr trc.Trace)
-	switch cfg.output {
+	switch cfg.Output {
 	case "ndjson":
 		enc := json.NewEncoder(cfg.stdout)
 		encode = func(tr trc.Trace) { enc.Encode(tr) }
