@@ -4,6 +4,7 @@ import (
 	"context"
 	"runtime/trace"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/peterbourgon/trc/internal/trcutil"
@@ -115,6 +116,8 @@ type prefixTrace struct {
 	args   []any
 }
 
+var _ Trace = (*prefixTrace)(nil)
+
 func (ptr *prefixTrace) Tracef(format string, args ...any) {
 	ptr.Trace.Tracef(ptr.format+format, append(ptr.args, args...)...)
 }
@@ -129,4 +132,41 @@ func (ptr *prefixTrace) Errorf(format string, args ...any) {
 
 func (ptr *prefixTrace) LazyErrorf(format string, args ...any) {
 	ptr.Trace.LazyErrorf(ptr.format+format, append(ptr.args, args...)...)
+}
+
+//
+//
+//
+
+func Wrap(ctx context.Context, category string) (context.Context, Trace) {
+	begin := time.Now()
+	inputTrace := Get(ctx)
+	//outputContext, outputTrace := Prefix(ctx, "·")
+	outputContext, outputTrace := ctx, inputTrace
+
+	inputTrace.LazyTracef("→ " + category)
+	finish := func() {
+		took := time.Since(begin)
+		inputTrace.LazyTracef("← "+category+" [%s]", trcutil.HumanizeDuration(took))
+	}
+
+	wrapped := &wrapTrace{
+		Trace:  outputTrace,
+		finish: finish,
+	}
+
+	return outputContext, wrapped
+}
+
+type wrapTrace struct {
+	Trace
+
+	once   sync.Once
+	finish func()
+}
+
+var _ Trace = (*wrapTrace)(nil)
+
+func (wtr *wrapTrace) Finish() {
+	wtr.once.Do(wtr.finish)
 }
