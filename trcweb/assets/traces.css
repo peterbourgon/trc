@@ -390,3 +390,7 @@ div#debug-info {
 .text {
 	text-align: left !important;
 }
+
+.faded {
+	color: #ccc;
+}

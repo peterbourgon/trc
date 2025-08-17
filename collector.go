@@ -182,15 +182,21 @@ func (c *Collector) Search(ctx context.Context, req *SearchRequest) (*SearchResp
 
 	tr.LazyTracef("%s -> total %d, matched %d, returned %d", c.source, totalCount, matchCount, len(traces))
 
+	var matchSources []string
+	if matchCount > 0 {
+		matchSources = []string{c.source}
+	}
+
 	return &SearchResponse{
-		Request:    req,
-		Sources:    []string{c.source},
-		TotalCount: totalCount,
-		MatchCount: matchCount,
-		Traces:     traces,
-		Stats:      stats,
-		Problems:   trcutil.FlattenErrors(normalizeErrs...),
-		Duration:   time.Since(begin),
+		Request:      req,
+		Sources:      []string{c.source},
+		TotalCount:   totalCount,
+		MatchCount:   matchCount,
+		MatchSources: matchSources,
+		Traces:       traces,
+		Stats:        stats,
+		Problems:     trcutil.FlattenErrors(normalizeErrs...),
+		Duration:     time.Since(begin),
 	}, nil
 }
 

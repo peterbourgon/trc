@@ -113,14 +113,15 @@ var DefaultBucketing = []time.Duration{
 
 // SearchResponse returned by a search request.
 type SearchResponse struct {
-	Request    *SearchRequest `json:"request,omitempty"`
-	Sources    []string       `json:"sources"`
-	TotalCount int            `json:"total_count"`
-	MatchCount int            `json:"match_count"`
-	Traces     []*StaticTrace `json:"traces"`
-	Stats      *SearchStats   `json:"stats,omitempty"`
-	Problems   []string       `json:"problems,omitempty"`
-	Duration   time.Duration  `json:"duration"`
+	Request      *SearchRequest `json:"request,omitempty"`
+	Sources      []string       `json:"sources"`
+	TotalCount   int            `json:"total_count"`
+	MatchCount   int            `json:"match_count"`
+	MatchSources []string       `json:"match_sources"`
+	Traces       []*StaticTrace `json:"traces"`
+	Stats        *SearchStats   `json:"stats,omitempty"`
+	Problems     []string       `json:"problems,omitempty"`
+	Duration     time.Duration  `json:"duration"`
 }
 
 //
@@ -180,6 +181,7 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 			aggregate.Sources = append(aggregate.Sources, t.res.Sources...)
 			aggregate.TotalCount += t.res.TotalCount
 			aggregate.MatchCount += t.res.MatchCount
+			aggregate.MatchSources = append(aggregate.MatchSources, t.res.MatchSources...)
 			aggregate.Traces = append(aggregate.Traces, t.res.Traces...) // needs sort+limit
 			aggregate.Problems = append(aggregate.Problems, t.res.Problems...)
 		case t.res != nil && t.err != nil: // weird
@@ -188,6 +190,7 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 			aggregate.Sources = append(aggregate.Sources, t.res.Sources...)
 			aggregate.TotalCount += t.res.TotalCount
 			aggregate.MatchCount += t.res.MatchCount
+			aggregate.MatchSources = append(aggregate.MatchSources, t.res.MatchSources...)
 			aggregate.Traces = append(aggregate.Traces, t.res.Traces...) // needs sort+limit
 			aggregate.Problems = append(aggregate.Problems, t.res.Problems...)
 			aggregate.Problems = append(aggregate.Problems, fmt.Sprintf("got valid search response with error (%v) -- weird", t.err))
@@ -208,16 +211,30 @@ func (ms MultiSearcher) Search(ctx context.Context, req *SearchRequest) (*Search
 	tr.Tracef("total %d, matched %d, returned %d", aggregate.TotalCount, aggregate.MatchCount, len(aggregate.Traces))
 
 	// Fix up the sources.
-	sourceIndex := make(map[string]struct{}, len(aggregate.Sources))
-	for _, source := range aggregate.Sources {
-		sourceIndex[source] = struct{}{}
+	{
+		sourceIndex := make(map[string]struct{}, len(aggregate.Sources))
+		for _, source := range aggregate.Sources {
+			sourceIndex[source] = struct{}{}
+		}
+		sourceList := make([]string, 0, len(sourceIndex))
+		for source := range sourceIndex {
+			sourceList = append(sourceList, source)
+		}
+		sort.Strings(sourceList)
+		aggregate.Sources = sourceList
 	}
-	sourceList := make([]string, 0, len(sourceIndex))
-	for source := range sourceIndex {
-		sourceList = append(sourceList, source)
+	{
+		sourceIndex := make(map[string]struct{}, len(aggregate.MatchSources))
+		for _, source := range aggregate.MatchSources {
+			sourceIndex[source] = struct{}{}
+		}
+		sourceList := make([]string, 0, len(sourceIndex))
+		for source := range sourceIndex {
+			sourceList = append(sourceList, source)
+		}
+		sort.Strings(sourceList)
+		aggregate.MatchSources = sourceList
 	}
-	sort.Strings(sourceList)
-	aggregate.Sources = sourceList
 
 	// Duration is defined across all individual requests.
 	aggregate.Duration = time.Since(begin)
