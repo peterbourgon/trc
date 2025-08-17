@@ -47,6 +47,10 @@ func Middleware(categorize func(*http.Request) string) func(http.Handler) http.H
 	return trcweb.Middleware(collector.NewTrace, categorize)
 }
 
+func Start(ctx context.Context, category string) (context.Context, trc.Trace) {
+	return collector.StartTrace(ctx, category)
+}
+
 // New creates a new trace in the global trace collector with the provided
 // category, injects that trace into the provided context, and returns a derived
 // context containing the new trace, as well as the new trace itself.

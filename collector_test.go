@@ -129,3 +129,53 @@ func TestCollectorResize(t *testing.T) {
 		AssertEqual(t, ids[len(ids)-fewer], res.Traces[len(res.Traces)-1].ID()) // last trace in the result "moves up" as older traces were dropped
 	}
 }
+
+func TestCollectorStart(t *testing.T) {
+	t.Parallel()
+
+	var (
+		ctx = context.Background()
+		src = trc.NewDefaultCollector()
+	)
+
+	f1 := func(ctx context.Context) {
+		_, tr := src.StartTrace(ctx, "f1")
+		defer tr.Finish()
+		tr.LazyTracef("f1 says hello and goodbye")
+	}
+
+	f2 := func(ctx context.Context) {
+		ctx, tr := src.StartTrace(ctx, "f2")
+		defer tr.Finish()
+		tr.LazyTracef("f2 says hello")
+		f1(ctx)
+		tr.LazyTracef("f2 says goodbye")
+	}
+
+	f3 := func(ctx context.Context) {
+		ctx, tr := src.StartTrace(ctx, "f3")
+		defer tr.Finish()
+		tr.LazyTracef("f3 says hello")
+		f2(ctx)
+		tr.LazyTracef("f3 says goodbye")
+	}
+
+	{
+		ctx, tr := src.StartTrace(ctx, "main")
+		tr.LazyTracef("main start")
+		f3(ctx)
+		tr.LazyTracef("main end")
+		tr.Finish()
+	}
+
+	{
+		res, err := src.Search(ctx, &trc.SearchRequest{Limit: 10})
+		AssertNoError(t, err)
+		AssertEqual(t, 1, res.TotalCount)
+		AssertEqual(t, 1, len(res.Traces))
+		AssertEqual(t, true, res.Traces[0].Finished())
+		for _, ev := range res.Traces[0].TraceEvents {
+			t.Logf("- %s", ev.What)
+		}
+	}
+}

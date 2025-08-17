@@ -111,6 +111,25 @@ func (c *Collector) SetCategorySize(cap int) *Collector {
 	return c
 }
 
+func (c *Collector) StartTrace(ctx context.Context, category string) (context.Context, Trace) {
+	if _, ok := MaybeGet(ctx); ok {
+		return Wrap(ctx, category)
+	}
+
+	ctx, tr := c.newTrace(ctx, c.source, category, publishDecorator(c.broker))
+
+	for _, d := range c.decorators {
+		tr = d(tr)
+	}
+
+	if droppedTrace, didDrop := c.categories.GetOrCreate(category).Add(tr); didDrop {
+		maybeFree(droppedTrace)
+	}
+
+	return Put(ctx, tr)
+
+}
+
 // NewTrace produces a new trace in the collector with the given category,
 // injects it into the given context, and returns a new derived context
 // containing the trace, as well as the new trace itself.
