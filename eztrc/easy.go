@@ -54,8 +54,8 @@ func Start(ctx context.Context, category string) (context.Context, trc.Trace) {
 // New creates a new trace in the global trace collector with the provided
 // category, injects that trace into the provided context, and returns a derived
 // context containing the new trace, as well as the new trace itself.
-func New(ctx context.Context, category string) (context.Context, trc.Trace) {
-	return collector.NewTrace(ctx, category)
+func New(ctx context.Context, category string, options ...trc.TraceOption) (context.Context, trc.Trace) {
+	return collector.New(ctx, category, options...)
 }
 
 // Region calls [trc.Region].
@@ -66,6 +66,11 @@ func Region(ctx context.Context, name string) (context.Context, trc.Trace, func(
 // Prefix calls [trc.Prefix].
 func Prefix(ctx context.Context, format string, args ...any) (context.Context, trc.Trace) {
 	return trc.Prefix(ctx, format, args...)
+}
+
+// Finish calls [trc.Finish].
+func Finish(tr trc.Trace, err *error) {
+	trc.Finish(tr, err)
 }
 
 // Get calls [trc.Get].

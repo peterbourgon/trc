@@ -50,8 +50,10 @@ func (a *KV) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *KV) handleSet(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	tr := trc.Get(ctx)
+	//ctx := r.Context()
+	//tr := trc.Get(ctx)
+	ctx, tr := eztrc.New(r.Context(), "KV.handleSet")
+	defer tr.Finish()
 
 	key := getKey(r.URL.Path)
 	if key == "" {

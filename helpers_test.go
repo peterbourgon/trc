@@ -2,10 +2,13 @@ package trc_test
 
 import (
 	"context"
+	"io"
+	"math/rand"
 	"strings"
 	"testing"
 
 	"github.com/peterbourgon/trc"
+	"github.com/peterbourgon/trc/eztrc"
 )
 
 func TestRegion(t *testing.T) {
@@ -76,5 +79,40 @@ func TestPrefix(t *testing.T) {
 		if !strings.Contains(havestr, wantstr) {
 			t.Errorf("event %d/%d: want %q, have %q", i+1, len(tr.Events()), wantstr, havestr)
 		}
+	}
+}
+
+func TestFinish(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	eztrc.Collector().SetDecorators(trc.LogDecorator(t.Output()))
+	ctx, tr := eztrc.New(ctx, t.Name())
+	defer tr.Finish()
+
+	fna := func(ctx context.Context) (err error) {
+		ctx, tr := eztrc.New(ctx, "fna")
+		defer trc.Finish(tr, &err)
+		tr.Tracef("fna doing work")
+		return nil
+	}
+
+	fnb := func(ctx context.Context) (err error) {
+		ctx, tr := eztrc.New(ctx, "fnb")
+		defer trc.Finish(tr, &err)
+		tr.Tracef("fna: err=%v", fna(ctx))
+		tr.Tracef("fnb doing work")
+		if r := rand.Float64(); r < 0.2 {
+			return io.EOF
+		}
+		return nil
+	}
+
+	for range 1 {
+		func() {
+			ctx, tr := eztrc.New(ctx, t.Name())
+			defer tr.Finish()
+			tr.Tracef("top level: fnb: err=%v", fnb(ctx))
+		}()
 	}
 }

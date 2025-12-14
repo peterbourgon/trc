@@ -6,6 +6,8 @@ import (
 	"io"
 	"log"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/peterbourgon/trc/internal/trcutil"
 )
@@ -66,12 +68,12 @@ func (ltr *logTrace) LazyTracef(format string, args ...any) {
 }
 
 func (ltr *logTrace) Errorf(format string, args ...any) {
-	ltr.logEvent("ERROR: "+format, args...)
+	ltr.logEvent(format+"  <ERROR>", args...)
 	ltr.Trace.Errorf(format, args...)
 }
 
 func (ltr *logTrace) LazyErrorf(format string, args ...any) {
-	ltr.logEvent("ERROR: "+format, args...)
+	ltr.logEvent(format+"  <ERROR>", args...)
 	ltr.Trace.LazyErrorf(format, args...)
 }
 
@@ -156,4 +158,128 @@ func (ptr *publishTrace) Free() {
 	if f, ok := ptr.Trace.(interface{ Free() }); ok {
 		f.Free()
 	}
+}
+
+//
+//
+//
+
+// WrapDecorator returns a DecoratorFunc that wraps traces using [WrapTrace].
+func WrapDecorator(name string) DecoratorFunc {
+	return func(tr Trace) Trace {
+		return NewWrapTrace(tr, WrapTraceConfig{
+			Name:          name,
+			EventPrefix:   "·",
+			ShowEnterExit: true,
+		})
+	}
+}
+
+// WrapTrace is a trace decorator that adds a name and optional event prefix to
+// all events, and optionally logs "enter" and "exit" events when the trace is
+// created and finished, respectively.
+type WrapTrace struct {
+	Trace
+	name          string
+	eventPrefix   string
+	showEnterExit bool
+	start         time.Time
+
+	mtx  sync.Mutex
+	done bool
+}
+
+// WrapTraceConfig contains configuration options for [WrapTrace].
+type WrapTraceConfig struct {
+	Name          string
+	EventPrefix   string
+	ShowEnterExit bool
+}
+
+// NewWrapTrace wraps tr according to config.
+func NewWrapTrace(tr Trace, config WrapTraceConfig) *WrapTrace {
+	if config.Name == "" {
+		config.Name = "(anonymous)"
+	}
+
+	if config.EventPrefix != "" {
+		config.EventPrefix = strings.TrimSpace(config.EventPrefix) + " "
+	}
+
+	wtr := &WrapTrace{
+		Trace:         tr,
+		name:          config.Name,
+		eventPrefix:   config.EventPrefix,
+		showEnterExit: config.ShowEnterExit,
+		start:         time.Now().UTC(),
+	}
+
+	if wtr.showEnterExit {
+		tr.LazyTracef("→ %s", config.Name)
+	}
+	return wtr
+}
+
+// Tracef implements Trace.
+func (wtr *WrapTrace) Tracef(format string, args ...any) {
+	wtr.mtx.Lock()
+	defer wtr.mtx.Unlock()
+
+	if wtr.done {
+		return
+	}
+
+	wtr.Trace.Tracef(wtr.eventPrefix+format, args...)
+}
+
+// LazyTracef implements Trace.
+func (wtr *WrapTrace) LazyTracef(format string, args ...any) {
+	wtr.mtx.Lock()
+	defer wtr.mtx.Unlock()
+
+	if wtr.done {
+		return
+	}
+
+	wtr.Trace.LazyTracef(wtr.eventPrefix+format, args...)
+}
+
+// Errorf implements Trace.
+func (wtr *WrapTrace) Errorf(format string, args ...any) {
+	wtr.mtx.Lock()
+	defer wtr.mtx.Unlock()
+
+	if wtr.done {
+		return
+	}
+
+	wtr.Trace.Errorf(wtr.eventPrefix+format, args...)
+}
+
+// LazyErrorf implements Trace.
+func (wtr *WrapTrace) LazyErrorf(format string, args ...any) {
+	wtr.mtx.Lock()
+	defer wtr.mtx.Unlock()
+
+	if wtr.done {
+		return
+	}
+
+	wtr.Trace.LazyErrorf(wtr.eventPrefix+format, args...)
+}
+
+// Finish the outer (wrap) trace, without finishing the inner (wrapped) trace.
+func (wtr *WrapTrace) Finish() {
+	wtr.mtx.Lock()
+	defer wtr.mtx.Unlock()
+
+	if wtr.done {
+		return
+	}
+
+	if wtr.showEnterExit {
+		wtr.Trace.LazyTracef("← %s [%s]", wtr.name, trcutil.HumanizeDuration(time.Since(wtr.start)))
+	}
+
+	wtr.done = true
 }

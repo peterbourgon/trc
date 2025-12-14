@@ -1,6 +1,6 @@
 module github.com/peterbourgon/trc
 
-go 1.21
+go 1.24
 
 require (
 	github.com/bernerdschaefer/eventsource v0.0.0-20130606115634-220e99a79763

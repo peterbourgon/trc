@@ -130,12 +130,40 @@ func (c *Collector) StartTrace(ctx context.Context, category string) (context.Co
 
 }
 
-// NewTrace produces a new trace in the collector with the given category,
+// NewTrace creates a new trace in the collector with the given category,
 // injects it into the given context, and returns a new derived context
 // containing the trace, as well as the new trace itself.
+//
+// If the context already contained a trace, it's wrapped with a [WrapTrace],
+// allowing callers to safely call Finish on all returned traces.
+//
+//	func (x *Thing) DoSomething(ctx context.Context) (err error) {
+//	    ctx, tr := trc.NewTrace(ctx, "Thing.DoSomething")
+//	    defer trc.Finish(tr, &err)
+//	    ...
+//
+// This pattern satisfies the majority of typical use cases.
 func (c *Collector) NewTrace(ctx context.Context, category string) (context.Context, Trace) {
+	return c.New(ctx, category)
+}
+
+func (c *Collector) New(ctx context.Context, category string, options ...TraceOption) (context.Context, Trace) {
+	var opts TraceOptions
+	for _, o := range options {
+		o(&opts)
+	}
+
 	if tr, ok := MaybeGet(ctx); ok {
-		tr.LazyTracef("(+ %s)", category)
+		if opts.wrapExisting {
+			wtr := NewWrapTrace(tr, WrapTraceConfig{
+				Name:          "(" + category + ") ",
+				EventPrefix:   "·",
+				ShowEnterExit: opts.wrapEnterExit,
+			})
+			ctx, tr = Put(ctx, wtr)
+		} else {
+			tr.LazyTracef("(+ %s)", category)
+		}
 		return ctx, tr
 	}
 
@@ -239,3 +267,13 @@ func maybeFree(tr Trace) {
 		f.Free()
 	}
 }
+
+type TraceOptions struct {
+	wrapExisting  bool
+	wrapEnterExit bool
+}
+
+type TraceOption func(*TraceOptions)
+
+func WithWrapExisting(opts *TraceOptions)  { opts.wrapExisting = true }
+func WithWrapEnterExit(opts *TraceOptions) { opts.wrapEnterExit = true }

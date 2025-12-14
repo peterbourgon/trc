@@ -170,3 +170,14 @@ var _ Trace = (*wrapTrace)(nil)
 func (wtr *wrapTrace) Finish() {
 	wtr.once.Do(wtr.finish)
 }
+
+//
+//
+//
+
+func Finish(tr Trace, err *error) {
+	if err != nil && *err != nil {
+		tr.Errorf("error: %v", *err)
+	}
+	tr.Finish()
+}
