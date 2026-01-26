@@ -17,6 +17,10 @@ var (
 	// (eventually) being GC'd.
 	CoreTraceLostCount atomic.Uint64
 
+	// CoreTraceUseAfterFinishCount tracks when a core trace is used after
+	// being finished.
+	CoreTraceUseAfterFinishCount atomic.Uint64
+
 	// CoreEventNewCount tracks when a new core event is requested.
 	CoreEventNewCount atomic.Uint64
 

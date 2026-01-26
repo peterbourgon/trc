@@ -174,17 +174,12 @@ func (c *Collector) New(ctx context.Context, category string, options ...TraceOp
 	}
 
 	if tr, ok := MaybeGet(ctx); ok {
-		if opts.wrapExisting {
-			wtr := NewWrapTrace(tr, WrapTraceConfig{
-				Name:          "(" + category + ") ",
-				EventPrefix:   "·",
-				ShowEnterExit: opts.wrapEnterExit,
-			})
-			ctx, tr = Put(ctx, wtr)
-		} else {
-			tr.LazyTracef("(+ %s)", category)
-		}
-		return ctx, tr
+		wtr := NewWrapTrace(tr, WrapTraceConfig{
+			Name:          "(" + category + ") ",
+			EventPrefix:   "·",
+			ShowEnterExit: opts.wrapShowEnterExit,
+		})
+		return Put(ctx, wtr)
 	}
 
 	ctx, tr := c.newTrace(ctx, c.source, category, publishDecorator(c.broker))
@@ -289,11 +284,9 @@ func maybeFree(tr Trace) {
 }
 
 type TraceOptions struct {
-	wrapExisting  bool
-	wrapEnterExit bool
+	wrapShowEnterExit bool
 }
 
 type TraceOption func(*TraceOptions)
 
-func WithWrapExisting(opts *TraceOptions)  { opts.wrapExisting = true }
-func WithWrapEnterExit(opts *TraceOptions) { opts.wrapEnterExit = true }
+func WithTraceWrapEnterExit(opts *TraceOptions) { opts.wrapShowEnterExit = true }

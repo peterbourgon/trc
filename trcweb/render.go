@@ -274,6 +274,7 @@ func debugInfo() string {
 		ta = trcdebug.CoreTraceAllocCount.Load()
 		tf = trcdebug.CoreTraceFreeCount.Load()
 		tl = trcdebug.CoreTraceLostCount.Load()
+		tu = trcdebug.CoreTraceUseAfterFinishCount.Load()
 		tr = 100 * float64(tf) / float64(tn)
 
 		en = trcdebug.CoreEventNewCount.Load()
@@ -290,10 +291,10 @@ func debugInfo() string {
 	)
 	buf := &bytes.Buffer{}
 	tw := tabwriter.NewWriter(buf, 0, 2, 2, ' ', 0)
-	fmt.Fprintf(tw, "KIND\tNEW\tALLOC\tFREE\tLOST\tREUSE\n")
-	fmt.Fprintf(tw, "coreTrace\t%d\t%d\t%d\t%d\t%.2f%%\n", tn, ta, tf, tl, tr)
-	fmt.Fprintf(tw, "coreEvent\t%d\t%d\t%d\t%d\t%.2f%%\n", en, ea, ef, el, er)
-	fmt.Fprintf(tw, "stringer\t%d\t%d\t%d\t%d\t%.2f%%\n", sn, sa, sf, sl, sr)
+	fmt.Fprintf(tw, "KIND\tNEW\tALLOC\tFREE\tLOST\tBADUSE\tREUSE\n")
+	fmt.Fprintf(tw, "coreTrace\t%d\t%d\t%d\t%d\t%d\t%.2f%%\n", tn, ta, tf, tl, tu, tr)
+	fmt.Fprintf(tw, "coreEvent\t%d\t%d\t%d\t%d\t-\t%.2f%%\n", en, ea, ef, el, er)
+	fmt.Fprintf(tw, "stringer\t%d\t%d\t%d\t%d\t-\t%.2f%%\n", sn, sa, sf, sl, sr)
 	tw.Flush()
 	return buf.String()
 }

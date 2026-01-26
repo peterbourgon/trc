@@ -59,6 +59,24 @@ func SetTraceStacks(enable bool) {
 	traceNoStacks.Store(!enable)
 }
 
+// SetUseAfterFinishHook sets a hook that is called whenever a trace is used
+// after being finished, which is always a bug in the caller. The default hook
+// is a no-op.
+func SetUseAfterFinishHook(fn func(tr Trace)) {
+	useAfterFinishHook.Store(fn)
+}
+
+var useAfterFinishHook = func() *atomic.Value {
+	var v atomic.Value
+	v.Store(func(tr Trace) {})
+	return &v
+}()
+
+func useAfterFinish(tr *coreTrace) {
+	trcdebug.CoreTraceUseAfterFinishCount.Add(1)
+	useAfterFinishHook.Load().(func(tr Trace))(tr)
+}
+
 //
 //
 //
@@ -166,6 +184,7 @@ func (tr *coreTrace) Tracef(format string, args ...any) {
 	defer tr.mtx.Unlock()
 
 	if tr.finished {
+		useAfterFinish(tr)
 		return
 	}
 
@@ -182,6 +201,7 @@ func (tr *coreTrace) LazyTracef(format string, args ...any) {
 	defer tr.mtx.Unlock()
 
 	if tr.finished {
+		useAfterFinish(tr)
 		return
 	}
 
@@ -198,6 +218,7 @@ func (tr *coreTrace) Errorf(format string, args ...any) {
 	defer tr.mtx.Unlock()
 
 	if tr.finished {
+		useAfterFinish(tr)
 		return
 	}
 
@@ -216,6 +237,7 @@ func (tr *coreTrace) LazyErrorf(format string, args ...any) {
 	defer tr.mtx.Unlock()
 
 	if tr.finished {
+		useAfterFinish(tr)
 		return
 	}
 

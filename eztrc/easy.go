@@ -58,10 +58,6 @@ func Middleware(categorize func(*http.Request) string) func(http.Handler) http.H
 // Callers should always call Finish on the returned trace.
 var New = collector.New
 
-func New0(ctx context.Context, category string, options ...trc.TraceOption) (context.Context, trc.Trace) {
-	return collector.New(ctx, category, options...)
-}
-
 // Tracef adds a new normal event to the trace in the context.
 // Arguments are evaluated immediately.
 func Tracef(ctx context.Context, format string, args ...any) {

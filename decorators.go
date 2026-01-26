@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/peterbourgon/trc/internal/trcutil"
@@ -40,6 +41,11 @@ func LogDecorator(dst io.Writer) DecoratorFunc {
 // LoggerDecorator is like LogDecorator, but uses a log.Logger.
 func LoggerDecorator(logger *log.Logger) DecoratorFunc {
 	return LogDecorator(&loggerWriter{logger})
+}
+
+// TestLogWriterDecorator is like LogDecorator, but writes to the test output.
+func TestLogWriterDecorator(tb testing.TB) DecoratorFunc {
+	return LogDecorator(tb.Output())
 }
 
 type loggerWriter struct{ logger *log.Logger }
@@ -78,7 +84,10 @@ func (ltr *logTrace) LazyErrorf(format string, args ...any) {
 }
 
 func (ltr *logTrace) Finish() {
-	ltr.Trace.Finish()
+	if ltr.Trace.Finished() {
+		return
+	}
+
 	var (
 		outcome  = "unknown"
 		duration = trcutil.HumanizeDuration(ltr.Trace.Duration())
@@ -90,9 +99,14 @@ func (ltr *logTrace) Finish() {
 		outcome = "success"
 	}
 	ltr.logEvent("done, %s, %s", outcome, duration)
+
+	ltr.Trace.Finish()
 }
 
 func (ltr *logTrace) logEvent(format string, args ...any) {
+	if ltr.Trace.Finished() {
+		return
+	}
 	format = ltr.id + " " + strings.TrimSuffix(format, "\n") + "\n"
 	fmt.Fprintf(ltr.dst, format, args...)
 }
