@@ -222,3 +222,43 @@ func BenchmarkParallelCollector(b *testing.B) {
 		})
 	})
 }
+
+func BenchmarkNewTraces(b *testing.B) {
+	ctx := b.Context()
+	category := "category"
+	cap := 1000
+	collector := trc.NewDefaultCollector()
+	collector.SetCategorySize(cap)
+	for range cap * 2 {
+		_, tr := collector.NewTrace(ctx, category)
+		tr.Finish()
+	}
+
+	b.Run("Collector.NewTrace", func(b *testing.B) {
+		for b.Loop() {
+			_, tr := collector.NewTrace(ctx, category)
+			tr.Finish()
+		}
+	})
+
+	b.Run("Collector.New", func(b *testing.B) {
+		for b.Loop() {
+			_, tr := collector.New(ctx, category)
+			tr.Finish()
+		}
+	})
+
+	b.Run("Collector.New1", func(b *testing.B) {
+		for b.Loop() {
+			_, tr := collector.New1(ctx, category)
+			tr.Finish()
+		}
+	})
+
+	b.Run("Collector.New2", func(b *testing.B) {
+		for b.Loop() {
+			_, tr := collector.New2(ctx, category)
+			tr.Finish()
+		}
+	})
+}

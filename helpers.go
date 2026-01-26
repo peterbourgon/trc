@@ -4,7 +4,6 @@ import (
 	"context"
 	"runtime/trace"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/peterbourgon/trc/internal/trcutil"
@@ -32,6 +31,25 @@ func Get(ctx context.Context) Trace {
 func MaybeGet(ctx context.Context) (Trace, bool) {
 	tr, ok := ctx.Value(traceContextVal).(Trace)
 	return tr, ok
+}
+
+// Finish the trace. If any of the provided args are of type error, or a valid
+// pointer to an error, and the error is non-nil, an error event is recorded in
+// the trace before finishing.
+func Finish(tr Trace, args ...any) {
+	for _, a := range args {
+		switch x := a.(type) {
+		case error:
+			if x != nil {
+				tr.Errorf("error: %v", x)
+			}
+		case *error:
+			if x != nil && *x != nil {
+				tr.Errorf("error: %v", *x)
+			}
+		}
+	}
+	tr.Finish()
 }
 
 // SetMaxEvents tries to set the max events for a specific trace, by checking if
@@ -137,47 +155,3 @@ func (ptr *prefixTrace) LazyErrorf(format string, args ...any) {
 //
 //
 //
-
-func Wrap(ctx context.Context, category string) (context.Context, Trace) {
-	begin := time.Now()
-	inputTrace := Get(ctx)
-	//outputContext, outputTrace := Prefix(ctx, "·")
-	outputContext, outputTrace := ctx, inputTrace
-
-	inputTrace.LazyTracef("→ " + category)
-	finish := func() {
-		took := time.Since(begin)
-		inputTrace.LazyTracef("← "+category+" [%s]", trcutil.HumanizeDuration(took))
-	}
-
-	wrapped := &wrapTrace{
-		Trace:  outputTrace,
-		finish: finish,
-	}
-
-	return outputContext, wrapped
-}
-
-type wrapTrace struct {
-	Trace
-
-	once   sync.Once
-	finish func()
-}
-
-var _ Trace = (*wrapTrace)(nil)
-
-func (wtr *wrapTrace) Finish() {
-	wtr.once.Do(wtr.finish)
-}
-
-//
-//
-//
-
-func Finish(tr Trace, err *error) {
-	if err != nil && *err != nil {
-		tr.Errorf("error: %v", *err)
-	}
-	tr.Finish()
-}

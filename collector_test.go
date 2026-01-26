@@ -130,7 +130,7 @@ func TestCollectorResize(t *testing.T) {
 	}
 }
 
-func TestCollectorStart(t *testing.T) {
+func TestCollectorNew(t *testing.T) {
 	t.Parallel()
 
 	var (
@@ -139,13 +139,13 @@ func TestCollectorStart(t *testing.T) {
 	)
 
 	f1 := func(ctx context.Context) {
-		_, tr := src.StartTrace(ctx, "f1")
+		_, tr := src.New(ctx, "f1")
 		defer tr.Finish()
 		tr.LazyTracef("f1 says hello and goodbye")
 	}
 
 	f2 := func(ctx context.Context) {
-		ctx, tr := src.StartTrace(ctx, "f2")
+		ctx, tr := src.New(ctx, "f2")
 		defer tr.Finish()
 		tr.LazyTracef("f2 says hello")
 		f1(ctx)
@@ -153,7 +153,7 @@ func TestCollectorStart(t *testing.T) {
 	}
 
 	f3 := func(ctx context.Context) {
-		ctx, tr := src.StartTrace(ctx, "f3")
+		ctx, tr := src.New(ctx, "f3")
 		defer tr.Finish()
 		tr.LazyTracef("f3 says hello")
 		f2(ctx)
@@ -161,7 +161,7 @@ func TestCollectorStart(t *testing.T) {
 	}
 
 	{
-		ctx, tr := src.StartTrace(ctx, "main")
+		ctx, tr := src.New(ctx, "main")
 		tr.LazyTracef("main start")
 		f3(ctx)
 		tr.LazyTracef("main end")

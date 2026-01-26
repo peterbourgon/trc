@@ -111,9 +111,22 @@ func (c *Collector) SetCategorySize(cap int) *Collector {
 	return c
 }
 
-func (c *Collector) StartTrace(ctx context.Context, category string) (context.Context, Trace) {
-	if _, ok := MaybeGet(ctx); ok {
-		return Wrap(ctx, category)
+// NewTrace creates a new trace in the collector with the given category,
+// injects it into the given context, and returns a new derived context
+// containing the trace, as well as the new trace itself.
+func (c *Collector) NewTrace(ctx context.Context, category string) (context.Context, Trace) {
+	return c.New(ctx, category)
+}
+
+func (c *Collector) New1(ctx context.Context, category string) (context.Context, Trace) {
+	if tr, ok := MaybeGet(ctx); ok {
+		wtr := NewWrapTrace(tr, WrapTraceConfig{
+			Name:          "(" + category + ") ",
+			EventPrefix:   "·",
+			ShowEnterExit: true,
+		})
+		ctx, tr = Put(ctx, wtr)
+		return ctx, tr
 	}
 
 	ctx, tr := c.newTrace(ctx, c.source, category, publishDecorator(c.broker))
@@ -127,26 +140,33 @@ func (c *Collector) StartTrace(ctx context.Context, category string) (context.Co
 	}
 
 	return Put(ctx, tr)
-
 }
 
-// NewTrace creates a new trace in the collector with the given category,
-// injects it into the given context, and returns a new derived context
-// containing the trace, as well as the new trace itself.
-//
-// If the context already contained a trace, it's wrapped with a [WrapTrace],
-// allowing callers to safely call Finish on all returned traces.
-//
-//	func (x *Thing) DoSomething(ctx context.Context) (err error) {
-//	    ctx, tr := trc.NewTrace(ctx, "Thing.DoSomething")
-//	    defer trc.Finish(tr, &err)
-//	    ...
-//
-// This pattern satisfies the majority of typical use cases.
-func (c *Collector) NewTrace(ctx context.Context, category string) (context.Context, Trace) {
-	return c.New(ctx, category)
+func (c *Collector) New2(ctx context.Context, category string) (context.Context, Trace) {
+	if tr, ok := MaybeGet(ctx); ok {
+		tr.LazyTracef("(+ %s)", category)
+		return ctx, tr
+	}
+
+	ctx, tr := c.newTrace(ctx, c.source, category, publishDecorator(c.broker))
+
+	for _, d := range c.decorators {
+		tr = d(tr)
+	}
+
+	if droppedTrace, didDrop := c.categories.GetOrCreate(category).Add(tr); didDrop {
+		maybeFree(droppedTrace)
+	}
+
+	return Put(ctx, tr)
 }
 
+// New creates a new trace in the collector with the provided category,
+// injects that trace into the provided context, and returns a derived context
+// containing the new trace, as well as the new trace itself.
+//
+// If there is already a trace in the provided context, then that trace is
+// either wrapped or annotated, depending on the provided options.
 func (c *Collector) New(ctx context.Context, category string, options ...TraceOption) (context.Context, Trace) {
 	var opts TraceOptions
 	for _, o := range options {
