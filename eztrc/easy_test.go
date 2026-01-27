@@ -28,7 +28,7 @@ func TestGet(t *testing.T) {
 	runtime.Gosched()
 
 	{
-		ctx, tr := eztrc.New(ctx, "category", trc.WithTraceWrapEnterExit)
+		ctx, tr := eztrc.New(ctx, "category")
 		t.Logf("%T", tr)
 		tr.LazyTracef("1")
 		{
@@ -36,7 +36,7 @@ func TestGet(t *testing.T) {
 			t.Logf("%T", tr)
 			tr.LazyTracef("2")
 			{
-				_, tr := eztrc.New(ctx, "inner-category", trc.WithTraceWrapEnterExit)
+				_, tr := eztrc.New(ctx, "inner-category", trc.WithEventPrefix("[inner]"))
 				t.Logf("%T", tr)
 				tr.Tracef("inner")
 				tr.Finish()

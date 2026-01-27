@@ -184,7 +184,7 @@ func WrapDecorator(name string) DecoratorFunc {
 		return NewWrapTrace(tr, WrapTraceConfig{
 			Name:          name,
 			EventPrefix:   "·",
-			ShowEnterExit: true,
+			HideEnterExit: true,
 		})
 	}
 }
@@ -196,7 +196,7 @@ type WrapTrace struct {
 	Trace
 	name          string
 	eventPrefix   string
-	showEnterExit bool
+	hideEnterExit bool
 	start         time.Time
 
 	mtx  sync.Mutex
@@ -207,7 +207,7 @@ type WrapTrace struct {
 type WrapTraceConfig struct {
 	Name          string
 	EventPrefix   string
-	ShowEnterExit bool
+	HideEnterExit bool
 }
 
 // NewWrapTrace wraps tr according to config.
@@ -224,13 +224,14 @@ func NewWrapTrace(tr Trace, config WrapTraceConfig) *WrapTrace {
 		Trace:         tr,
 		name:          config.Name,
 		eventPrefix:   config.EventPrefix,
-		showEnterExit: config.ShowEnterExit,
+		hideEnterExit: config.HideEnterExit,
 		start:         time.Now().UTC(),
 	}
 
-	if wtr.showEnterExit {
+	if !wtr.hideEnterExit {
 		tr.LazyTracef("→ %s", config.Name)
 	}
+
 	return wtr
 }
 
@@ -291,7 +292,7 @@ func (wtr *WrapTrace) Finish() {
 		return
 	}
 
-	if wtr.showEnterExit {
+	if !wtr.hideEnterExit {
 		wtr.Trace.LazyTracef("← %s [%s]", wtr.name, trcutil.HumanizeDuration(time.Since(wtr.start)))
 	}
 

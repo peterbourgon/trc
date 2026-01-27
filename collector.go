@@ -111,64 +111,23 @@ func (c *Collector) SetCategorySize(cap int) *Collector {
 	return c
 }
 
-// NewTrace creates a new trace in the collector with the given category,
-// injects it into the given context, and returns a new derived context
-// containing the trace, as well as the new trace itself.
+// NewTrace calls New with no options.
 func (c *Collector) NewTrace(ctx context.Context, category string) (context.Context, Trace) {
 	return c.New(ctx, category)
 }
 
-func (c *Collector) New1(ctx context.Context, category string) (context.Context, Trace) {
-	if tr, ok := MaybeGet(ctx); ok {
-		wtr := NewWrapTrace(tr, WrapTraceConfig{
-			Name:          "(" + category + ") ",
-			EventPrefix:   "·",
-			ShowEnterExit: true,
-		})
-		ctx, tr = Put(ctx, wtr)
-		return ctx, tr
-	}
-
-	ctx, tr := c.newTrace(ctx, c.source, category, publishDecorator(c.broker))
-
-	for _, d := range c.decorators {
-		tr = d(tr)
-	}
-
-	if droppedTrace, didDrop := c.categories.GetOrCreate(category).Add(tr); didDrop {
-		maybeFree(droppedTrace)
-	}
-
-	return Put(ctx, tr)
-}
-
-func (c *Collector) New2(ctx context.Context, category string) (context.Context, Trace) {
-	if tr, ok := MaybeGet(ctx); ok {
-		tr.LazyTracef("(+ %s)", category)
-		return ctx, tr
-	}
-
-	ctx, tr := c.newTrace(ctx, c.source, category, publishDecorator(c.broker))
-
-	for _, d := range c.decorators {
-		tr = d(tr)
-	}
-
-	if droppedTrace, didDrop := c.categories.GetOrCreate(category).Add(tr); didDrop {
-		maybeFree(droppedTrace)
-	}
-
-	return Put(ctx, tr)
-}
-
-// New creates a new trace in the collector with the provided category,
-// injects that trace into the provided context, and returns a derived context
+// New creates a new trace in the collector with the provided category, injects
+// that trace into the provided context, and returns a derived context
 // containing the new trace, as well as the new trace itself.
 //
-// If there is already a trace in the provided context, then that trace is
-// either wrapped or annotated, depending on the provided options.
+// If there is already a trace in the provided context, that trace is wrapped
+// and returned as a sub-trace, and nothing is added in the collector.
+//
+// Callers should always call Finish on the returned trace.
 func (c *Collector) New(ctx context.Context, category string, options ...TraceOption) (context.Context, Trace) {
-	var opts TraceOptions
+	opts := TraceOptions{
+		eventPrefix: "·",
+	}
 	for _, o := range options {
 		o(&opts)
 	}
@@ -176,8 +135,8 @@ func (c *Collector) New(ctx context.Context, category string, options ...TraceOp
 	if tr, ok := MaybeGet(ctx); ok {
 		wtr := NewWrapTrace(tr, WrapTraceConfig{
 			Name:          "(" + category + ") ",
-			EventPrefix:   "·",
-			ShowEnterExit: opts.wrapShowEnterExit,
+			EventPrefix:   opts.eventPrefix,
+			HideEnterExit: opts.hideEnterExit,
 		})
 		return Put(ctx, wtr)
 	}
@@ -283,10 +242,24 @@ func maybeFree(tr Trace) {
 	}
 }
 
+//
+//
+//
+
 type TraceOptions struct {
-	wrapShowEnterExit bool
+	hideEnterExit bool
+	eventPrefix   string
+	useRegion     bool
 }
 
 type TraceOption func(*TraceOptions)
 
-func WithTraceWrapEnterExit(opts *TraceOptions) { opts.wrapShowEnterExit = true }
+func WithHideEnterExit(opts *TraceOptions) {
+	opts.hideEnterExit = true
+}
+
+func WithEventPrefix(prefix string) TraceOption {
+	return func(opts *TraceOptions) {
+		opts.eventPrefix = prefix
+	}
+}
